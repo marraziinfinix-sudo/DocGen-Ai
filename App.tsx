@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company } from './types';
 import { generateDescription } from './services/geminiService';
@@ -26,12 +27,12 @@ const App: React.FC = () => {
     }
     return [{
       id: 1,
-      details: { name: 'Your Company', address: '123 Main St, Anytown, USA', email: 'contact@yourcompany.com', phone: '555-123-4567', bankName: '', accountNumber: '', website: '', taxId: '' },
+      details: { name: '', address: '', email: '', phone: '', bankName: '', accountNumber: '', website: '', taxId: '' },
       logo: null,
       bankQRCode: null,
-      defaultNotes: 'Thank you for your business.',
+      defaultNotes: '',
       taxRate: 0,
-      currency: '$',
+      currency: '',
     }];
   });
   const [activeCompanyId, setActiveCompanyId] = useState<number>(companies[0].id);
@@ -58,37 +59,25 @@ const App: React.FC = () => {
   }, [activeCompany]);
 
 
-  const [clientDetails, setClientDetails] = useState<Details>({ name: 'Client Name', address: '456 Oak Ave, Otherville, USA', email: 'client@example.com', phone: '' });
+  const [clientDetails, setClientDetails] = useState<Details>({ name: '', address: '', email: '', phone: '' });
   
   const [clients, setClients] = useState<Client[]>(() => {
     try {
       const saved = localStorage.getItem('clients');
-      return saved ? JSON.parse(saved) : [
-        { id: 1, name: 'Sample Client Inc.', address: '789 Client Ave, Testburg, USA', email: 'contact@sampleclient.com', phone: '555-987-6543' }
-      ];
+      return saved ? JSON.parse(saved) : [];
     } catch (e) {
       console.error('Failed to load clients from localStorage', e);
-      return [
-        { id: 1, name: 'Sample Client Inc.', address: '789 Client Ave, Testburg, USA', email: 'contact@sampleclient.com', phone: '555-987-6543' }
-      ];
+      return [];
     }
   });
 
    const [items, setItems] = useState<Item[]>(() => {
     try {
       const saved = localStorage.getItem('items');
-      return saved ? JSON.parse(saved) : [
-        { id: 1, description: 'Premium Web Development', price: 3000 },
-        { id: 2, description: 'Logo Design & Branding Package', price: 1200 },
-        { id: 3, description: 'Monthly SEO Services', price: 750 },
-      ];
+      return saved ? JSON.parse(saved) : [];
     } catch (e) {
       console.error('Failed to load items from localStorage', e);
-      return [
-        { id: 1, description: 'Premium Web Development', price: 3000 },
-        { id: 2, description: 'Logo Design & Branding Package', price: 1200 },
-        { id: 3, description: 'Monthly SEO Services', price: 750 },
-      ];
+      return [];
     }
   });
 
@@ -100,10 +89,7 @@ const App: React.FC = () => {
     date.setDate(date.getDate() + 30);
     return date.toISOString().split('T')[0];
   });
-  const [lineItems, setLineItems] = useState<LineItem[]>([
-    { id: 1, description: 'E.g., Web Design Services', quantity: 10, price: 150.00 },
-    { id: 2, description: 'E.g., Content Management System', quantity: 1, price: 2500.00 },
-  ]);
+  const [lineItems, setLineItems] = useState<LineItem[]>([]);
   
   const [generatingStates, setGeneratingStates] = useState<Record<number, boolean>>({});
 
@@ -239,6 +225,27 @@ const App: React.FC = () => {
   };
 
   const handleSaveDocument = () => {
+    // Check if client is new and ask to save
+    if (clientDetails.name && clientDetails.name.trim() !== '') {
+      const isExistingClient = clients.some(c => 
+        c.name.trim().toLowerCase() === clientDetails.name.trim().toLowerCase() && 
+        c.email.trim().toLowerCase() === clientDetails.email.trim().toLowerCase()
+      );
+
+      if (!isExistingClient) {
+        if (window.confirm(`'${clientDetails.name}' is not in your client list. Would you like to save this client for future use?`)) {
+          const newClient: Client = {
+            id: Date.now(),
+            name: clientDetails.name,
+            address: clientDetails.address,
+            email: clientDetails.email,
+            phone: clientDetails.phone,
+          };
+          setClients(prev => [...prev, newClient]);
+        }
+      }
+    }
+
     const newDocument: SavedDocument = {
       id: Date.now(),
       documentNumber,
@@ -264,7 +271,7 @@ const App: React.FC = () => {
     if (selectedClient) {
         setClientDetails(selectedClient);
     } else {
-        setClientDetails({ name: 'Client Name', address: '456 Oak Ave, Otherville, USA', email: 'client@example.com', phone: '' });
+        setClientDetails({ name: '', address: '', email: '', phone: '' });
     }
   };
 
