@@ -525,8 +525,7 @@ const App: React.FC = () => {
                     <WhatsAppIcon />
                 </button>
                  <button onClick={handleSaveDocument} className="flex items-center gap-2 bg-slate-500 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-600 transition-colors duration-200">
-                    <span className="hidden sm:inline">Save </span>
-                    <span>{documentType}</span>
+                    <span>Save</span>
                 </button>
                 <button onClick={() => window.print()} className="flex items-center gap-2 bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 transition-colors duration-200">
                     <PrinterIcon />
