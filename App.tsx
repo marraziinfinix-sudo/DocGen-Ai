@@ -9,11 +9,6 @@ import ItemListPage from './components/ItemListPage';
 import DocumentListPage from './components/DocumentListPage';
 import QuotationListPage from './components/QuotationListPage';
 
-// Declare globals from CDN scripts
-declare var html2canvas: any;
-declare var jspdf: any;
-
-
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<'editor' | 'setup' | 'clients' | 'items' | 'invoices' | 'quotations'>('editor');
   const [documentType, setDocumentType] = useState<DocumentType>(DocumentType.Quotation);
@@ -447,10 +442,10 @@ const App: React.FC = () => {
       const element = document.getElementById('print-area');
       if (!element) throw new Error('Preview element not found');
 
-      const canvas = await html2canvas(element, { scale: 2, useCORS: true });
+      const canvas = await (window as any).html2canvas(element, { scale: 2, useCORS: true });
       const imgData = canvas.toDataURL('image/png');
 
-      const { jsPDF } = jspdf;
+      const { jsPDF } = (window as any).jspdf;
       const pdf = new jsPDF('p', 'mm', 'a4');
       const imgProps = pdf.getImageProperties(imgData);
       const pdfWidth = pdf.internal.pageSize.getWidth();
