@@ -542,18 +542,27 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen font-sans text-slate-800">
       <header className="bg-white shadow-md sticky top-0 z-20 no-print">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-2 sm:gap-4">
-            <h1 className="text-xl sm:text-2xl font-bold text-indigo-600">DocGen AI</h1>
-            <nav className="flex items-center gap-1 sm:gap-2 border-l pl-2 sm:pl-4">
-                 <button onClick={() => setCurrentView('setup')} title="Setup" className={`flex items-center gap-2 py-2 px-3 rounded-lg ${currentView === 'setup' ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'text-slate-600 hover:bg-slate-100'}`}><CogIcon/> <span className="hidden md:inline">Setup</span></button>
-                 <button onClick={() => setCurrentView('clients')} title="Clients" className={`flex items-center gap-2 py-2 px-3 rounded-lg ${currentView === 'clients' ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'text-slate-600 hover:bg-slate-100'}`}><UsersIcon/> <span className="hidden md:inline">Clients</span></button>
-                 <button onClick={() => setCurrentView('items')} title="Items" className={`flex items-center gap-2 py-2 px-3 rounded-lg ${currentView === 'items' ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'text-slate-600 hover:bg-slate-100'}`}><ListIcon/> <span className="hidden md:inline">Items</span></button>
-                 <button onClick={() => setCurrentView('quotations')} title="Quotations" className={`flex items-center gap-2 py-2 px-3 rounded-lg ${currentView === 'quotations' ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'text-slate-600 hover:bg-slate-100'}`}><FileTextIcon/> <span className="hidden md:inline">Quotes</span></button>
-                 <button onClick={() => setCurrentView('invoices')} title="Invoices" className={`flex items-center gap-2 py-2 px-3 rounded-lg ${currentView === 'invoices' ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'text-slate-600 hover:bg-slate-100'}`}><DocumentIcon/> <span className="hidden md:inline">Invoices</span></button>
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-wrap items-center justify-between gap-4">
+            {/* Title on the far left */}
+            <div className="flex-shrink-0">
+                <h1 className="text-xl sm:text-2xl font-bold text-indigo-600">DocGen AI</h1>
+            </div>
+            
+            {/* Nav in the middle, will wrap to a new line on mobile */}
+            <nav className="w-full md:w-auto order-3 md:order-2 flex-grow">
+                <div className="flex items-center justify-center gap-1 sm:gap-2 pt-4 border-t md:pt-0 md:border-0">
+                   <button onClick={() => setCurrentView('setup')} title="Setup" className={`flex items-center gap-2 py-2 px-3 rounded-lg ${currentView === 'setup' ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'text-slate-600 hover:bg-slate-100'}`}><CogIcon/> <span className="hidden md:inline">Setup</span></button>
+                   <button onClick={() => setCurrentView('clients')} title="Clients" className={`flex items-center gap-2 py-2 px-3 rounded-lg ${currentView === 'clients' ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'text-slate-600 hover:bg-slate-100'}`}><UsersIcon/> <span className="hidden md:inline">Clients</span></button>
+                   <button onClick={() => setCurrentView('items')} title="Items" className={`flex items-center gap-2 py-2 px-3 rounded-lg ${currentView === 'items' ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'text-slate-600 hover:bg-slate-100'}`}><ListIcon/> <span className="hidden md:inline">Items</span></button>
+                   <button onClick={() => setCurrentView('quotations')} title="Quotations" className={`flex items-center gap-2 py-2 px-3 rounded-lg ${currentView === 'quotations' ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'text-slate-600 hover:bg-slate-100'}`}><FileTextIcon/> <span className="hidden md:inline">Quotes</span></button>
+                   <button onClick={() => setCurrentView('invoices')} title="Invoices" className={`flex items-center gap-2 py-2 px-3 rounded-lg ${currentView === 'invoices' ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'text-slate-600 hover:bg-slate-100'}`}><DocumentIcon/> <span className="hidden md:inline">Invoices</span></button>
+                </div>
             </nav>
-          </div>
-          {headerActions()}
+            
+            {/* Actions on the far right */}
+            <div className="flex-shrink-0 order-2 md:order-3">
+                {headerActions()}
+            </div>
         </div>
       </header>
       
