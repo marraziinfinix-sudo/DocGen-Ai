@@ -116,6 +116,7 @@ const App: React.FC = () => {
   });
 
   const [selectedSavedItemId, setSelectedSavedItemId] = useState<string>('');
+  const [selectedClientId, setSelectedClientId] = useState<string>('');
 
   // --- LocalStorage Persistence ---
   useEffect(() => {
@@ -262,6 +263,21 @@ const App: React.FC = () => {
   };
 
   const handleSaveDocument = () => {
+    // Basic validation
+    if (lineItems.length === 0) {
+      alert('Please add at least one line item before saving.');
+      return;
+    }
+    if (!clientDetails.name.trim()) {
+      alert('Please enter a client name before saving.');
+      return;
+    }
+
+    // Confirmation dialog
+    if (!window.confirm(`Are you sure you want to save this ${documentType.toLowerCase()}? Please review the details before confirming.`)) {
+        return; // Stop if user cancels
+    }
+
     // Check if client is new and ask to save
     if (clientDetails.name && clientDetails.name.trim() !== '') {
       const isExistingClient = clients.some(c => 
@@ -294,6 +310,7 @@ const App: React.FC = () => {
       total,
       status: documentType === DocumentType.Invoice ? InvoiceStatus.Pending : null,
     };
+
     if (documentType === DocumentType.Invoice) {
       setSavedInvoices(prev => [newDocument, ...prev]);
       alert('Invoice saved successfully!');
@@ -301,9 +318,35 @@ const App: React.FC = () => {
       setSavedQuotations(prev => [newDocument, ...prev]);
       alert('Quotation saved successfully!');
     }
+
+    // Clear the form for the next entry
+    setSelectedClientId('');
+    setClientDetails({ name: '', address: '', email: '', phone: '' });
+    setLineItems([]);
+    setSelectedSavedItemId('');
+
+    // Increment document number
+    setDocumentNumber(prev => {
+        const currentNum = parseInt(prev, 10);
+        return isNaN(currentNum) ? '001' : String(currentNum + 1).padStart(3, '0');
+    });
+    
+    // Reset dates
+    const today = new Date().toISOString().split('T')[0];
+    setIssueDate(today);
+    const newDueDate = new Date();
+    newDueDate.setDate(newDueDate.getDate() + 30);
+    setDueDate(newDueDate.toISOString().split('T')[0]);
+    setDueDateOption('30days');
+
+    // Reset notes to company default
+    if (activeCompany) {
+        setNotes(activeCompany.defaultNotes);
+    }
   };
   
   const handleSelectClient = (clientId: string) => {
+    setSelectedClientId(clientId);
     const selectedClient = clients.find(c => c.id === parseInt(clientId, 10));
     if (selectedClient) {
         setClientDetails(selectedClient);
@@ -390,7 +433,7 @@ const App: React.FC = () => {
           <div>
             <div className="bg-white p-4 rounded-lg shadow-sm mb-4">
                 <label className="block text-sm font-medium text-slate-600 mb-1">Select a client</label>
-                <select onChange={(e) => handleSelectClient(e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                <select value={selectedClientId} onChange={(e) => handleSelectClient(e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                     <option value="">-- New Client --</option>
                     {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
