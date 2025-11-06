@@ -491,7 +491,28 @@ const App: React.FC = () => {
 
   const handleShareEmail = () => {
       const subject = `${documentType} #${documentNumber} from ${companyDetails.name}`;
-      const body = `Hi ${clientDetails.name},\n\nPlease find attached our ${documentType.toLowerCase()} #${documentNumber} for a total of ${formatCurrency(total)}.\n\n${documentType === DocumentType.Invoice ? `The due date is ${new Date(dueDate + 'T00:00:00').toLocaleDateString()}.` : ''}\n\nThank you,\n${companyDetails.name}`;
+      
+      const docDataForMessage = {
+          documentType,
+          companyDetails,
+          clientDetails,
+          documentNumber,
+          issueDate,
+          dueDate,
+          lineItems,
+          notes,
+          subtotal,
+          taxAmount,
+          taxRate,
+          total,
+          formatCurrency,
+      };
+      
+      const messagePrefix = `Hi ${clientDetails.name},\n\nPlease find the details of our ${documentType.toLowerCase()} #${documentNumber} below.\n\n---\n\n`;
+      const messageContent = generateWhatsAppMessage(docDataForMessage);
+      const messageSuffix = `\n\nThank you,\n${companyDetails.name}`;
+      const body = messagePrefix + messageContent + messageSuffix;
+      
       window.location.href = `mailto:${clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   };
 
