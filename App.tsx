@@ -89,7 +89,7 @@ const App: React.FC = () => {
     date.setDate(date.getDate() + 30);
     return date.toISOString().split('T')[0];
   });
-  const [dueDateOption, setDueDateOption] = useState<string>('net30');
+  const [dueDateOption, setDueDateOption] = useState<string>('30days');
   
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   
@@ -167,19 +167,19 @@ const App: React.FC = () => {
     const newDueDate = new Date(issueDate + 'T00:00:00'); // Use UTC midnight to avoid timezone issues
     
     switch (dueDateOption) {
-        case 'receipt':
+        case 'sameday':
             // Due date is the same as issue date, so no change to newDueDate
             break;
-        case 'net15':
+        case '15days':
             newDueDate.setDate(newDueDate.getDate() + 15);
             break;
-        case 'net30':
+        case '30days':
             newDueDate.setDate(newDueDate.getDate() + 30);
             break;
-        case 'net45':
+        case '45days':
             newDueDate.setDate(newDueDate.getDate() + 45);
             break;
-        case 'net60':
+        case '60days':
             newDueDate.setDate(newDueDate.getDate() + 60);
             break;
         default:
@@ -339,7 +339,7 @@ const App: React.FC = () => {
     const newDueDate = new Date();
     newDueDate.setDate(newDueDate.getDate() + 30);
     setDueDate(newDueDate.toISOString().split('T')[0]);
-    setDueDateOption('net30');
+    setDueDateOption('30days');
 
     // Use default notes from the active company profile
     if (activeCompany) {
@@ -420,11 +420,11 @@ const App: React.FC = () => {
                 className="text-xs p-1 bg-white text-slate-600 border border-slate-300 rounded-md focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
               >
                 <option value="custom">Custom</option>
-                <option value="receipt">On Receipt</option>
-                <option value="net15">Net 15</option>
-                <option value="net30">Net 30</option>
-                <option value="net45">Net 45</option>
-                <option value="net60">Net 60</option>
+                <option value="sameday">On The Same Day</option>
+                <option value="15days">15 Days</option>
+                <option value="30days">30 Days</option>
+                <option value="45days">45 Days</option>
+                <option value="60days">60 Days</option>
               </select>
             </div>
             <input 
