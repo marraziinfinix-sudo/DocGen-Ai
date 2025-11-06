@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company } from './types';
 import { generateDescription } from './services/geminiService';
@@ -374,49 +373,64 @@ const App: React.FC = () => {
         {/* Line Items */}
         <div className="bg-white p-4 rounded-lg shadow-sm">
           <h3 className="text-lg font-semibold text-slate-700 mb-3">Items</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-left text-slate-500">
-                <tr className="border-b">
-                  <th className="font-semibold p-2 w-1/2">Description</th>
-                  <th className="font-semibold p-2 w-1/6">Qty</th>
-                  <th className="font-semibold p-2 w-1/6">Price</th>
-                  <th className="font-semibold p-2 w-1/6 text-right">Total</th>
-                  <th className="font-semibold p-2"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {lineItems.map((item, index) => (
-                  <tr key={item.id} className="border-b border-slate-100">
-                    <td className="p-2 align-top">
-                      <div className="relative">
-                        <textarea
-                          value={item.description}
-                          onChange={(e) => handleLineItemChange(item.id, 'description', e.target.value)}
-                          rows={2}
-                          placeholder="Item description"
-                          className="w-full p-2 pr-10 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"
-                        />
-                        <button onClick={() => handleGenerateDescription(item.id)} disabled={generatingStates[item.id]} className="absolute top-2 right-2 p-1 text-indigo-500 hover:bg-indigo-100 rounded-full disabled:text-slate-400 disabled:cursor-wait">
-                          <SparklesIcon isLoading={generatingStates[item.id]} />
-                        </button>
-                      </div>
-                    </td>
-                    <td className="p-2 align-top"><input type="number" min="0" value={item.quantity} onChange={(e) => handleLineItemChange(item.id, 'quantity', parseFloat(e.target.value) || 0)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"/></td>
-                    <td className="p-2 align-top"><input type="number" min="0" step="0.01" value={item.price} onChange={(e) => handleLineItemChange(item.id, 'price', parseFloat(e.target.value) || 0)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"/></td>
-                    <td className="p-2 align-top text-right text-slate-600">{formatCurrency(item.quantity * item.price)}</td>
-                    <td className="p-2 align-top"><button onClick={() => removeLineItem(item.id)} className="text-red-500 hover:text-red-700 p-2"><TrashIcon/></button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+           <div className="space-y-4">
+            {/* Desktop Header */}
+            <div className="hidden md:grid grid-cols-[minmax(0,_1fr)_90px_110px_110px_50px] gap-x-4 text-sm font-semibold text-slate-500 border-b pb-2">
+              <span>Description</span>
+              <span className="text-center">Qty</span>
+              <span className="text-right">Price</span>
+              <span className="text-right">Total</span>
+              <span></span>
+            </div>
+
+            {lineItems.map((item) => (
+              <div key={item.id} className="p-3 rounded-lg md:p-0 border md:border-0 md:border-b md:rounded-none border-slate-200 md:grid grid-cols-[minmax(0,_1fr)_90px_110px_110px_50px] gap-x-4 items-start md:py-3 space-y-2 md:space-y-0">
+                {/* Description */}
+                <div className="relative">
+                  <label className="text-xs font-medium text-slate-500 md:hidden">Description</label>
+                  <textarea
+                    value={item.description}
+                    onChange={(e) => handleLineItemChange(item.id, 'description', e.target.value)}
+                    rows={2}
+                    placeholder="Item description"
+                    className="w-full p-2 pr-10 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"
+                  />
+                  <button onClick={() => handleGenerateDescription(item.id)} disabled={generatingStates[item.id]} className="absolute top-2 right-2 p-1 text-indigo-500 hover:bg-indigo-100 rounded-full disabled:text-slate-400 disabled:cursor-wait">
+                    <SparklesIcon isLoading={generatingStates[item.id]} />
+                  </button>
+                </div>
+                
+                {/* Mobile container for Qty/Price */}
+                <div className="grid grid-cols-2 gap-4 md:contents">
+                    <div>
+                        <label className="text-xs font-medium text-slate-500 md:hidden">Qty</label>
+                        <input type="number" min="0" value={item.quantity} onChange={(e) => handleLineItemChange(item.id, 'quantity', parseFloat(e.target.value) || 0)} className="w-full text-center p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"/>
+                    </div>
+                    <div>
+                        <label className="text-xs font-medium text-slate-500 md:hidden">Price</label>
+                        <input type="number" min="0" step="0.01" value={item.price} onChange={(e) => handleLineItemChange(item.id, 'price', parseFloat(e.target.value) || 0)} className="w-full text-right p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"/>
+                    </div>
+                </div>
+
+                {/* Total */}
+                <div className="text-right self-center">
+                    <span className="font-medium text-slate-500 md:hidden">Total: </span>
+                    <span className="font-semibold text-slate-800">{formatCurrency(item.quantity * item.price)}</span>
+                </div>
+
+                {/* Remove Button */}
+                <div className="flex justify-end items-center self-center">
+                  <button onClick={() => removeLineItem(item.id)} className="text-red-500 hover:text-red-700 p-2"><TrashIcon/></button>
+                </div>
+              </div>
+            ))}
           </div>
           <button onClick={addLineItem} className="mt-4 flex items-center gap-2 text-indigo-600 font-semibold py-2 px-4 rounded-lg hover:bg-indigo-50 transition-colors">
             <PlusIcon/> Add Item
           </button>
            <div className="mt-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
               <label htmlFor="saved-item-select" className="block text-sm font-medium text-slate-600 mb-2">Add from Saved Items</label>
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <select 
                   id="saved-item-select"
                   value={selectedSavedItemId}
@@ -465,7 +479,7 @@ const App: React.FC = () => {
       </div>
 
       <div className="lg:col-span-2">
-        <div className="sticky top-24">
+        <div className="lg:sticky top-24">
           <DocumentPreview 
             documentType={documentType}
             companyDetails={companyDetails}
@@ -511,11 +525,12 @@ const App: React.FC = () => {
                     <WhatsAppIcon />
                 </button>
                  <button onClick={handleSaveDocument} className="flex items-center gap-2 bg-slate-500 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-600 transition-colors duration-200">
-                    <span>Save {documentType}</span>
+                    <span className="hidden sm:inline">Save </span>
+                    <span>{documentType}</span>
                 </button>
                 <button onClick={() => window.print()} className="flex items-center gap-2 bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 transition-colors duration-200">
                     <PrinterIcon />
-                    <span>Print / Save PDF</span>
+                    <span className="hidden sm:inline">Print / PDF</span>
                 </button>
             </div>
         );
@@ -528,14 +543,14 @@ const App: React.FC = () => {
     <div className="min-h-screen font-sans text-slate-800">
       <header className="bg-white shadow-md sticky top-0 z-20 no-print">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <h1 className="text-2xl font-bold text-indigo-600">DocGen AI</h1>
-            <nav className="flex items-center gap-2 border-l pl-4">
-                 <button onClick={() => setCurrentView('setup')} className={`flex items-center gap-2 py-2 px-3 rounded-lg ${currentView === 'setup' ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'text-slate-600 hover:bg-slate-100'}`}><CogIcon/> Setup</button>
-                 <button onClick={() => setCurrentView('clients')} className={`flex items-center gap-2 py-2 px-3 rounded-lg ${currentView === 'clients' ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'text-slate-600 hover:bg-slate-100'}`}><UsersIcon/> Clients</button>
-                 <button onClick={() => setCurrentView('items')} className={`flex items-center gap-2 py-2 px-3 rounded-lg ${currentView === 'items' ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'text-slate-600 hover:bg-slate-100'}`}><ListIcon/> Items</button>
-                 <button onClick={() => setCurrentView('quotations')} className={`flex items-center gap-2 py-2 px-3 rounded-lg ${currentView === 'quotations' ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'text-slate-600 hover:bg-slate-100'}`}><FileTextIcon/> Quotations</button>
-                 <button onClick={() => setCurrentView('invoices')} className={`flex items-center gap-2 py-2 px-3 rounded-lg ${currentView === 'invoices' ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'text-slate-600 hover:bg-slate-100'}`}><DocumentIcon/> Invoices</button>
+          <div className="flex items-center gap-2 sm:gap-4">
+            <h1 className="text-xl sm:text-2xl font-bold text-indigo-600">DocGen AI</h1>
+            <nav className="flex items-center gap-1 sm:gap-2 border-l pl-2 sm:pl-4">
+                 <button onClick={() => setCurrentView('setup')} title="Setup" className={`flex items-center gap-2 py-2 px-3 rounded-lg ${currentView === 'setup' ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'text-slate-600 hover:bg-slate-100'}`}><CogIcon/> <span className="hidden md:inline">Setup</span></button>
+                 <button onClick={() => setCurrentView('clients')} title="Clients" className={`flex items-center gap-2 py-2 px-3 rounded-lg ${currentView === 'clients' ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'text-slate-600 hover:bg-slate-100'}`}><UsersIcon/> <span className="hidden md:inline">Clients</span></button>
+                 <button onClick={() => setCurrentView('items')} title="Items" className={`flex items-center gap-2 py-2 px-3 rounded-lg ${currentView === 'items' ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'text-slate-600 hover:bg-slate-100'}`}><ListIcon/> <span className="hidden md:inline">Items</span></button>
+                 <button onClick={() => setCurrentView('quotations')} title="Quotations" className={`flex items-center gap-2 py-2 px-3 rounded-lg ${currentView === 'quotations' ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'text-slate-600 hover:bg-slate-100'}`}><FileTextIcon/> <span className="hidden md:inline">Quotes</span></button>
+                 <button onClick={() => setCurrentView('invoices')} title="Invoices" className={`flex items-center gap-2 py-2 px-3 rounded-lg ${currentView === 'invoices' ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'text-slate-600 hover:bg-slate-100'}`}><DocumentIcon/> <span className="hidden md:inline">Invoices</span></button>
             </nav>
           </div>
           {headerActions()}

@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { DocumentType, LineItem, Details } from '../types';
 
@@ -39,12 +38,12 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
 }) => {
 
   return (
-    <div id="print-area" className="bg-white rounded-lg shadow-lg p-8 md:p-12 text-sm text-slate-700 border">
-      <header className="flex justify-between items-start pb-8 border-b border-slate-200">
-        <div className="flex items-start gap-6">
-          {companyLogo && <img src={companyLogo} alt="Company Logo" className="w-24 h-24 object-contain" />}
+    <div id="print-area" className="bg-white rounded-lg shadow-lg p-6 sm:p-8 md:p-12 text-sm text-slate-700 border">
+      <header className="flex flex-col sm:flex-row justify-between items-start pb-8 border-b border-slate-200 gap-4 sm:gap-2">
+        <div className="flex items-start gap-4">
+          {companyLogo && <img src={companyLogo} alt="Company Logo" className="w-20 h-20 sm:w-24 sm:h-24 object-contain" />}
           <div>
-            <h1 className="text-3xl font-bold text-slate-800">{companyDetails.name}</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">{companyDetails.name}</h1>
             <p className="text-slate-500">{companyDetails.address}</p>
             <p className="text-slate-500">{companyDetails.email}</p>
             <p className="text-slate-500">{companyDetails.phone}</p>
@@ -52,20 +51,20 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
             {companyDetails.taxId && <p className="text-slate-500">Tax ID: {companyDetails.taxId}</p>}
           </div>
         </div>
-        <div className="text-right">
-          <h2 className="text-3xl font-bold uppercase text-indigo-600">{documentType}</h2>
+        <div className="text-left sm:text-right w-full sm:w-auto">
+          <h2 className="text-2xl sm:text-3xl font-bold uppercase text-indigo-600">{documentType}</h2>
           <p className="text-slate-500"># {documentNumber}</p>
         </div>
       </header>
       
-      <section className="grid grid-cols-2 gap-8 my-8">
+      <section className="grid grid-cols-1 sm:grid-cols-2 gap-8 my-8">
         <div>
           <h3 className="font-semibold text-slate-500 uppercase tracking-wider mb-2">Billed To</h3>
           <p className="font-bold text-slate-800">{clientDetails.name}</p>
           <p className="text-slate-600">{clientDetails.address}</p>
           <p className="text-slate-600">{clientDetails.email}</p>
         </div>
-        <div className="text-right">
+        <div className="text-left sm:text-right">
           <div className="mb-2">
             <p className="font-semibold text-slate-500">Date Issued</p>
             <p className="font-medium text-slate-800">{new Date(issueDate + 'T00:00:00').toLocaleDateString()}</p>
@@ -79,7 +78,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
         </div>
       </section>
       
-      <section>
+      <section className="overflow-x-auto">
         <table className="w-full text-left">
           <thead className="bg-slate-100">
             <tr>
@@ -119,7 +118,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
         </div>
       </section>
       
-      <footer className="mt-12 pt-8 border-t border-slate-200 grid grid-cols-2 gap-8">
+      <footer className="mt-12 pt-8 border-t border-slate-200 grid grid-cols-1 md:grid-cols-2 gap-8">
         <div>
           <h4 className="font-semibold text-slate-600 mb-2">Notes</h4>
           <p className="text-slate-500 whitespace-pre-wrap">{notes}</p>
