@@ -1,14 +1,17 @@
-
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company } from './types';
 import { generateDescription } from './services/geminiService';
-import { SparklesIcon, PlusIcon, TrashIcon, PrinterIcon, CogIcon, UsersIcon, ListIcon, DocumentIcon, MailIcon, WhatsAppIcon, FileTextIcon } from './components/Icons';
+import { SparklesIcon, PlusIcon, TrashIcon, PrinterIcon, CogIcon, UsersIcon, ListIcon, DocumentIcon, ShareIcon, FileTextIcon } from './components/Icons';
 import DocumentPreview from './components/DocumentPreview';
 import SetupPage from './components/SetupPage';
 import ClientListPage from './components/ClientListPage';
 import ItemListPage from './components/ItemListPage';
 import DocumentListPage from './components/DocumentListPage';
 import QuotationListPage from './components/QuotationListPage';
+
+// Declare globals from CDN scripts
+declare var html2canvas: any;
+declare var jspdf: any;
 
 
 const App: React.FC = () => {
@@ -94,6 +97,7 @@ const App: React.FC = () => {
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   
   const [generatingStates, setGeneratingStates] = useState<Record<number, boolean>>({});
+  const [isSharing, setIsSharing] = useState(false);
 
   const [savedInvoices, setSavedInvoices] = useState<SavedDocument[]>(() => {
     try {
@@ -432,21 +436,67 @@ const App: React.FC = () => {
     setCurrentView('editor');
   };
 
-  const handleShareEmail = () => {
-      const subject = `${documentType} #${documentNumber} from ${companyDetails.name}`;
-      const body = `Hi ${clientDetails.name},\n\nPlease find attached our ${documentType.toLowerCase()} #${documentNumber} for a total of ${formatCurrency(total)}.\n\n${documentType === DocumentType.Invoice ? `The due date is ${new Date(dueDate + 'T00:00:00').toLocaleDateString()}.` : ''}\n\nThank you,\n${companyDetails.name}`;
-      window.location.href = `mailto:${clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-  };
-
-  const handleShareWhatsApp = () => {
-    if (!clientDetails.phone || clientDetails.phone.trim() === '') {
-      alert("Please enter a phone number for the client to share via WhatsApp.");
+  const handleShare = async () => {
+    if (lineItems.length === 0 || !clientDetails.name.trim()) {
+      alert('Please add at least one item and a client name before sharing.');
       return;
     }
-    const phoneNumber = clientDetails.phone.replace(/\D/g, '');
-    const message = `Hi ${clientDetails.name}, here is our ${documentType.toLowerCase()} #${documentNumber} for a total of ${formatCurrency(total)}. Thank you!`;
-    const url = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
-    window.open(url, '_blank');
+
+    setIsSharing(true);
+    try {
+      const element = document.getElementById('print-area');
+      if (!element) throw new Error('Preview element not found');
+
+      const canvas = await html2canvas(element, { scale: 2, useCORS: true });
+      const imgData = canvas.toDataURL('image/png');
+
+      const { jsPDF } = jspdf;
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgProps = pdf.getImageProperties(imgData);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+      let heightLeft = pdfHeight;
+      let position = 0;
+      const pageHeight = pdf.internal.pageSize.getHeight();
+
+      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        position -= pageHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+        heightLeft -= pageHeight;
+      }
+      
+      const pdfBlob = pdf.getBlob();
+      const fileName = `${documentType}-${documentNumber}-${clientDetails.name.replace(/\s/g, '_')}.pdf`;
+      const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
+
+      const shareData = {
+        files: [pdfFile],
+        title: `${documentType} #${documentNumber} from ${companyDetails.name}`,
+        text: `Hi ${clientDetails.name},\n\nPlease find attached our ${documentType.toLowerCase()} #${documentNumber} for a total of ${formatCurrency(total)}.`,
+      };
+
+      if (navigator.share && navigator.canShare(shareData)) {
+        await navigator.share(shareData);
+      } else {
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(pdfBlob);
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        alert('PDF downloaded successfully. You can now manually attach it to your email or message.');
+      }
+    } catch (error) {
+      console.error('Failed to generate or share PDF:', error);
+      alert('An error occurred while creating the PDF for sharing.');
+    } finally {
+      setIsSharing(false);
+    }
   };
 
   const renderEditor = () => (
@@ -672,11 +722,9 @@ const App: React.FC = () => {
     if (currentView === 'editor') {
         return (
             <div className="flex items-center gap-2">
-                <button onClick={handleShareEmail} title="Share via Email" className="p-2 text-slate-500 hover:bg-slate-100 rounded-full">
-                    <MailIcon />
-                </button>
-                <button onClick={handleShareWhatsApp} title="Share via WhatsApp" className="p-2 text-slate-500 hover:bg-slate-100 rounded-full">
-                    <WhatsAppIcon />
+                <button onClick={handleShare} disabled={isSharing} title="Share Document" className="flex items-center gap-2 bg-slate-100 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-200 transition-colors duration-200 disabled:bg-slate-200 disabled:cursor-wait">
+                    <ShareIcon isLoading={isSharing} />
+                    <span className="hidden sm:inline">{isSharing ? 'Preparing...' : 'Share'}</span>
                 </button>
                 <button onClick={handleCreateNew} title="Create New Document" className="flex items-center gap-2 bg-slate-100 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-200 transition-colors duration-200">
                     <PlusIcon />
