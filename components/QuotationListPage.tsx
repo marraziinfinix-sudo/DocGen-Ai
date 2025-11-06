@@ -6,9 +6,10 @@ interface QuotationListPageProps {
   setDocuments: React.Dispatch<React.SetStateAction<SavedDocument[]>>;
   formatCurrency: (amount: number) => string;
   handleCreateInvoiceFromQuote: (quotation: SavedDocument) => void;
+  handleLoadDocument: (doc: SavedDocument) => void;
 }
 
-const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDocuments, formatCurrency, handleCreateInvoiceFromQuote }) => {
+const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDocuments, formatCurrency, handleCreateInvoiceFromQuote, handleLoadDocument }) => {
 
   const handleDeleteDocument = (id: number) => {
     if (window.confirm('Are you sure you want to delete this quotation? This action cannot be undone.')) {
@@ -23,7 +24,7 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
         
         <div className="space-y-4">
           {/* Header for large screens */}
-          <div className="hidden lg:grid grid-cols-[1fr,2fr,1fr,1fr,1.5fr] gap-4 px-4 py-2 bg-slate-50 rounded-t-lg">
+          <div className="hidden lg:grid grid-cols-[1fr,2fr,1fr,1fr,2fr] gap-4 px-4 py-2 bg-slate-50 rounded-t-lg">
               <span className="font-semibold text-slate-600 uppercase text-sm">Quote #</span>
               <span className="font-semibold text-slate-600 uppercase text-sm">Client</span>
               <span className="font-semibold text-slate-600 uppercase text-sm">Date</span>
@@ -54,6 +55,7 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
                       >
                           Create Invoice
                       </button>
+                      <button onClick={() => handleLoadDocument(doc)} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-50 text-sm">View</button>
                       <button onClick={() => handleDeleteDocument(doc.id)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-50 text-sm">
                           Delete
                       </button>
@@ -61,7 +63,7 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
               </div>
 
               {/* Desktop Row View */}
-              <div className="hidden lg:grid grid-cols-[1fr,2fr,1fr,1fr,1.5fr] gap-4 items-center p-4">
+              <div className="hidden lg:grid grid-cols-[1fr,2fr,1fr,1fr,2fr] gap-4 items-center p-4">
                   <span className="font-medium text-slate-800">{doc.documentNumber}</span>
                   <span className="text-slate-700 truncate">{doc.clientDetails.name}</span>
                   <span className="text-slate-500 text-sm">{new Date(doc.issueDate + 'T00:00:00').toLocaleDateString()}</span>
@@ -74,6 +76,7 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
                       >
                           Create Invoice
                       </button>
+                      <button onClick={() => handleLoadDocument(doc)} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-50 text-xs">View</button>
                       <button onClick={() => handleDeleteDocument(doc.id)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-50 text-xs">
                           Delete
                       </button>

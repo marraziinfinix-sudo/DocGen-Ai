@@ -304,9 +304,15 @@ const App: React.FC = () => {
       documentNumber,
       documentType,
       clientDetails,
+      companyDetails,
+      companyLogo,
+      bankQRCode,
       issueDate,
       dueDate,
       lineItems,
+      notes,
+      taxRate,
+      currency,
       total,
       status: documentType === DocumentType.Invoice ? InvoiceStatus.Pending : null,
     };
@@ -355,8 +361,24 @@ const App: React.FC = () => {
     }
   };
 
+  const handleLoadDocument = (doc: SavedDocument) => {
+    setDocumentType(doc.documentType);
+    setCompanyDetails(doc.companyDetails || activeCompany.details);
+    setCompanyLogo(doc.companyLogo);
+    setBankQRCode(doc.bankQRCode);
+    setClientDetails(doc.clientDetails);
+    setDocumentNumber(doc.documentNumber);
+    setIssueDate(doc.issueDate);
+    setDueDate(doc.dueDate);
+    setLineItems(doc.lineItems.map(item => ({ ...item, id: Date.now() + Math.random() }))); 
+    setNotes(doc.notes);
+    setTaxRate(doc.taxRate);
+    setCurrency(doc.currency);
+    setCurrentView('editor');
+  };
+
    const handleSendReminder = (doc: SavedDocument, channel: 'email' | 'whatsapp') => {
-    const message = `Dear ${doc.clientDetails.name},\n\nThis is a friendly reminder regarding invoice #${doc.documentNumber} for ${formatCurrency(doc.total)}, which was due on ${new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}.\n\nPlease let us know if you have any questions.\n\nBest regards,\n${companyDetails.name}`;
+    const message = `Dear ${doc.clientDetails.name},\n\nThis is a friendly reminder regarding invoice #${doc.documentNumber} for ${formatCurrency(doc.total)}, which was due on ${new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}.\n\nPlease let us know if you have any questions.\n\nBest regards,\n${doc.companyDetails.name}`;
     
     if (channel === 'email') {
       const subject = `Payment Reminder: Invoice #${doc.documentNumber}`;
@@ -367,29 +389,31 @@ const App: React.FC = () => {
   };
   
   const handleCreateInvoiceFromQuote = (quotation: SavedDocument) => {
-    // Switch to Invoice type
     setDocumentType(DocumentType.Invoice);
 
-    // Populate form fields from the quotation
+    setCompanyDetails(quotation.companyDetails);
+    setCompanyLogo(quotation.companyLogo);
+    setBankQRCode(quotation.bankQRCode);
     setClientDetails(quotation.clientDetails);
-    // Give line items new IDs to avoid key conflicts if the user manipulates them
     setLineItems(quotation.lineItems.map(item => ({ ...item, id: Date.now() + Math.random() }))); 
-    
-    // Set new invoice-specific details
-    setDocumentNumber(String(savedInvoices.length + 1).padStart(3, '0'));
-    setIssueDate(new Date().toISOString().split('T')[0]);
+    setNotes(quotation.notes);
+    setTaxRate(quotation.taxRate);
+    setCurrency(quotation.currency);
+
+    const highestInvoiceNum = savedInvoices.reduce((max, inv) => {
+        const num = parseInt(inv.documentNumber, 10);
+        return isNaN(num) ? max : Math.max(max, num);
+    }, 0);
+    setDocumentNumber(String(highestInvoiceNum + 1).padStart(3, '0'));
+
+    const today = new Date().toISOString().split('T')[0];
+    setIssueDate(today);
     
     const newDueDate = new Date();
     newDueDate.setDate(newDueDate.getDate() + 30);
     setDueDate(newDueDate.toISOString().split('T')[0]);
     setDueDateOption('30days');
 
-    // Use default notes from the active company profile
-    if (activeCompany) {
-      setNotes(activeCompany.defaultNotes);
-    }
-
-    // Switch view to the editor
     setCurrentView('editor');
   };
 
@@ -643,7 +667,7 @@ const App: React.FC = () => {
             </div>
         );
     }
-    return <button onClick={() => setCurrentView('editor')} className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700">Back to Editor</button>;
+    return <button onClick={() => setCurrentView('editor')} className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700">Back To Main Menu</button>;
   };
 
 
@@ -679,8 +703,8 @@ const App: React.FC = () => {
         {currentView === 'setup' && <SetupPage companies={companies} setCompanies={setCompanies} onDone={() => setCurrentView('editor')} />}
         {currentView === 'clients' && <ClientListPage clients={clients} setClients={setClients} onDone={() => setCurrentView('editor')} />}
         {currentView === 'items' && <ItemListPage items={items} setItems={setItems} formatCurrency={formatCurrency} onDone={() => setCurrentView('editor')} />}
-        {currentView === 'invoices' && <DocumentListPage documents={savedInvoices} setDocuments={setSavedInvoices} formatCurrency={formatCurrency} handleSendReminder={handleSendReminder} />}
-        {currentView === 'quotations' && <QuotationListPage documents={savedQuotations} setDocuments={setSavedQuotations} formatCurrency={formatCurrency} handleCreateInvoiceFromQuote={handleCreateInvoiceFromQuote} />}
+        {currentView === 'invoices' && <DocumentListPage documents={savedInvoices} setDocuments={setSavedInvoices} formatCurrency={formatCurrency} handleSendReminder={handleSendReminder} handleLoadDocument={handleLoadDocument} />}
+        {currentView === 'quotations' && <QuotationListPage documents={savedQuotations} setDocuments={setSavedQuotations} formatCurrency={formatCurrency} handleCreateInvoiceFromQuote={handleCreateInvoiceFromQuote} handleLoadDocument={handleLoadDocument} />}
       </main>
     </div>
   );

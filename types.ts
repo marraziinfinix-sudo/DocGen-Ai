@@ -55,9 +55,15 @@ export interface SavedDocument {
   documentNumber: string;
   documentType: DocumentType;
   clientDetails: Details;
+  companyDetails: Details;
+  companyLogo: string | null;
+  bankQRCode: string | null;
   issueDate: string;
   dueDate: string;
   lineItems: LineItem[];
+  notes: string;
+  taxRate: number;
+  currency: string;
   total: number;
   status: InvoiceStatus | null;
   paidDate?: string | null;

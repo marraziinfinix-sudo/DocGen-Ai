@@ -7,9 +7,10 @@ interface DocumentListPageProps {
   setDocuments: React.Dispatch<React.SetStateAction<SavedDocument[]>>;
   formatCurrency: (amount: number) => string;
   handleSendReminder: (doc: SavedDocument, channel: 'email' | 'whatsapp') => void;
+  handleLoadDocument: (doc: SavedDocument) => void;
 }
 
-const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocuments, formatCurrency, handleSendReminder }) => {
+const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocuments, formatCurrency, handleSendReminder, handleLoadDocument }) => {
 
   const handleToggleStatus = (id: number) => {
     setDocuments(prev =>
@@ -40,7 +41,7 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
         
         <div className="space-y-4">
           {/* Header for large screens */}
-          <div className="hidden lg:grid grid-cols-[1fr,2fr,1fr,1fr,1fr,1.5fr] gap-4 px-4 py-2 bg-slate-50 rounded-t-lg">
+          <div className="hidden lg:grid grid-cols-[1fr,2fr,1fr,1fr,1fr,2fr] gap-4 px-4 py-2 bg-slate-50 rounded-t-lg">
               <span className="font-semibold text-slate-600 uppercase text-sm">Invoice #</span>
               <span className="font-semibold text-slate-600 uppercase text-sm">Client</span>
               <span className="font-semibold text-slate-600 uppercase text-sm">Date</span>
@@ -82,13 +83,14 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
                                 <button onClick={() => handleSendReminder(doc, 'whatsapp')} title="Send WhatsApp Reminder" className="p-2 text-slate-500 hover:bg-slate-100 rounded-full"><WhatsAppIcon /></button>
                             </>
                         )}
+                        <button onClick={() => handleLoadDocument(doc)} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-50 text-xs">View</button>
                         <button onClick={() => handleDeleteDocument(doc.id)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-50 text-xs">Delete</button>
                     </div>
                 </div>
               </div>
 
               {/* Desktop Row View */}
-              <div className="hidden lg:grid grid-cols-[1fr,2fr,1fr,1fr,1fr,1.5fr] gap-4 items-center p-4">
+              <div className="hidden lg:grid grid-cols-[1fr,2fr,1fr,1fr,1fr,2fr] gap-4 items-center p-4">
                   <span className="font-medium text-slate-800">{doc.documentNumber}</span>
                   <span className="text-slate-700 truncate">{doc.clientDetails.name}</span>
                   <span className="text-slate-500 text-sm">{new Date(doc.issueDate + 'T00:00:00').toLocaleDateString()}</span>
@@ -115,6 +117,7 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
                               <button onClick={() => handleSendReminder(doc, 'whatsapp')} title="Send WhatsApp Reminder" className="p-2 text-slate-500 hover:bg-slate-100 rounded-full"><WhatsAppIcon /></button>
                           </>
                       )}
+                      <button onClick={() => handleLoadDocument(doc)} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-50 text-xs">View</button>
                       <button onClick={() => handleDeleteDocument(doc.id)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-50 text-xs">Delete</button>
                   </div>
               </div>
