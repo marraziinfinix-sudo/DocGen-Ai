@@ -392,19 +392,76 @@ const App: React.FC = () => {
     setCurrentView('editor');
   };
 
+  const generateWhatsAppMessage = (docData: any) => {
+    let message = `*${docData.documentType.toUpperCase()}*\n\n`;
+
+    message += `*FROM:*\n`;
+    message += `${docData.companyDetails.name}\n`;
+    if (docData.companyDetails.address) message += `${docData.companyDetails.address}\n`;
+    if (docData.companyDetails.email) message += `Email: ${docData.companyDetails.email}\n`;
+    if (docData.companyDetails.phone) message += `Phone: ${docData.companyDetails.phone}\n`;
+    if (docData.companyDetails.website) message += `Website: ${docData.companyDetails.website}\n`;
+    if (docData.companyDetails.taxId) message += `Tax ID: ${docData.companyDetails.taxId}\n\n`;
+
+    message += `*BILLED TO:*\n`;
+    message += `${docData.clientDetails.name}\n`;
+    if (docData.clientDetails.address) message += `${docData.clientDetails.address}\n`;
+    if (docData.clientDetails.email) message += `Email: ${docData.clientDetails.email}\n\n`;
+
+    message += `*${docData.documentType} #: ${docData.documentNumber}*\n`;
+    message += `*Date Issued:* ${new Date(docData.issueDate + 'T00:00:00').toLocaleDateString()}\n`;
+    const dueDateLabel = docData.documentType === DocumentType.Invoice ? 'Due Date' : 'Valid Until';
+    message += `*${dueDateLabel}:* ${new Date(docData.dueDate + 'T00:00:00').toLocaleDateString()}\n\n`;
+
+    message += `*ITEMS*\n`;
+    message += `-----------------------------------\n`;
+    docData.lineItems.forEach((item: LineItem) => {
+        message += `${item.description}\n`;
+        message += `(${item.quantity} x ${docData.formatCurrency(item.price)}) = *${docData.formatCurrency(item.price * item.quantity)}*\n`;
+        message += `-----------------------------------\n`;
+    });
+    message += `\n`;
+
+    message += `Subtotal: ${docData.formatCurrency(docData.subtotal)}\n`;
+    message += `Tax (${docData.taxRate}%): ${docData.formatCurrency(docData.taxAmount)}\n`;
+    message += `*TOTAL: ${docData.formatCurrency(docData.total)}*\n\n`;
+
+    if (docData.notes) {
+        message += `*Notes:*\n`;
+        message += `${docData.notes}\n\n`;
+    }
+
+    if (docData.companyDetails.bankName || docData.companyDetails.accountNumber) {
+        message += `*Payment Details:*\n`;
+        if (docData.companyDetails.bankName) message += `Bank: ${docData.companyDetails.bankName}\n`;
+        if (docData.companyDetails.accountNumber) message += `Account No.: ${docData.companyDetails.accountNumber}\n\n`;
+    }
+
+    return message;
+  };
+
    const handleSendReminder = (doc: SavedDocument, channel: 'email' | 'whatsapp') => {
-    const message = `Dear ${doc.clientDetails.name},\n\nThis is a friendly reminder regarding invoice #${doc.documentNumber} for ${formatCurrency(doc.total)}, which was due on ${new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}.\n\nPlease let us know if you have any questions.\n\nBest regards,\n${doc.companyDetails.name}`;
+    const reminderMessage = `Dear ${doc.clientDetails.name},\n\nThis is a friendly reminder regarding invoice #${doc.documentNumber} for ${formatCurrency(doc.total)}, which was due on ${new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}.\n\nPlease let us know if you have any questions.\n\nBest regards,\n${doc.companyDetails.name}`;
     
     if (channel === 'email') {
       const subject = `Payment Reminder: Invoice #${doc.documentNumber}`;
-      window.location.href = `mailto:${doc.clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
+      window.location.href = `mailto:${doc.clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(reminderMessage)}`;
     } else {
       if (!doc.clientDetails.phone || doc.clientDetails.phone.trim() === '') {
         alert(`Please add a phone number for '${doc.clientDetails.name}' to send a WhatsApp reminder.`);
         return;
       }
       const phoneNumber = doc.clientDetails.phone.replace(/\D/g, '');
-      const url = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
+
+      const subtotal = doc.lineItems.reduce((acc, item) => acc + item.quantity * item.price, 0);
+      const taxAmount = subtotal * (doc.taxRate / 100);
+      const docDataForMessage = { ...doc, subtotal, taxAmount, formatCurrency };
+      
+      const reminderPrefix = `*Friendly Reminder*\n\nDear ${doc.clientDetails.name},\nThis is a reminder for the following invoice which was due on ${new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}:\n\n---\n\n`;
+      const messageContent = generateWhatsAppMessage(docDataForMessage);
+      const fullMessage = reminderPrefix + messageContent;
+
+      const url = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(fullMessage)}`;
       window.open(url, '_blank');
     }
   };
@@ -444,7 +501,27 @@ const App: React.FC = () => {
       return;
     }
     const phoneNumber = clientDetails.phone.replace(/\D/g, '');
-    const message = `Hi ${clientDetails.name}, here is our ${documentType.toLowerCase()} #${documentNumber} for a total of ${formatCurrency(total)}. Thank you!`;
+    
+    const docDataForMessage = {
+        documentType,
+        companyDetails,
+        clientDetails,
+        documentNumber,
+        issueDate,
+        dueDate,
+        lineItems,
+        notes,
+        subtotal,
+        taxAmount,
+        taxRate,
+        total,
+        formatCurrency,
+    };
+    
+    const messagePrefix = `Hi ${clientDetails.name}, here is our ${documentType.toLowerCase()} #${documentNumber}:\n\n---\n\n`;
+    const messageContent = generateWhatsAppMessage(docDataForMessage);
+    const message = messagePrefix + messageContent;
+
     const url = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
     window.open(url, '_blank');
   };
