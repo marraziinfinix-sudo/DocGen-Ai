@@ -1,6 +1,5 @@
-
-import React, { useState, useMemo, useCallback } from 'react';
-import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus } from './types';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company } from './types';
 import { generateDescription } from './services/geminiService';
 import { SparklesIcon, PlusIcon, TrashIcon, PrinterIcon, CogIcon, UsersIcon, ListIcon, DocumentIcon, MailIcon, WhatsAppIcon, FileTextIcon } from './components/Icons';
 import DocumentPreview from './components/DocumentPreview';
@@ -14,7 +13,42 @@ import QuotationListPage from './components/QuotationListPage';
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<'editor' | 'setup' | 'clients' | 'items' | 'invoices' | 'quotations'>('editor');
   const [documentType, setDocumentType] = useState<DocumentType>(DocumentType.Quotation);
-  const [companyDetails, setCompanyDetails] = useState<Details>({ name: 'Your Company', address: '123 Main St, Anytown, USA', email: 'contact@yourcompany.com', phone: '555-123-4567', bankName: '', accountNumber: '' });
+  
+  const [companies, setCompanies] = useState<Company[]>([
+    {
+      id: Date.now(),
+      details: { name: 'Your Company', address: '123 Main St, Anytown, USA', email: 'contact@yourcompany.com', phone: '555-123-4567', bankName: '', accountNumber: '', website: '', taxId: '' },
+      logo: null,
+      bankQRCode: null,
+      defaultNotes: 'Thank you for your business.',
+      taxRate: 0,
+      currency: '',
+    }
+  ]);
+  const [activeCompanyId, setActiveCompanyId] = useState<number>(companies[0].id);
+
+  const activeCompany = useMemo(() => companies.find(c => c.id === activeCompanyId) || companies[0], [companies, activeCompanyId]);
+
+  // States for the current document form
+  const [companyDetails, setCompanyDetails] = useState<Details>(activeCompany.details);
+  const [companyLogo, setCompanyLogo] = useState<string | null>(activeCompany.logo);
+  const [bankQRCode, setBankQRCode] = useState<string | null>(activeCompany.bankQRCode);
+  const [notes, setNotes] = useState(activeCompany.defaultNotes);
+  const [taxRate, setTaxRate] = useState(activeCompany.taxRate);
+  const [currency, setCurrency] = useState(activeCompany.currency);
+
+  useEffect(() => {
+    if (activeCompany) {
+      setCompanyDetails(activeCompany.details);
+      setCompanyLogo(activeCompany.logo);
+      setBankQRCode(activeCompany.bankQRCode);
+      setNotes(activeCompany.defaultNotes);
+      setTaxRate(activeCompany.taxRate);
+      setCurrency(activeCompany.currency);
+    }
+  }, [activeCompany]);
+
+
   const [clientDetails, setClientDetails] = useState<Details>({ name: 'Client Name', address: '456 Oak Ave, Otherville, USA', email: 'client@example.com', phone: '' });
   const [clients, setClients] = useState<Client[]>([
     { id: 1, name: 'Sample Client Inc.', address: '789 Client Ave, Testburg, USA', email: 'contact@sampleclient.com', phone: '555-987-6543' }
@@ -26,8 +60,7 @@ const App: React.FC = () => {
   ]);
   const [documentNumber, setDocumentNumber] = useState('001');
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0]);
-  const [companyLogo, setCompanyLogo] = useState<string | null>(null);
-  const [bankQRCode, setBankQRCode] = useState<string | null>(null);
+  
   const [dueDate, setDueDate] = useState(() => {
     const date = new Date();
     date.setDate(date.getDate() + 30);
@@ -37,9 +70,7 @@ const App: React.FC = () => {
     { id: 1, description: 'E.g., Web Design Services', quantity: 10, price: 150.00 },
     { id: 2, description: 'E.g., Content Management System', quantity: 1, price: 2500.00 },
   ]);
-  const [notes, setNotes] = useState('Thank you for your business.');
-  const [taxRate, setTaxRate] = useState(0);
-  const [currency, setCurrency] = useState('');
+  
   const [generatingStates, setGeneratingStates] = useState<Record<number, boolean>>({});
   const [savedInvoices, setSavedInvoices] = useState<SavedDocument[]>([]);
   const [savedQuotations, setSavedQuotations] = useState<SavedDocument[]>([]);
@@ -154,20 +185,29 @@ const App: React.FC = () => {
   };
   
   const handleCreateInvoiceFromQuote = (quotation: SavedDocument) => {
+    // Switch to Invoice type
+    setDocumentType(DocumentType.Invoice);
+
+    // Populate form fields from the quotation
+    setClientDetails(quotation.clientDetails);
+    // Give line items new IDs to avoid key conflicts if the user manipulates them
+    setLineItems(quotation.lineItems.map(item => ({ ...item, id: Date.now() + Math.random() }))); 
+    
+    // Set new invoice-specific details
+    setDocumentNumber(String(savedInvoices.length + 1).padStart(3, '0'));
+    setIssueDate(new Date().toISOString().split('T')[0]);
+    
     const newDueDate = new Date();
     newDueDate.setDate(newDueDate.getDate() + 30);
+    setDueDate(newDueDate.toISOString().split('T')[0]);
 
-    const newInvoice: SavedDocument = {
-      ...quotation,
-      id: Date.now(),
-      documentType: DocumentType.Invoice,
-      documentNumber: String(savedInvoices.length + 1).padStart(3, '0'),
-      issueDate: new Date().toISOString().split('T')[0],
-      dueDate: newDueDate.toISOString().split('T')[0],
-      status: InvoiceStatus.Pending,
-    };
-    setSavedInvoices(prev => [newInvoice, ...prev]);
-    setCurrentView('invoices');
+    // Use default notes from the active company profile
+    if (activeCompany) {
+      setNotes(activeCompany.defaultNotes);
+    }
+
+    // Switch view to the editor
+    setCurrentView('editor');
   };
 
   const handleShareEmail = () => {
@@ -198,9 +238,17 @@ const App: React.FC = () => {
         
         {/* Company & Client Details */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {renderDetailsForm("From", companyDetails, handleDetailChange(setCompanyDetails))}
           <div>
-            <div className="mb-2">
+              <div className="bg-white p-4 rounded-lg shadow-sm mb-4">
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Active Company Profile</label>
+                  <select onChange={(e) => setActiveCompanyId(Number(e.target.value))} value={activeCompanyId} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                    {companies.map(c => <option key={c.id} value={c.id}>{c.details.name}</option>)}
+                  </select>
+              </div>
+              {renderDetailsForm("From (Editable for this document)", companyDetails, handleDetailChange(setCompanyDetails))}
+          </div>
+          <div>
+            <div className="bg-white p-4 rounded-lg shadow-sm mb-4">
                 <label className="block text-sm font-medium text-slate-600 mb-1">Select a client</label>
                 <select onChange={(e) => handleSelectClient(e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                     <option value="">-- New Client --</option>
@@ -400,7 +448,7 @@ const App: React.FC = () => {
       
       <main className={`container mx-auto p-4 sm:p-6 lg:p-8 ${currentView === 'editor' ? 'grid grid-cols-1 lg:grid-cols-5 gap-8' : ''}`}>
         {currentView === 'editor' && renderEditor()}
-        {currentView === 'setup' && <SetupPage companyDetails={companyDetails} setCompanyDetails={setCompanyDetails} companyLogo={companyLogo} setCompanyLogo={setCompanyLogo} bankQRCode={bankQRCode} setBankQRCode={setBankQRCode} notes={notes} setNotes={setNotes} taxRate={taxRate} setTaxRate={setTaxRate} currency={currency} setCurrency={setCurrency} onDone={() => setCurrentView('editor')} />}
+        {currentView === 'setup' && <SetupPage companies={companies} setCompanies={setCompanies} onDone={() => setCurrentView('editor')} />}
         {currentView === 'clients' && <ClientListPage clients={clients} setClients={setClients} onDone={() => setCurrentView('editor')} />}
         {currentView === 'items' && <ItemListPage items={items} setItems={setItems} formatCurrency={formatCurrency} onDone={() => setCurrentView('editor')} />}
         {currentView === 'invoices' && <DocumentListPage documents={savedInvoices} setDocuments={setSavedInvoices} formatCurrency={formatCurrency} handleSendReminder={handleSendReminder} />}

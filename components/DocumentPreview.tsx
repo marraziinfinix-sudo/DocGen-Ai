@@ -48,6 +48,8 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
             <p className="text-slate-500">{companyDetails.address}</p>
             <p className="text-slate-500">{companyDetails.email}</p>
             <p className="text-slate-500">{companyDetails.phone}</p>
+            {companyDetails.website && <p className="text-slate-500">{companyDetails.website}</p>}
+            {companyDetails.taxId && <p className="text-slate-500">Tax ID: {companyDetails.taxId}</p>}
           </div>
         </div>
         <div className="text-right">

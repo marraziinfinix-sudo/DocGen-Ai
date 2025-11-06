@@ -26,6 +26,18 @@ export interface Details {
   phone: string;
   bankName?: string;
   accountNumber?: string;
+  website?: string;
+  taxId?: string;
+}
+
+export interface Company {
+  id: number;
+  details: Details;
+  logo: string | null;
+  bankQRCode: string | null;
+  defaultNotes: string;
+  taxRate: number;
+  currency: string;
 }
 
 export interface Client extends Details {
