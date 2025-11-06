@@ -384,7 +384,13 @@ const App: React.FC = () => {
       const subject = `Payment Reminder: Invoice #${doc.documentNumber}`;
       window.location.href = `mailto:${doc.clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
     } else {
-      window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+      if (!doc.clientDetails.phone || doc.clientDetails.phone.trim() === '') {
+        alert(`Please add a phone number for '${doc.clientDetails.name}' to send a WhatsApp reminder.`);
+        return;
+      }
+      const phoneNumber = doc.clientDetails.phone.replace(/\D/g, '');
+      const url = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
+      window.open(url, '_blank');
     }
   };
   
@@ -424,8 +430,14 @@ const App: React.FC = () => {
   };
 
   const handleShareWhatsApp = () => {
+    if (!clientDetails.phone || clientDetails.phone.trim() === '') {
+      alert("Please enter a phone number for the client to share via WhatsApp.");
+      return;
+    }
+    const phoneNumber = clientDetails.phone.replace(/\D/g, '');
     const message = `Hi ${clientDetails.name}, here is our ${documentType.toLowerCase()} #${documentNumber} for a total of ${formatCurrency(total)}. Thank you!`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+    const url = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
+    window.open(url, '_blank');
   };
 
   const renderEditor = () => (
