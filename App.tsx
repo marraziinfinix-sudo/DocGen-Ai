@@ -159,7 +159,17 @@ const App: React.FC = () => {
     }
   }, [savedQuotations]);
   // --- End LocalStorage Persistence ---
-
+  
+  // --- Document Number Management ---
+  useEffect(() => {
+    const relevantDocs = documentType === DocumentType.Invoice ? savedInvoices : savedQuotations;
+    const highestNum = relevantDocs.reduce((max, doc) => {
+      const num = parseInt(doc.documentNumber, 10);
+      return isNaN(num) ? max : Math.max(max, num);
+    }, 0);
+    setDocumentNumber(String(highestNum + 1).padStart(3, '0'));
+  }, [documentType, savedInvoices, savedQuotations]);
+  // --- End Document Number Management ---
 
   // --- Due Date Calculation Effect ---
   useEffect(() => {
@@ -261,6 +271,33 @@ const App: React.FC = () => {
   const formatCurrency = (amount: number) => {
     return `${currency}${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount)}`;
   };
+  
+  const clearAndPrepareNewDocument = useCallback(() => {
+    setSelectedClientId('');
+    setClientDetails({ name: '', address: '', email: '', phone: '' });
+    setLineItems([]);
+    setSelectedSavedItemId('');
+    
+    // Reset dates
+    const today = new Date().toISOString().split('T')[0];
+    setIssueDate(today);
+    const newDueDate = new Date();
+    newDueDate.setDate(newDueDate.getDate() + 30);
+    setDueDate(newDueDate.toISOString().split('T')[0]);
+    setDueDateOption('30days');
+
+    // Reset notes to company default
+    if (activeCompany) {
+      setNotes(activeCompany.defaultNotes);
+    }
+    // The document number is handled by the useEffect hook
+  }, [activeCompany]);
+
+  const handleCreateNew = () => {
+    if (window.confirm("Are you sure you want to start a new document? All unsaved changes will be lost.")) {
+      clearAndPrepareNewDocument();
+    }
+  };
 
   const handleSaveDocument = () => {
     // Basic validation
@@ -326,29 +363,7 @@ const App: React.FC = () => {
     }
 
     // Clear the form for the next entry
-    setSelectedClientId('');
-    setClientDetails({ name: '', address: '', email: '', phone: '' });
-    setLineItems([]);
-    setSelectedSavedItemId('');
-
-    // Increment document number
-    setDocumentNumber(prev => {
-        const currentNum = parseInt(prev, 10);
-        return isNaN(currentNum) ? '001' : String(currentNum + 1).padStart(3, '0');
-    });
-    
-    // Reset dates
-    const today = new Date().toISOString().split('T')[0];
-    setIssueDate(today);
-    const newDueDate = new Date();
-    newDueDate.setDate(newDueDate.getDate() + 30);
-    setDueDate(newDueDate.toISOString().split('T')[0]);
-    setDueDateOption('30days');
-
-    // Reset notes to company default
-    if (activeCompany) {
-        setNotes(activeCompany.defaultNotes);
-    }
+    clearAndPrepareNewDocument();
   };
   
   const handleSelectClient = (clientId: string) => {
@@ -405,12 +420,6 @@ const App: React.FC = () => {
     setNotes(quotation.notes);
     setTaxRate(quotation.taxRate);
     setCurrency(quotation.currency);
-
-    const highestInvoiceNum = savedInvoices.reduce((max, inv) => {
-        const num = parseInt(inv.documentNumber, 10);
-        return isNaN(num) ? max : Math.max(max, num);
-    }, 0);
-    setDocumentNumber(String(highestInvoiceNum + 1).padStart(3, '0'));
 
     const today = new Date().toISOString().split('T')[0];
     setIssueDate(today);
@@ -668,6 +677,10 @@ const App: React.FC = () => {
                 </button>
                 <button onClick={handleShareWhatsApp} title="Share via WhatsApp" className="p-2 text-slate-500 hover:bg-slate-100 rounded-full">
                     <WhatsAppIcon />
+                </button>
+                <button onClick={handleCreateNew} title="Create New Document" className="flex items-center gap-2 bg-slate-100 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-200 transition-colors duration-200">
+                    <PlusIcon />
+                    <span className="hidden sm:inline">New</span>
                 </button>
                  <button onClick={handleSaveDocument} className="flex items-center gap-2 bg-slate-500 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-600 transition-colors duration-200">
                     <span>Save</span>
