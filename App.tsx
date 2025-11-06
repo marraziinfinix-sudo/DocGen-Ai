@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company } from './types';
 import { generateDescription } from './services/geminiService';
@@ -14,17 +15,26 @@ const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<'editor' | 'setup' | 'clients' | 'items' | 'invoices' | 'quotations'>('editor');
   const [documentType, setDocumentType] = useState<DocumentType>(DocumentType.Quotation);
   
-  const [companies, setCompanies] = useState<Company[]>([
-    {
-      id: Date.now(),
+  const [companies, setCompanies] = useState<Company[]>(() => {
+    try {
+      const saved = localStorage.getItem('companies');
+      const parsed = saved ? JSON.parse(saved) : null;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    } catch (e) {
+      console.error('Failed to load companies from localStorage', e);
+    }
+    return [{
+      id: 1,
       details: { name: 'Your Company', address: '123 Main St, Anytown, USA', email: 'contact@yourcompany.com', phone: '555-123-4567', bankName: '', accountNumber: '', website: '', taxId: '' },
       logo: null,
       bankQRCode: null,
       defaultNotes: 'Thank you for your business.',
       taxRate: 0,
-      currency: '',
-    }
-  ]);
+      currency: '$',
+    }];
+  });
   const [activeCompanyId, setActiveCompanyId] = useState<number>(companies[0].id);
 
   const activeCompany = useMemo(() => companies.find(c => c.id === activeCompanyId) || companies[0], [companies, activeCompanyId]);
@@ -50,14 +60,39 @@ const App: React.FC = () => {
 
 
   const [clientDetails, setClientDetails] = useState<Details>({ name: 'Client Name', address: '456 Oak Ave, Otherville, USA', email: 'client@example.com', phone: '' });
-  const [clients, setClients] = useState<Client[]>([
-    { id: 1, name: 'Sample Client Inc.', address: '789 Client Ave, Testburg, USA', email: 'contact@sampleclient.com', phone: '555-987-6543' }
-  ]);
-   const [items, setItems] = useState<Item[]>([
-    { id: 1, description: 'Premium Web Development', price: 3000 },
-    { id: 2, description: 'Logo Design & Branding Package', price: 1200 },
-    { id: 3, description: 'Monthly SEO Services', price: 750 },
-  ]);
+  
+  const [clients, setClients] = useState<Client[]>(() => {
+    try {
+      const saved = localStorage.getItem('clients');
+      return saved ? JSON.parse(saved) : [
+        { id: 1, name: 'Sample Client Inc.', address: '789 Client Ave, Testburg, USA', email: 'contact@sampleclient.com', phone: '555-987-6543' }
+      ];
+    } catch (e) {
+      console.error('Failed to load clients from localStorage', e);
+      return [
+        { id: 1, name: 'Sample Client Inc.', address: '789 Client Ave, Testburg, USA', email: 'contact@sampleclient.com', phone: '555-987-6543' }
+      ];
+    }
+  });
+
+   const [items, setItems] = useState<Item[]>(() => {
+    try {
+      const saved = localStorage.getItem('items');
+      return saved ? JSON.parse(saved) : [
+        { id: 1, description: 'Premium Web Development', price: 3000 },
+        { id: 2, description: 'Logo Design & Branding Package', price: 1200 },
+        { id: 3, description: 'Monthly SEO Services', price: 750 },
+      ];
+    } catch (e) {
+      console.error('Failed to load items from localStorage', e);
+      return [
+        { id: 1, description: 'Premium Web Development', price: 3000 },
+        { id: 2, description: 'Logo Design & Branding Package', price: 1200 },
+        { id: 3, description: 'Monthly SEO Services', price: 750 },
+      ];
+    }
+  });
+
   const [documentNumber, setDocumentNumber] = useState('001');
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0]);
   
@@ -72,9 +107,70 @@ const App: React.FC = () => {
   ]);
   
   const [generatingStates, setGeneratingStates] = useState<Record<number, boolean>>({});
-  const [savedInvoices, setSavedInvoices] = useState<SavedDocument[]>([]);
-  const [savedQuotations, setSavedQuotations] = useState<SavedDocument[]>([]);
+
+  const [savedInvoices, setSavedInvoices] = useState<SavedDocument[]>(() => {
+    try {
+      const saved = localStorage.getItem('savedInvoices');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error('Failed to load savedInvoices from localStorage', e);
+      return [];
+    }
+  });
+
+  const [savedQuotations, setSavedQuotations] = useState<SavedDocument[]>(() => {
+    try {
+      const saved = localStorage.getItem('savedQuotations');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error('Failed to load savedQuotations from localStorage', e);
+      return [];
+    }
+  });
+
   const [selectedSavedItemId, setSelectedSavedItemId] = useState<string>('');
+
+  // --- LocalStorage Persistence ---
+  useEffect(() => {
+    try {
+      localStorage.setItem('companies', JSON.stringify(companies));
+    } catch (e) {
+      console.error('Failed to save companies to localStorage', e);
+    }
+  }, [companies]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('clients', JSON.stringify(clients));
+    } catch (e) {
+      console.error('Failed to save clients to localStorage', e);
+    }
+  }, [clients]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('items', JSON.stringify(items));
+    } catch (e) {
+      console.error('Failed to save items to localStorage', e);
+    }
+  }, [items]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('savedInvoices', JSON.stringify(savedInvoices));
+    } catch (e) {
+      console.error('Failed to save invoices to localStorage', e);
+    }
+  }, [savedInvoices]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('savedQuotations', JSON.stringify(savedQuotations));
+    } catch (e) {
+      console.error('Failed to save quotations to localStorage', e);
+    }
+  }, [savedQuotations]);
+  // --- End LocalStorage Persistence ---
 
 
   const handleLineItemChange = useCallback((id: number, field: keyof Omit<LineItem, 'id'>, value: string | number) => {
