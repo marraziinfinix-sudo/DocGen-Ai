@@ -89,6 +89,8 @@ const App: React.FC = () => {
     date.setDate(date.getDate() + 30);
     return date.toISOString().split('T')[0];
   });
+  const [dueDateOption, setDueDateOption] = useState<string>('net30');
+  
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   
   const [generatingStates, setGeneratingStates] = useState<Record<number, boolean>>({});
@@ -157,6 +159,41 @@ const App: React.FC = () => {
   }, [savedQuotations]);
   // --- End LocalStorage Persistence ---
 
+
+  // --- Due Date Calculation Effect ---
+  useEffect(() => {
+    if (dueDateOption === 'custom' || !issueDate) return;
+
+    const newDueDate = new Date(issueDate + 'T00:00:00'); // Use UTC midnight to avoid timezone issues
+    
+    switch (dueDateOption) {
+        case 'receipt':
+            // Due date is the same as issue date, so no change to newDueDate
+            break;
+        case 'net15':
+            newDueDate.setDate(newDueDate.getDate() + 15);
+            break;
+        case 'net30':
+            newDueDate.setDate(newDueDate.getDate() + 30);
+            break;
+        case 'net45':
+            newDueDate.setDate(newDueDate.getDate() + 45);
+            break;
+        case 'net60':
+            newDueDate.setDate(newDueDate.getDate() + 60);
+            break;
+        default:
+            return; // Don't change if it's an unknown option
+    }
+
+    setDueDate(newDueDate.toISOString().split('T')[0]);
+  }, [issueDate, dueDateOption]);
+  
+  const handleManualDueDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setDueDate(e.target.value);
+    setDueDateOption('custom');
+  };
+  // --- End Due Date Calculation ---
 
   const handleLineItemChange = useCallback((id: number, field: keyof Omit<LineItem, 'id'>, value: string | number) => {
     setLineItems(prevItems =>
@@ -302,6 +339,7 @@ const App: React.FC = () => {
     const newDueDate = new Date();
     newDueDate.setDate(newDueDate.getDate() + 30);
     setDueDate(newDueDate.toISOString().split('T')[0]);
+    setDueDateOption('net30');
 
     // Use default notes from the active company profile
     if (activeCompany) {
@@ -372,8 +410,29 @@ const App: React.FC = () => {
               <input type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
           </div>
           <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">{documentType === DocumentType.Invoice ? 'Due Date' : 'Valid Until'}</label>
-              <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+            <div className="flex justify-between items-center mb-1">
+              <label className="block text-sm font-medium text-slate-600">
+                {documentType === DocumentType.Invoice ? 'Due Date' : 'Valid Until'}
+              </label>
+              <select 
+                value={dueDateOption} 
+                onChange={(e) => setDueDateOption(e.target.value)}
+                className="text-xs p-1 bg-white text-slate-600 border border-slate-300 rounded-md focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+              >
+                <option value="custom">Custom</option>
+                <option value="receipt">On Receipt</option>
+                <option value="net15">Net 15</option>
+                <option value="net30">Net 30</option>
+                <option value="net45">Net 45</option>
+                <option value="net60">Net 60</option>
+              </select>
+            </div>
+            <input 
+              type="date" 
+              value={dueDate} 
+              onChange={handleManualDueDateChange} 
+              className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" 
+            />
           </div>
         </div>
         
