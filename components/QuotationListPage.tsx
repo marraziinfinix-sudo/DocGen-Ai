@@ -32,38 +32,52 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
           </div>
 
           {documents.length > 0 ? documents.map(doc => (
-            <div key={doc.id} className="bg-white p-4 rounded-lg shadow-sm border lg:border-b lg:shadow-none lg:rounded-none lg:grid lg:grid-cols-[1fr,2fr,1fr,1fr,1.5fr] gap-4 items-center">
-              
-              <div className="lg:contents">
-                <div className="font-medium text-slate-800">
-                  <span className="lg:hidden text-xs font-semibold text-slate-500 uppercase">Quote # </span>
-                  {doc.documentNumber}
-                </div>
-                <div className="text-slate-700 truncate mt-1 lg:mt-0">
-                  <span className="lg:hidden text-xs font-semibold text-slate-500 uppercase">Client: </span>
-                  {doc.clientDetails.name}
-                </div>
-                <div className="text-slate-500 text-sm mt-1 lg:mt-0">
-                  <span className="lg:hidden text-xs font-semibold uppercase">Date: </span>
-                  {new Date(doc.issueDate + 'T00:00:00').toLocaleDateString()}
-                </div>
-                <div className="font-medium text-slate-800 text-right mt-1 lg:mt-0">
-                  <span className="lg:hidden text-xs font-semibold text-slate-500 uppercase">Total: </span>
-                  {formatCurrency(doc.total)}
-                </div>
+            <div key={doc.id} className="bg-white p-4 rounded-lg shadow-sm border lg:p-0 lg:shadow-none lg:rounded-none lg:border-b">
+              {/* Mobile Card View */}
+              <div className="lg:hidden">
+                  <div className="flex justify-between items-start">
+                      <div>
+                          <p className="text-xs font-semibold text-slate-500 uppercase">Quote #</p>
+                          <p className="font-medium text-slate-800">{doc.documentNumber}</p>
+                      </div>
+                      <p className="font-bold text-lg text-indigo-600">{formatCurrency(doc.total)}</p>
+                  </div>
+                  <div className="mt-2 text-sm text-slate-600">
+                      <p className="font-medium">{doc.clientDetails.name}</p>
+                      <p>Issued: {new Date(doc.issueDate + 'T00:00:00').toLocaleDateString()}</p>
+                  </div>
+                  <div className="mt-4 pt-3 border-t flex justify-end items-center gap-2">
+                      <button 
+                          onClick={() => handleCreateInvoiceFromQuote(doc)}
+                          className="font-semibold text-green-600 py-1 px-3 rounded-lg hover:bg-green-50 text-sm whitespace-nowrap"
+                          title="Convert to Invoice"
+                      >
+                          Create Invoice
+                      </button>
+                      <button onClick={() => handleDeleteDocument(doc.id)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-50 text-sm">
+                          Delete
+                      </button>
+                  </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t lg:border-0 lg:mt-0 lg:pt-0">
-                <button 
-                  onClick={() => handleCreateInvoiceFromQuote(doc)}
-                  className="font-semibold text-green-600 py-1 px-3 rounded-lg hover:bg-green-50 text-xs whitespace-nowrap"
-                  title="Convert to Invoice"
-                >
-                  Create Invoice
-                </button>
-                <button onClick={() => handleDeleteDocument(doc.id)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-50 text-xs">
-                  Delete
-                </button>
+              {/* Desktop Row View */}
+              <div className="hidden lg:grid grid-cols-[1fr,2fr,1fr,1fr,1.5fr] gap-4 items-center p-4">
+                  <span className="font-medium text-slate-800">{doc.documentNumber}</span>
+                  <span className="text-slate-700 truncate">{doc.clientDetails.name}</span>
+                  <span className="text-slate-500 text-sm">{new Date(doc.issueDate + 'T00:00:00').toLocaleDateString()}</span>
+                  <span className="font-medium text-slate-800 text-right">{formatCurrency(doc.total)}</span>
+                  <div className="flex items-center justify-end gap-2">
+                      <button 
+                          onClick={() => handleCreateInvoiceFromQuote(doc)}
+                          className="font-semibold text-green-600 py-1 px-3 rounded-lg hover:bg-green-50 text-xs whitespace-nowrap"
+                          title="Convert to Invoice"
+                      >
+                          Create Invoice
+                      </button>
+                      <button onClick={() => handleDeleteDocument(doc.id)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-50 text-xs">
+                          Delete
+                      </button>
+                  </div>
               </div>
             </div>
           )) : (

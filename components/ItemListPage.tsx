@@ -8,8 +8,6 @@ interface ItemListPageProps {
   onDone: () => void;
 }
 
-// FIX: Changed the type definition to correctly handle the price as a string for the form input.
-// `Omit<Item, 'id' | 'price'>` prevents a type conflict on the `price` property, which was previously `number & string`, resulting in `never`.
 const emptyFormState: Omit<Item, 'id' | 'price'> & { id: number | null; price: string } = {
   id: null,
   description: '',
@@ -56,7 +54,7 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
 
   return (
     <main className="container mx-auto p-4 sm:p-6 lg:p-8">
-      <div className="max-w-4xl mx-auto bg-white p-8 rounded-lg shadow-md">
+      <div className="max-w-4xl mx-auto bg-white p-4 sm:p-8 rounded-lg shadow-md">
         <h2 className="text-2xl font-bold text-gray-800 mb-6 border-b pb-4">Manage Items</h2>
 
         <div className="bg-slate-50 p-6 rounded-lg mb-8 border border-slate-200">
@@ -81,12 +79,12 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
             <h3 className="text-lg font-semibold text-gray-700 mb-4">Saved Items</h3>
             <div className="space-y-3">
                 {items.length > 0 ? items.map(item => (
-                    <div key={item.id} className="bg-white p-4 rounded-lg shadow-sm border flex justify-between items-center">
-                        <div>
+                    <div key={item.id} className="bg-white p-4 rounded-lg shadow-sm border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-2">
+                        <div className="w-full sm:w-auto">
                             <p className="font-bold text-slate-800">{item.description}</p>
                             <p className="text-sm text-slate-500">{formatCurrency(item.price)}</p>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 self-end sm:self-center flex-shrink-0">
                             <button onClick={() => handleEditItem(item)} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-50">Edit</button>
                             <button onClick={() => handleDeleteItem(item.id)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-50">Delete</button>
                         </div>

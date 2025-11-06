@@ -55,7 +55,7 @@ const CompanyForm: React.FC<{
     <div className="fixed inset-0 bg-black bg-opacity-50 z-30 flex justify-center items-center p-4">
         <div className="bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <form onSubmit={handleSubmit}>
-                <div className="p-8">
+                <div className="p-4 sm:p-8">
                     <h2 className="text-2xl font-bold text-gray-800 mb-6 border-b pb-4">
                         {formData.id === 0 ? 'Add New Company' : 'Edit Company'}
                     </h2>
@@ -182,25 +182,25 @@ const SetupPage: React.FC<SetupPageProps> = ({ companies, setCompanies, onDone }
 
   return (
     <main className="container mx-auto p-4 sm:p-6 lg:p-8">
-      <div className="max-w-4xl mx-auto bg-white p-8 rounded-lg shadow-md">
+      <div className="max-w-4xl mx-auto bg-white p-4 sm:p-8 rounded-lg shadow-md">
         <div className="flex justify-between items-center mb-6 border-b pb-4">
             <h2 className="text-2xl font-bold text-gray-800">Company Profiles</h2>
             <button onClick={handleAddNew} className="flex items-center gap-2 bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700">
-                <PlusIcon /> Add New
+                <PlusIcon /> <span className="hidden sm:inline">Add New</span>
             </button>
         </div>
 
         <div className="space-y-4">
             {companies.map(company => (
-                 <div key={company.id} className="bg-slate-50 p-4 rounded-lg border flex justify-between items-center">
+                 <div key={company.id} className="bg-slate-50 p-4 rounded-lg border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-2">
                     <div className="flex items-center gap-4">
-                        {company.logo && <img src={company.logo} alt="logo" className="w-12 h-12 object-contain bg-white rounded-md p-1 border" />}
+                        {company.logo && <img src={company.logo} alt="logo" className="w-12 h-12 object-contain bg-white rounded-md p-1 border flex-shrink-0" />}
                         <div>
                             <p className="font-bold text-slate-800">{company.details.name}</p>
-                            <p className="text-sm text-slate-500">{company.details.email}</p>
+                            <p className="text-sm text-slate-500 break-all">{company.details.email}</p>
                         </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 self-end sm:self-center flex-shrink-0">
                         <button onClick={() => handleEdit(company)} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-50">Edit</button>
                         <button onClick={() => handleDelete(company.id)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-50">Delete</button>
                     </div>
