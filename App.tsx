@@ -176,13 +176,26 @@ const App: React.FC = () => {
   // --- Document Number Management ---
   useEffect(() => {
     if (!isCreatingNew) return;
-    const relevantDocs = documentType === DocumentType.Invoice ? savedInvoices : savedQuotations;
-    const highestNum = relevantDocs.reduce((max, doc) => {
+  
+    const usedNumbers = new Set<number>();
+  
+    // Collect all document numbers from both invoices and quotations
+    [...savedInvoices, ...savedQuotations].forEach(doc => {
       const num = parseInt(doc.documentNumber, 10);
-      return isNaN(num) ? max : Math.max(max, num);
-    }, 0);
-    setDocumentNumber(String(highestNum + 1).padStart(3, '0'));
-  }, [documentType, savedInvoices, savedQuotations, isCreatingNew]);
+      if (!isNaN(num)) {
+        usedNumbers.add(num);
+      }
+    });
+  
+    // Find the first available positive integer
+    let nextNumber = 1;
+    while (usedNumbers.has(nextNumber)) {
+      nextNumber++;
+    }
+  
+    setDocumentNumber(String(nextNumber).padStart(3, '0'));
+  
+  }, [savedInvoices, savedQuotations, isCreatingNew]);
   // --- End Document Number Management ---
 
   // --- Auto-update saved client on detail change ---
