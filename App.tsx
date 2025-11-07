@@ -627,7 +627,8 @@ const App: React.FC = () => {
   const handleShareEmailFromModal = () => {
     if (!lastSavedDocument) return;
     const subject = `${lastSavedDocument.documentType} #${lastSavedDocument.documentNumber} from ${lastSavedDocument.companyDetails.name}`;
-    const body = `Hi ${lastSavedDocument.clientDetails.name},\n\nPlease find our ${lastSavedDocument.documentType.toLowerCase()} attached.\n\nThank you,\n${lastSavedDocument.companyDetails.name}`;
+    const pdfFileName = `${lastSavedDocument.documentType}-${lastSavedDocument.documentNumber}.pdf`;
+    const body = `Hi ${lastSavedDocument.clientDetails.name},\n\nPlease find our ${lastSavedDocument.documentType.toLowerCase()} attached.\n\n(To attach the file, please find '${pdfFileName}' in your Downloads folder.)\n\nThank you,\n${lastSavedDocument.companyDetails.name}`;
     window.location.href = `mailto:${lastSavedDocument.clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     setShowPostSaveModal(false);
   };
@@ -639,7 +640,7 @@ const App: React.FC = () => {
       return;
     }
     const phoneNumber = lastSavedDocument.clientDetails.phone.replace(/\D/g, '');
-    const message = `Hi ${lastSavedDocument.clientDetails.name}, please find our ${lastSavedDocument.documentType.toLowerCase()} #${lastSavedDocument.documentNumber} attached.`;
+    const message = `Hi ${lastSavedDocument.clientDetails.name}, here is our ${lastSavedDocument.documentType.toLowerCase()} #${lastSavedDocument.documentNumber}. Please attach the PDF file you just downloaded to this message.`;
     const url = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
     window.open(url, '_blank');
     setShowPostSaveModal(false);
@@ -932,7 +933,7 @@ const App: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
           <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md text-center">
             <h3 className="text-xl font-bold text-slate-800 mb-2">Saved & PDF Generated!</h3>
-            <p className="text-slate-600 mb-6">Your PDF has been downloaded. What would you like to do next?</p>
+            <p className="text-slate-600 mb-6">Your PDF has been downloaded. Click a share option below, then manually attach the downloaded file to your message.</p>
             <div className="flex flex-col sm:flex-row justify-center gap-4">
               <button onClick={handleShareEmailFromModal} className="flex items-center justify-center gap-2 bg-blue-500 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-blue-600 transition-colors">
                 <MailIcon /> Share via Email
