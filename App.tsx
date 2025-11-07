@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment } from './types';
 import { generateDescription } from './services/geminiService';
@@ -322,6 +321,16 @@ const App: React.FC = () => {
       return;
     }
 
+    const existingDocs = documentType === DocumentType.Invoice ? savedInvoices : savedQuotations;
+    const isDuplicate = existingDocs.some(
+      doc => doc.documentNumber.trim().toLowerCase() === documentNumber.trim().toLowerCase()
+    );
+
+    if (isDuplicate) {
+      alert(`A ${documentType.toLowerCase()} with the number #${documentNumber} already exists. Please use a different number.`);
+      return;
+    }
+
     if (!window.confirm(`Are you sure you want to save this ${documentType.toLowerCase()}? Please review the details.`)) {
         return;
     }
@@ -512,9 +521,17 @@ const App: React.FC = () => {
     if (!window.confirm(`Create an invoice from quotation #${quotation.documentNumber}? This will be saved immediately.`)) {
       return;
     }
+    
+    const newInvoiceNumber = quotation.documentNumber;
 
-    const highestInvoiceNum = savedInvoices.reduce((max, doc) => Math.max(max, parseInt(doc.documentNumber, 10) || 0), 0);
-    const newInvoiceNumber = String(highestInvoiceNum + 1).padStart(3, '0');
+    const isDuplicateInvoice = savedInvoices.some(
+      inv => inv.documentNumber.trim().toLowerCase() === newInvoiceNumber.trim().toLowerCase()
+    );
+
+    if (isDuplicateInvoice) {
+      alert(`Cannot create invoice. An invoice with the number #${newInvoiceNumber} already exists.`);
+      return;
+    }
     
     const today = new Date();
     const issueDate = today.toISOString().split('T')[0];
