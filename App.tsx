@@ -327,23 +327,46 @@ const App: React.FC = () => {
   };
 
   const handleSaveDocument = () => {
-    if (
-        loadedDocumentInfo &&
-        loadedDocumentInfo.docType === DocumentType.Invoice &&
-        loadedDocumentInfo.status === InvoiceStatus.Paid
-    ) {
-        alert('This invoice is marked as Paid and cannot be modified or re-saved to prevent duplicate records.');
-        return;
-    }
-
     if (lineItems.length === 0 || !clientDetails.name.trim()) {
       alert('Please add at least one line item and a client name before saving.');
       return;
     }
 
+    // Find the original document if we are editing one
+    let originalDoc: SavedDocument | undefined = undefined;
+    if (loadedDocumentInfo) {
+      const list = loadedDocumentInfo.docType === DocumentType.Invoice ? savedInvoices : savedQuotations;
+      originalDoc = list.find(d => d.id === loadedDocumentInfo.id);
+    }
+
+    const isUpdating = !!originalDoc;
+
+    // Block modification of non-pending invoices or non-active quotations
+    if (originalDoc) {
+      if (originalDoc.documentType === DocumentType.Invoice && originalDoc.status !== InvoiceStatus.Pending) {
+        alert('This invoice is already Paid or Partially Paid and cannot be modified. Please create a new invoice instead.');
+        return;
+      }
+      if (originalDoc.documentType === DocumentType.Quotation) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const validUntil = new Date(originalDoc.dueDate + 'T00:00:00');
+        
+        if (originalDoc.quotationStatus === QuotationStatus.Agreed) {
+          alert('This quotation has been converted to an invoice and cannot be modified.');
+          return;
+        }
+        if (validUntil < today) {
+          alert('This quotation has expired and cannot be modified.');
+          return;
+        }
+      }
+    }
+
+    // Check for duplicate document numbers, excluding the current document if updating
     const existingDocs = documentType === DocumentType.Invoice ? savedInvoices : savedQuotations;
     const isDuplicate = existingDocs.some(
-      doc => doc.documentNumber.trim().toLowerCase() === documentNumber.trim().toLowerCase()
+      doc => doc.documentNumber.trim().toLowerCase() === documentNumber.trim().toLowerCase() && doc.id !== originalDoc?.id
     );
 
     if (isDuplicate) {
@@ -351,10 +374,11 @@ const App: React.FC = () => {
       return;
     }
 
-    if (!window.confirm(`Are you sure you want to save this ${documentType.toLowerCase()}? Please review the details.`)) {
-        return;
+    if (!window.confirm(`Are you sure you want to ${isUpdating ? 'update' : 'save'} this ${documentType.toLowerCase()}? Please review the details.`)) {
+      return;
     }
 
+    // Save new client if needed
     if (clientDetails.name && clientDetails.name.trim() !== '') {
       const isExistingClient = clients.some(c => 
         c.name.trim().toLowerCase() === clientDetails.name.trim().toLowerCase() && 
@@ -367,9 +391,9 @@ const App: React.FC = () => {
       }
     }
 
+    // Determine final status for invoices
     let finalStatus: InvoiceStatus | null = null;
     let finalPaidDate: string | null | undefined = null;
-
     if (documentType === DocumentType.Invoice) {
         const amountPaid = payments.reduce((sum, p) => sum + p.amount, 0);
         if (amountPaid >= total) {
@@ -382,8 +406,8 @@ const App: React.FC = () => {
         }
     }
 
-    const newDocument: SavedDocument = {
-      id: Date.now(),
+    // Construct the document data
+    const documentData: Omit<SavedDocument, 'id'> = {
       documentNumber,
       documentType,
       clientDetails,
@@ -398,19 +422,32 @@ const App: React.FC = () => {
       currency,
       total,
       status: finalStatus,
-      quotationStatus: documentType === DocumentType.Quotation ? QuotationStatus.Active : null,
+      quotationStatus: documentType === DocumentType.Quotation ? (originalDoc?.quotationStatus || QuotationStatus.Active) : null,
       paidDate: finalPaidDate,
       payments: documentType === DocumentType.Invoice ? payments : [],
       template,
       accentColor,
     };
-
-    if (documentType === DocumentType.Invoice) {
-      setSavedInvoices(prev => [newDocument, ...prev]);
-      alert('Invoice saved successfully!');
-    } else {
-      setSavedQuotations(prev => [newDocument, ...prev]);
-      alert('Quotation saved successfully!');
+    
+    // Perform Update or Create
+    if (isUpdating && originalDoc) {
+      const updatedDocument: SavedDocument = { ...documentData, id: originalDoc.id };
+      if (documentType === DocumentType.Invoice) {
+        setSavedInvoices(prev => prev.map(doc => doc.id === originalDoc.id ? updatedDocument : doc));
+        alert('Invoice updated successfully!');
+      } else {
+        setSavedQuotations(prev => prev.map(doc => doc.id === originalDoc.id ? updatedDocument : doc));
+        alert('Quotation updated successfully!');
+      }
+    } else { // Create new
+      const newDocument: SavedDocument = { ...documentData, id: Date.now() };
+      if (documentType === DocumentType.Invoice) {
+        setSavedInvoices(prev => [newDocument, ...prev]);
+        alert('Invoice saved successfully!');
+      } else {
+        setSavedQuotations(prev => [newDocument, ...prev]);
+        alert('Quotation saved successfully!');
+      }
     }
   };
 
