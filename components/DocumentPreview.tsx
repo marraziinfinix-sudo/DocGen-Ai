@@ -59,7 +59,9 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
       
       <section className="grid grid-cols-1 sm:grid-cols-2 gap-8 my-8">
         <div>
-          <h3 className="font-semibold text-slate-500 uppercase tracking-wider mb-2">Billed To</h3>
+          <h3 className="font-semibold text-slate-500 uppercase tracking-wider mb-2">
+            {documentType === DocumentType.Invoice ? 'Billed To' : 'Quote To'}
+          </h3>
           <p className="font-bold text-slate-800">{clientDetails.name}</p>
           <p className="text-slate-600">{clientDetails.address}</p>
           <p className="text-slate-600">{clientDetails.email}</p>

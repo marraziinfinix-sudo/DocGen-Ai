@@ -403,7 +403,8 @@ const App: React.FC = () => {
     if (docData.companyDetails.website) message += `Website: ${docData.companyDetails.website}\n`;
     if (docData.companyDetails.taxId) message += `Tax ID: ${docData.companyDetails.taxId}\n\n`;
 
-    message += `*BILLED TO:*\n`;
+    const billedToLabel = docData.documentType === DocumentType.Invoice ? 'BILLED TO' : 'QUOTE TO';
+    message += `*${billedToLabel}:*\n`;
     message += `${docData.clientDetails.name}\n`;
     if (docData.clientDetails.address) message += `${docData.clientDetails.address}\n`;
     if (docData.clientDetails.email) message += `Email: ${docData.clientDetails.email}\n\n`;
