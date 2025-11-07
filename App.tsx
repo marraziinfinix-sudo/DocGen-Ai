@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment } from './types';
+import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus } from './types';
 import { generateDescription } from './services/geminiService';
 import { SparklesIcon, PlusIcon, TrashIcon, CogIcon, UsersIcon, ListIcon, DocumentIcon, MailIcon, WhatsAppIcon, FileTextIcon, DownloadIcon, MoreVerticalIcon, PrinterIcon } from './components/Icons';
 import DocumentPreview from './components/DocumentPreview';
@@ -378,6 +378,7 @@ const App: React.FC = () => {
       currency,
       total,
       status: finalStatus,
+      quotationStatus: documentType === DocumentType.Quotation ? QuotationStatus.Active : null,
       paidDate: finalPaidDate,
       payments: documentType === DocumentType.Invoice ? payments : [],
     };
@@ -549,9 +550,11 @@ const App: React.FC = () => {
       status: InvoiceStatus.Pending,
       paidDate: null,
       payments: [],
+      quotationStatus: null,
     };
     
     setSavedInvoices(prev => [newInvoice, ...prev]);
+    setSavedQuotations(prev => prev.map(q => q.id === quotation.id ? { ...q, quotationStatus: QuotationStatus.Agreed } : q));
 
     alert(`Invoice #${newInvoiceNumber} created successfully!`);
     setCurrentView('invoices');

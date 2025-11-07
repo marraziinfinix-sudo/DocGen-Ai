@@ -13,6 +13,12 @@ export enum InvoiceStatus {
   PartiallyPaid = 'Partially Paid',
 }
 
+export enum QuotationStatus {
+  Active = 'Active',
+  Expired = 'Expired',
+  Agreed = 'Agreed',
+}
+
 export interface Payment {
   id: number;
   amount: number;
@@ -75,6 +81,7 @@ export interface SavedDocument {
   currency: string;
   total: number;
   status: InvoiceStatus | null;
+  quotationStatus?: QuotationStatus | null;
   paidDate?: string | null;
   payments?: Payment[];
 }
