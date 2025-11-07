@@ -128,6 +128,7 @@ const App: React.FC = () => {
   const [selectedSavedItemId, setSelectedSavedItemId] = useState<string>('');
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [loadedDocumentInfo, setLoadedDocumentInfo] = useState<{ id: number; status: InvoiceStatus | QuotationStatus | null; docType: DocumentType } | null>(null);
+  const [isCreatingNew, setIsCreatingNew] = useState(true);
 
 
   // --- LocalStorage Persistence ---
@@ -174,14 +175,14 @@ const App: React.FC = () => {
   
   // --- Document Number Management ---
   useEffect(() => {
-    if (currentView !== 'editor' || loadedDocumentInfo) return;
+    if (!isCreatingNew) return;
     const relevantDocs = documentType === DocumentType.Invoice ? savedInvoices : savedQuotations;
     const highestNum = relevantDocs.reduce((max, doc) => {
       const num = parseInt(doc.documentNumber, 10);
       return isNaN(num) ? max : Math.max(max, num);
     }, 0);
     setDocumentNumber(String(highestNum + 1).padStart(3, '0'));
-  }, [documentType, savedInvoices, savedQuotations, currentView, loadedDocumentInfo]);
+  }, [documentType, savedInvoices, savedQuotations, isCreatingNew]);
   // --- End Document Number Management ---
 
   // --- Auto-update saved client on detail change ---
@@ -299,6 +300,7 @@ const App: React.FC = () => {
   
   const clearAndPrepareNewDocument = useCallback(() => {
     setLoadedDocumentInfo(null);
+    setIsCreatingNew(true);
     setSelectedClientId('');
     setClientDetails({ name: '', address: '', email: '', phone: '' });
     setLineItems([]);
@@ -437,6 +439,8 @@ const App: React.FC = () => {
         setSavedQuotations(prev => [newDocument, ...prev]);
         alert('Quotation saved successfully!');
       }
+      setLoadedDocumentInfo({ id: newDocument.id, status: newDocument.status || newDocument.quotationStatus, docType: newDocument.documentType });
+      setIsCreatingNew(false);
     }
   };
 
@@ -476,6 +480,7 @@ const App: React.FC = () => {
 
   const handleLoadDocument = (doc: SavedDocument) => {
     setLoadedDocumentInfo({ id: doc.id, status: doc.status || doc.quotationStatus, docType: doc.documentType });
+    setIsCreatingNew(false);
     setDocumentType(doc.documentType);
     setCompanyDetails(doc.companyDetails || activeCompany.details);
     setCompanyLogo(doc.companyLogo);
