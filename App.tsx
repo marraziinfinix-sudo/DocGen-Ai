@@ -171,6 +171,22 @@ const App: React.FC = () => {
   }, [documentType, savedInvoices, savedQuotations]);
   // --- End Document Number Management ---
 
+  // --- Auto-update saved client on detail change ---
+  useEffect(() => {
+    // Only update if there is a selected client.
+    // This prevents updating the list when creating a new client from a blank form.
+    if (selectedClientId) {
+      setClients(prevClients =>
+        prevClients.map(client =>
+          client.id === parseInt(selectedClientId, 10)
+            // Spread the original client to preserve the ID, then overwrite with form details
+            ? { ...client, ...clientDetails }
+            : client
+        )
+      );
+    }
+  }, [clientDetails, selectedClientId, setClients]);
+
   // --- Due Date Calculation Effect ---
   useEffect(() => {
     if (dueDateOption === 'custom' || !issueDate) return;
