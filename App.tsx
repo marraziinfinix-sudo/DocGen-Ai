@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus } from './types';
 import { generateDescription } from './services/geminiService';
@@ -122,6 +121,8 @@ const App: React.FC = () => {
 
   const [selectedSavedItemId, setSelectedSavedItemId] = useState<string>('');
   const [selectedClientId, setSelectedClientId] = useState<string>('');
+  const [loadedDocumentInfo, setLoadedDocumentInfo] = useState<{ id: number; status: InvoiceStatus | null; docType: DocumentType } | null>(null);
+
 
   // --- LocalStorage Persistence ---
   useEffect(() => {
@@ -291,6 +292,7 @@ const App: React.FC = () => {
   };
   
   const clearAndPrepareNewDocument = useCallback(() => {
+    setLoadedDocumentInfo(null);
     setSelectedClientId('');
     setClientDetails({ name: '', address: '', email: '', phone: '' });
     setLineItems([]);
@@ -317,6 +319,15 @@ const App: React.FC = () => {
   };
 
   const handleSaveDocument = () => {
+    if (
+        loadedDocumentInfo &&
+        loadedDocumentInfo.docType === DocumentType.Invoice &&
+        loadedDocumentInfo.status === InvoiceStatus.Paid
+    ) {
+        alert('This invoice is marked as Paid and cannot be modified or re-saved to prevent duplicate records.');
+        return;
+    }
+
     if (lineItems.length === 0 || !clientDetails.name.trim()) {
       alert('Please add at least one line item and a client name before saving.');
       return;
@@ -428,6 +439,7 @@ const App: React.FC = () => {
   };
 
   const handleLoadDocument = (doc: SavedDocument) => {
+    setLoadedDocumentInfo({ id: doc.id, status: doc.status, docType: doc.documentType });
     setDocumentType(doc.documentType);
     setCompanyDetails(doc.companyDetails || activeCompany.details);
     setCompanyLogo(doc.companyLogo);
