@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Client, Details } from '../types';
+import { Client } from '../types';
+import { TrashIcon } from './Icons';
 
 interface ClientListPageProps {
   clients: Client[];
@@ -18,6 +19,7 @@ const emptyFormState: Omit<Client, 'id'> & { id: number | null } = {
 const ClientListPage: React.FC<ClientListPageProps> = ({ clients, setClients, onDone }) => {
   const [formState, setFormState] = useState(emptyFormState);
   const [isEditing, setIsEditing] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -30,7 +32,7 @@ const ClientListPage: React.FC<ClientListPageProps> = ({ clients, setClients, on
     if (isEditing && formState.id) {
       setClients(prev => prev.map(c => c.id === formState.id ? { ...formState, id: c.id } : c));
     } else {
-      setClients(prev => [...prev, { ...formState, id: Date.now() }]);
+      setClients(prev => [{ ...formState, id: Date.now() }, ...prev]);
     }
     setFormState(emptyFormState);
     setIsEditing(false);
@@ -39,6 +41,7 @@ const ClientListPage: React.FC<ClientListPageProps> = ({ clients, setClients, on
   const handleEditClient = (client: Client) => {
     setFormState(client);
     setIsEditing(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleDeleteClient = (id: number) => {
@@ -51,11 +54,50 @@ const ClientListPage: React.FC<ClientListPageProps> = ({ clients, setClients, on
     setFormState(emptyFormState);
     setIsEditing(false);
   };
+  
+  const handleSelect = (id: number) => {
+    setSelectedIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setSelectedIds(new Set(clients.map(c => c.id)));
+    } else {
+      setSelectedIds(new Set());
+    }
+  };
+
+  const handleDeleteSelected = () => {
+    if (selectedIds.size === 0) return;
+    if (window.confirm(`Are you sure you want to delete ${selectedIds.size} selected client(s)? This action cannot be undone.`)) {
+      setClients(prev => prev.filter(c => !selectedIds.has(c.id)));
+      setSelectedIds(new Set());
+    }
+  };
+
+  const isAllSelected = clients.length > 0 && selectedIds.size === clients.length;
+  const isIndeterminate = selectedIds.size > 0 && selectedIds.size < clients.length;
 
   return (
     <main className="container mx-auto p-4 sm:p-6 lg:p-8">
       <div className="max-w-4xl mx-auto bg-white p-4 sm:p-8 rounded-lg shadow-md">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6 border-b pb-4">Manage Clients</h2>
+        <div className="flex justify-between items-center mb-6 border-b pb-4">
+            <h2 className="text-2xl font-bold text-gray-800">Manage Clients</h2>
+            {selectedIds.size > 0 && (
+                <button onClick={handleDeleteSelected} className="bg-red-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-red-700 flex items-center gap-2 transition-all duration-200">
+                    <TrashIcon />
+                    Delete ({selectedIds.size})
+                </button>
+            )}
+        </div>
 
         <div className="bg-slate-50 p-6 rounded-lg mb-8 border border-slate-200">
             <h3 className="text-lg font-semibold text-gray-700 mb-4">{isEditing ? 'Edit Client' : 'Add New Client'}</h3>
@@ -79,16 +121,36 @@ const ClientListPage: React.FC<ClientListPageProps> = ({ clients, setClients, on
 
         <div>
             <h3 className="text-lg font-semibold text-gray-700 mb-4">Saved Clients</h3>
+             {clients.length > 0 && (
+                <div className="flex items-center p-2 rounded-t-lg bg-slate-50 border-b">
+                    <input 
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        onChange={handleSelectAll}
+                        checked={isAllSelected}
+                        ref={el => el && (el.indeterminate = isIndeterminate)}
+                    />
+                    <label className="ml-3 text-sm font-medium text-gray-600">Select All</label>
+                </div>
+            )}
             <div className="space-y-3">
                 {clients.length > 0 ? clients.map(client => (
-                    <div key={client.id} className="bg-white p-4 rounded-lg shadow-sm border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-2">
-                        <div className="w-full sm:w-auto">
-                            <p className="font-bold text-slate-800">{client.name}</p>
-                            <p className="text-sm text-slate-500 break-words">{client.email} &bull; {client.phone}</p>
+                    <div key={client.id} className={`p-4 border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-2 ${selectedIds.has(client.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-white'}`}>
+                        <div className="flex items-start w-full sm:w-auto">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mt-1"
+                              checked={selectedIds.has(client.id)}
+                              onChange={() => handleSelect(client.id)}
+                            />
+                            <div className="ml-4">
+                                <p className="font-bold text-slate-800">{client.name}</p>
+                                <p className="text-sm text-slate-500 break-words">{client.email} &bull; {client.phone}</p>
+                            </div>
                         </div>
                         <div className="flex gap-2 self-end sm:self-center flex-shrink-0">
-                            <button onClick={() => handleEditClient(client)} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-50">Edit</button>
-                            <button onClick={() => handleDeleteClient(client.id)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-50">Delete</button>
+                            <button onClick={() => handleEditClient(client)} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-100">Edit</button>
+                            <button onClick={() => handleDeleteClient(client.id)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-100">Delete</button>
                         </div>
                     </div>
                 )) : (

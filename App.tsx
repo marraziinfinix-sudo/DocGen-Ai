@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus } from './types';
 import { generateDescription } from './services/geminiService';
@@ -888,7 +889,7 @@ const App: React.FC = () => {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-wrap items-center justify-between gap-4">
             {/* Title on the far left */}
             <div className="flex-shrink-0">
-                <h1 className="text-xl sm:text-2xl font-bold text-indigo-600">DocGen AI</h1>
+                <h1 className="text-xl sm:text-2xl font-bold text-indigo-600">QuotInv AI</h1>
             </div>
             
             {/* Nav in the middle, will wrap to a new line on mobile */}
