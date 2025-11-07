@@ -82,9 +82,9 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
       const isActionable = statusInfo.text === 'Active';
       return (
         <div className="relative">
-            <button 
-                onClick={(e) => {
-                    e.stopPropagation();
+            <button
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={() => {
                     setOpenDropdownId(openDropdownId === doc.id ? null : doc.id);
                 }}
                 className="p-2 text-slate-500 hover:bg-slate-100 rounded-full"
@@ -92,9 +92,9 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
                 <MoreVerticalIcon />
             </button>
             {openDropdownId === doc.id && (
-                <div 
+                <div
                     className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg z-20 ring-1 ring-black ring-opacity-5"
-                    onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
                 >
                     <div className="py-1" role="menu" aria-orientation="vertical">
                         <button
