@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { SavedDocument, InvoiceStatus, Payment } from '../types';
 import { MailIcon, WhatsAppIcon, CashIcon, ViewIcon, TrashIcon } from './Icons';
@@ -85,14 +84,14 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
           
           <div className="space-y-4">
             {/* Header for large screens */}
-            <div className="hidden lg:grid grid-cols-[auto,1fr,2fr,1fr,1fr,1fr,auto] gap-4 px-4 py-2 bg-slate-50 rounded-t-lg">
-                <span className="font-semibold text-slate-600 uppercase text-sm text-center">Status</span>
-                <span className="font-semibold text-slate-600 uppercase text-sm">Invoice #</span>
-                <span className="font-semibold text-slate-600 uppercase text-sm">Client</span>
-                <span className="font-semibold text-slate-600 uppercase text-sm">Due Date</span>
-                <span className="font-semibold text-slate-600 uppercase text-sm text-right">Balance Due</span>
-                <span className="font-semibold text-slate-600 uppercase text-sm text-right">Total</span>
-                <span className="font-semibold text-slate-600 uppercase text-sm text-right">Actions</span>
+            <div className="hidden lg:grid grid-cols-12 gap-4 px-4 py-2 bg-slate-50 rounded-t-lg">
+                <span className="col-span-1 font-semibold text-slate-600 uppercase text-sm text-center">Status</span>
+                <span className="col-span-1 font-semibold text-slate-600 uppercase text-sm">Invoice #</span>
+                <span className="col-span-4 font-semibold text-slate-600 uppercase text-sm">Client</span>
+                <span className="col-span-2 font-semibold text-slate-600 uppercase text-sm">Due Date</span>
+                <span className="col-span-1 font-semibold text-slate-600 uppercase text-sm text-right">Balance</span>
+                <span className="col-span-1 font-semibold text-slate-600 uppercase text-sm text-right">Total</span>
+                <span className="col-span-2 font-semibold text-slate-600 uppercase text-sm text-right">Actions</span>
             </div>
 
             {documents.length > 0 ? documents.map(doc => {
@@ -146,16 +145,16 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
 
 
                   {/* Desktop Row View */}
-                  <div className="hidden lg:grid grid-cols-[auto,1fr,2fr,1fr,1fr,1fr,auto] gap-4 items-center p-4">
-                      <div className="text-center">
+                  <div className="hidden lg:grid grid-cols-12 gap-4 items-center p-4">
+                      <div className="col-span-1 text-center">
                           <span className={`text-xs font-bold py-1 px-3 rounded-full capitalize ${displayStatus.color}`}>{displayStatus.text}</span>
                       </div>
-                      <span className="font-medium text-slate-800">{doc.documentNumber}</span>
-                      <span className="text-slate-700 truncate">{doc.clientDetails.name}</span>
-                      <span className="text-slate-500 text-sm">{new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}</span>
-                      <span className="font-medium text-red-600 text-right">{formatCurrency(balanceDue)}</span>
-                      <span className="font-medium text-slate-800 text-right">{formatCurrency(doc.total)}</span>
-                      <div className="flex items-center justify-end">
+                      <span className="col-span-1 font-medium text-slate-800 truncate">{doc.documentNumber}</span>
+                      <span className="col-span-4 text-slate-700 truncate">{doc.clientDetails.name}</span>
+                      <span className="col-span-2 text-slate-500 text-sm">{new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}</span>
+                      <span className="col-span-1 font-medium text-red-600 text-right">{formatCurrency(balanceDue)}</span>
+                      <span className="col-span-1 font-medium text-slate-800 text-right">{formatCurrency(doc.total)}</span>
+                      <div className="col-span-2 flex items-center justify-end">
                           <button onClick={() => handleRecordPaymentClick(doc)} title="Record Payment" className="p-2 text-slate-500 hover:bg-slate-100 rounded-full"><CashIcon/></button>
                           {doc.status !== InvoiceStatus.Paid && (
                               <>

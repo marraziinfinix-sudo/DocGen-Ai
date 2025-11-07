@@ -1,5 +1,6 @@
 import React from 'react';
 import { SavedDocument, QuotationStatus } from '../types';
+import { DocumentIcon, ViewIcon, TrashIcon } from './Icons';
 
 interface QuotationListPageProps {
   documents: SavedDocument[];
@@ -39,13 +40,13 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
         
         <div className="space-y-4">
           {/* Header for large screens */}
-          <div className="hidden lg:grid grid-cols-[auto,1fr,2fr,1fr,1fr,1fr,2fr] gap-4 px-4 py-2 bg-slate-50 rounded-t-lg">
-              <span className="font-semibold text-slate-600 uppercase text-sm">Status</span>
-              <span className="font-semibold text-slate-600 uppercase text-sm">Quote #</span>
-              <span className="font-semibold text-slate-600 uppercase text-sm">Client</span>
-              <span className="font-semibold text-slate-600 uppercase text-sm">Valid Until</span>
-              <span className="font-semibold text-slate-600 uppercase text-sm text-right">Total</span>
-              <span className="font-semibold text-slate-600 uppercase text-sm text-right">Actions</span>
+          <div className="hidden lg:grid grid-cols-12 gap-4 px-4 py-2 bg-slate-50 rounded-t-lg">
+              <span className="col-span-1 font-semibold text-slate-600 uppercase text-sm text-center">Status</span>
+              <span className="col-span-1 font-semibold text-slate-600 uppercase text-sm">Quote #</span>
+              <span className="col-span-5 font-semibold text-slate-600 uppercase text-sm">Client</span>
+              <span className="col-span-2 font-semibold text-slate-600 uppercase text-sm">Valid Until</span>
+              <span className="col-span-1 font-semibold text-slate-600 uppercase text-sm text-right">Total</span>
+              <span className="col-span-2 font-semibold text-slate-600 uppercase text-sm text-right">Actions</span>
           </div>
 
           {documents.length > 0 ? documents.map(doc => {
@@ -84,24 +85,28 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
                 </div>
 
                 {/* Desktop Row View */}
-                <div className="hidden lg:grid grid-cols-[auto,1fr,2fr,1fr,1fr,auto] gap-4 items-center p-4">
-                    <span className={`text-xs font-bold py-1 px-3 rounded-full capitalize ${statusInfo.color}`}>{statusInfo.text}</span>
-                    <span className="font-medium text-slate-800">{doc.documentNumber}</span>
-                    <span className="text-slate-700 truncate">{doc.clientDetails.name}</span>
-                    <span className="text-slate-500 text-sm">{new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}</span>
-                    <span className="font-medium text-slate-800 text-right">{formatCurrency(doc.total)}</span>
-                    <div className="flex items-center justify-end gap-2">
+                <div className="hidden lg:grid grid-cols-12 gap-4 items-center p-4">
+                    <div className="col-span-1 text-center">
+                        <span className={`text-xs font-bold py-1 px-3 rounded-full capitalize ${statusInfo.color}`}>{statusInfo.text}</span>
+                    </div>
+                    <span className="col-span-1 font-medium text-slate-800 truncate">{doc.documentNumber}</span>
+                    <span className="col-span-5 text-slate-700 truncate">{doc.clientDetails.name}</span>
+                    <span className="col-span-2 text-slate-500 text-sm">{new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}</span>
+                    <span className="col-span-1 font-medium text-slate-800 text-right">{formatCurrency(doc.total)}</span>
+                    <div className="col-span-2 flex items-center justify-end">
                         <button 
                             onClick={() => handleCreateInvoiceFromQuote(doc)}
                             disabled={!isActionable}
-                            className="font-semibold text-green-600 py-1 px-3 rounded-lg hover:bg-green-50 text-xs whitespace-nowrap disabled:text-slate-400 disabled:bg-transparent disabled:cursor-not-allowed"
+                            className="p-2 text-slate-500 hover:bg-slate-100 rounded-full disabled:text-slate-300 disabled:hover:bg-transparent disabled:cursor-not-allowed"
                             title={!isActionable ? (statusInfo.text === 'Agreed' ? 'Already converted to invoice' : 'Quotation has expired') : "Convert to Invoice"}
                         >
-                            Create Invoice
+                            <DocumentIcon/>
                         </button>
-                        <button onClick={() => handleLoadDocument(doc)} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-50 text-xs">View</button>
-                        <button onClick={() => handleDeleteDocument(doc.id)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-50 text-xs">
-                            Delete
+                        <button onClick={() => handleLoadDocument(doc)} title="View Quotation" className="p-2 text-slate-500 hover:bg-slate-100 rounded-full">
+                            <ViewIcon/>
+                        </button>
+                        <button onClick={() => handleDeleteDocument(doc.id)} title="Delete Quotation" className="p-2 text-red-500 hover:bg-red-50 rounded-full">
+                            <TrashIcon/>
                         </button>
                     </div>
                 </div>
