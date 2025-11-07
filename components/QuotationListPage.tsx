@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { SavedDocument, QuotationStatus } from '../types';
 import { DocumentIcon, ViewIcon, TrashIcon, MoreVerticalIcon } from './Icons';
 
@@ -13,6 +13,28 @@ interface QuotationListPageProps {
 const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDocuments, formatCurrency, handleCreateInvoiceFromQuote, handleLoadDocument }) => {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [openDropdownId, setOpenDropdownId] = useState<number | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string>('All');
+
+  const getQuotationDisplayStatusText = (doc: SavedDocument): QuotationStatus => {
+    if (doc.quotationStatus === QuotationStatus.Agreed) {
+      return QuotationStatus.Agreed;
+    }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dueDate = new Date(doc.dueDate + 'T00:00:00');
+    
+    if (dueDate < today) {
+      return QuotationStatus.Expired;
+    }
+    return QuotationStatus.Active;
+  };
+
+  const filteredDocuments = useMemo(() => {
+    if (statusFilter === 'All') {
+        return documents;
+    }
+    return documents.filter(doc => getQuotationDisplayStatusText(doc) === statusFilter);
+  }, [documents, statusFilter]);
 
   useEffect(() => {
     const handleClickOutside = () => {
@@ -46,7 +68,7 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
-      setSelectedIds(new Set(documents.map(d => d.id)));
+      setSelectedIds(new Set(filteredDocuments.map(d => d.id)));
     } else {
       setSelectedIds(new Set());
     }
@@ -61,21 +83,16 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
   };
 
   const getQuotationDisplayStatus = (doc: SavedDocument) => {
-    if (doc.quotationStatus === QuotationStatus.Agreed) {
-      return { text: 'Agreed', color: 'bg-green-100 text-green-700' };
+    const statusText = getQuotationDisplayStatusText(doc);
+    switch (statusText) {
+      case QuotationStatus.Agreed: return { text: 'Agreed', color: 'bg-green-100 text-green-700' };
+      case QuotationStatus.Expired: return { text: 'Expired', color: 'bg-red-100 text-red-700' };
+      default: return { text: 'Active', color: 'bg-blue-100 text-blue-700' };
     }
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const dueDate = new Date(doc.dueDate + 'T00:00:00');
-    
-    if (dueDate < today) {
-      return { text: 'Expired', color: 'bg-red-100 text-red-700' };
-    }
-    return { text: 'Active', color: 'bg-blue-100 text-blue-700' };
   };
   
-  const isAllSelected = documents.length > 0 && selectedIds.size === documents.length;
-  const isIndeterminate = selectedIds.size > 0 && selectedIds.size < documents.length;
+  const isAllSelected = filteredDocuments.length > 0 && selectedIds.size === filteredDocuments.length;
+  const isIndeterminate = selectedIds.size > 0 && selectedIds.size < filteredDocuments.length;
 
   const renderActionsDropdown = (doc: SavedDocument) => {
       const statusInfo = getQuotationDisplayStatus(doc);
@@ -119,6 +136,8 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
       );
   }
 
+  const filterOptions = ['All', 'Active', 'Agreed', 'Expired'];
+
   return (
     <main className="container mx-auto p-4 sm:p-6 lg:p-8">
       <div className="max-w-6xl mx-auto bg-white p-4 sm:p-8 rounded-lg shadow-md">
@@ -132,6 +151,25 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
             )}
         </div>
         
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+            <span className="text-sm font-medium text-slate-600">Filter by status:</span>
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
+                {filterOptions.map(option => (
+                    <button
+                        key={option}
+                        onClick={() => setStatusFilter(option)}
+                        className={`px-3 py-1 text-sm font-semibold rounded-md transition-colors ${
+                            statusFilter === option
+                                ? 'bg-white text-indigo-700 shadow'
+                                : 'text-slate-600 hover:bg-slate-200'
+                        }`}
+                    >
+                        {option}
+                    </button>
+                ))}
+            </div>
+          </div>
+
         <div className="space-y-4">
           {/* Header for large screens */}
           <div className="hidden lg:grid grid-cols-[auto_1fr_1fr_4fr_2fr_1fr_2fr] gap-4 px-4 py-2 bg-slate-50 rounded-t-lg items-center">
@@ -150,59 +188,65 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
               <span className="font-semibold text-slate-600 uppercase text-sm text-right">Actions</span>
           </div>
 
-          {documents.length > 0 ? documents.map(doc => {
-            const statusInfo = getQuotationDisplayStatus(doc);
+          {documents.length > 0 ? (
+            filteredDocuments.length > 0 ? (
+                filteredDocuments.map(doc => {
+                    const statusInfo = getQuotationDisplayStatus(doc);
 
-            return (
-              <div key={doc.id} className={`p-4 rounded-lg border lg:p-0 lg:shadow-none lg:rounded-none lg:border-b ${selectedIds.has(doc.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-white'}`}>
-                {/* Mobile Card View */}
-                <div className="lg:hidden">
-                    <div className="flex justify-between items-start">
-                        <div className="flex items-start">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mt-1.5"
-                            checked={selectedIds.has(doc.id)}
-                            onChange={() => handleSelect(doc.id)}
-                          />
-                          <div className="ml-4">
-                              <p className="font-bold text-slate-800">{doc.clientDetails.name}</p>
-                              <p className="text-sm text-slate-500">Quote #{doc.documentNumber}</p>
-                          </div>
+                    return (
+                    <div key={doc.id} className={`p-4 rounded-lg border lg:p-0 lg:shadow-none lg:rounded-none lg:border-b ${selectedIds.has(doc.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-white'}`}>
+                        {/* Mobile Card View */}
+                        <div className="lg:hidden">
+                            <div className="flex justify-between items-start">
+                                <div className="flex items-start">
+                                <input
+                                    type="checkbox"
+                                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mt-1.5"
+                                    checked={selectedIds.has(doc.id)}
+                                    onChange={() => handleSelect(doc.id)}
+                                />
+                                <div className="ml-4">
+                                    <p className="font-bold text-slate-800">{doc.clientDetails.name}</p>
+                                    <p className="text-sm text-slate-500">Quote #{doc.documentNumber}</p>
+                                </div>
+                                </div>
+                                <span className={`text-xs font-bold py-1 px-3 rounded-full capitalize ${statusInfo.color}`}>{statusInfo.text}</span>
+                            </div>
+                            <div className="mt-2 text-sm text-slate-600 ml-8">
+                                <p>Total: <span className="font-bold text-indigo-600">{formatCurrency(doc.total)}</span></p>
+                                <p>Valid Until: <span className="font-medium">{new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}</span></p>
+                            </div>
+                            <div className="mt-4 pt-3 border-t flex justify-end items-center gap-2 ml-8">
+                                {renderActionsDropdown(doc)}
+                            </div>
                         </div>
-                        <span className={`text-xs font-bold py-1 px-3 rounded-full capitalize ${statusInfo.color}`}>{statusInfo.text}</span>
-                    </div>
-                    <div className="mt-2 text-sm text-slate-600 ml-8">
-                        <p>Total: <span className="font-bold text-indigo-600">{formatCurrency(doc.total)}</span></p>
-                        <p>Valid Until: <span className="font-medium">{new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}</span></p>
-                    </div>
-                    <div className="mt-4 pt-3 border-t flex justify-end items-center gap-2 ml-8">
-                        {renderActionsDropdown(doc)}
-                    </div>
-                </div>
 
-                {/* Desktop Row View */}
-                <div className="hidden lg:grid grid-cols-[auto_1fr_1fr_4fr_2fr_1fr_2fr] gap-4 items-center p-4">
-                    <input
-                        type="checkbox"
-                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                        checked={selectedIds.has(doc.id)}
-                        onChange={() => handleSelect(doc.id)}
-                    />
-                    <div className="text-center">
-                        <span className={`text-xs font-bold py-1 px-3 rounded-full capitalize ${statusInfo.color}`}>{statusInfo.text}</span>
+                        {/* Desktop Row View */}
+                        <div className="hidden lg:grid grid-cols-[auto_1fr_1fr_4fr_2fr_1fr_2fr] gap-4 items-center p-4">
+                            <input
+                                type="checkbox"
+                                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                checked={selectedIds.has(doc.id)}
+                                onChange={() => handleSelect(doc.id)}
+                            />
+                            <div className="text-center">
+                                <span className={`text-xs font-bold py-1 px-3 rounded-full capitalize ${statusInfo.color}`}>{statusInfo.text}</span>
+                            </div>
+                            <span className="font-medium text-slate-800 truncate">{doc.documentNumber}</span>
+                            <span className="text-slate-700 truncate">{doc.clientDetails.name}</span>
+                            <span className="text-slate-500 text-sm">{new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}</span>
+                            <span className="font-medium text-slate-800 text-right">{formatCurrency(doc.total)}</span>
+                            <div className="flex items-center justify-end">
+                              {renderActionsDropdown(doc)}
+                            </div>
+                        </div>
                     </div>
-                    <span className="font-medium text-slate-800 truncate">{doc.documentNumber}</span>
-                    <span className="text-slate-700 truncate">{doc.clientDetails.name}</span>
-                    <span className="text-slate-500 text-sm">{new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}</span>
-                    <span className="font-medium text-slate-800 text-right">{formatCurrency(doc.total)}</span>
-                    <div className="flex items-center justify-end">
-                       {renderActionsDropdown(doc)}
-                    </div>
-                </div>
-              </div>
+                    )
+                })
+            ) : (
+                <div className="text-center text-slate-500 py-10">No quotations match the current filter.</div>
             )
-          }) : (
+          ) : (
             <div className="text-center text-slate-500 py-10">You haven't saved any quotations yet.</div>
           )}
         </div>
