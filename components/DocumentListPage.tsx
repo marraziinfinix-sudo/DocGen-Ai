@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
 import { SavedDocument, InvoiceStatus, Payment } from '../types';
-import { MailIcon, WhatsAppIcon, CashIcon } from './Icons';
+import { MailIcon, WhatsAppIcon, CashIcon, ViewIcon, TrashIcon } from './Icons';
 import PaymentModal from './PaymentModal';
 
 interface DocumentListPageProps {
@@ -84,13 +85,13 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
           
           <div className="space-y-4">
             {/* Header for large screens */}
-            <div className="hidden lg:grid grid-cols-[1fr,2fr,1fr,1fr,1fr,1fr,2fr] gap-4 px-4 py-2 bg-slate-50 rounded-t-lg">
+            <div className="hidden lg:grid grid-cols-[auto,1fr,2fr,1fr,1fr,1fr,auto] gap-4 px-4 py-2 bg-slate-50 rounded-t-lg">
+                <span className="font-semibold text-slate-600 uppercase text-sm text-center">Status</span>
                 <span className="font-semibold text-slate-600 uppercase text-sm">Invoice #</span>
                 <span className="font-semibold text-slate-600 uppercase text-sm">Client</span>
                 <span className="font-semibold text-slate-600 uppercase text-sm">Due Date</span>
                 <span className="font-semibold text-slate-600 uppercase text-sm text-right">Balance Due</span>
                 <span className="font-semibold text-slate-600 uppercase text-sm text-right">Total</span>
-                <span className="font-semibold text-slate-600 uppercase text-sm text-center">Status</span>
                 <span className="font-semibold text-slate-600 uppercase text-sm text-right">Actions</span>
             </div>
 
@@ -102,56 +103,68 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
               return (
                 <div key={doc.id} className="bg-white p-4 rounded-lg shadow-sm border lg:p-0 lg:shadow-none lg:rounded-none lg:border-b">
                   {/* Mobile Card View */}
-                  <div className="lg:hidden">
+                  <div className="lg:hidden space-y-3">
                     <div className="flex justify-between items-start">
                         <div>
-                            <p className="text-xs font-semibold text-slate-500 uppercase">Invoice #{doc.documentNumber}</p>
-                            <p className="font-medium text-slate-800">{doc.clientDetails.name}</p>
+                            <p className="font-bold text-slate-800 text-lg">{doc.clientDetails.name}</p>
+                            <p className="text-sm text-slate-500">Invoice #{doc.documentNumber}</p>
                         </div>
-                         <div className="text-right">
-                          <p className="font-bold text-lg text-red-600">{formatCurrency(balanceDue)}</p>
-                          <p className="text-xs text-slate-500">Balance Due</p>
-                        </div>
-                    </div>
-                    <div className="mt-2 text-sm text-slate-600">
-                        <p>Due: {new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}</p>
-                    </div>
-                    <div className="mt-4 pt-3 border-t flex justify-between items-center">
                         <span className={`text-xs font-bold py-1 px-3 rounded-full capitalize ${displayStatus.color}`}>{displayStatus.text}</span>
-                        <div className="flex items-center justify-end gap-1">
+                    </div>
+
+                    <div className="flex justify-between items-baseline bg-slate-50 p-3 rounded-lg">
+                        <div>
+                            <p className="text-xs text-slate-500">Balance Due</p>
+                            <p className="font-bold text-2xl text-red-600">{formatCurrency(balanceDue)}</p>
+                        </div>
+                        <div className="text-right">
+                            <p className="text-xs text-slate-500">Total</p>
+                            <p className="font-medium text-slate-700">{formatCurrency(doc.total)}</p>
+                        </div>
+                    </div>
+
+                    <p className="text-sm text-slate-600">Due: <span className="font-medium">{new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}</span></p>
+
+                    <div className="pt-3 border-t flex flex-wrap justify-end items-center gap-2">
+                        <button onClick={() => handleRecordPaymentClick(doc)} className="flex-grow sm:flex-grow-0 flex items-center justify-center gap-2 bg-green-500 text-white font-semibold py-2 px-4 rounded-lg shadow-sm hover:bg-green-600 transition-colors text-sm">
+                            <CashIcon/> Record Payment
+                        </button>
+                        <div className="flex items-center gap-1">
+                            <button onClick={() => handleLoadDocument(doc)} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-50 text-sm">View</button>
                             {doc.status !== InvoiceStatus.Paid && (
                                 <>
                                   <button onClick={() => handleSendReminder(doc, 'email')} title="Send Email Reminder" className="p-2 text-slate-500 hover:bg-slate-100 rounded-full"><MailIcon /></button>
                                   <button onClick={() => handleSendReminder(doc, 'whatsapp')} title="Send WhatsApp Reminder" className="p-2 text-slate-500 hover:bg-slate-100 rounded-full"><WhatsAppIcon /></button>
                                 </>
                             )}
-                            <button onClick={() => handleRecordPaymentClick(doc)} title="Record Payment" className="p-2 text-slate-500 hover:bg-slate-100 rounded-full"><CashIcon/></button>
-                            <button onClick={() => handleLoadDocument(doc)} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-50 text-xs">View</button>
-                            <button onClick={() => handleDeleteDocument(doc.id)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-50 text-xs">Delete</button>
+                            <button onClick={() => handleDeleteDocument(doc.id)} title="Delete Invoice" className="p-2 text-red-500 hover:bg-red-50 rounded-full">
+                                <TrashIcon/>
+                            </button>
                         </div>
                     </div>
                   </div>
 
+
                   {/* Desktop Row View */}
-                  <div className="hidden lg:grid grid-cols-[1fr,2fr,1fr,1fr,1fr,1fr,2fr] gap-4 items-center p-4">
+                  <div className="hidden lg:grid grid-cols-[auto,1fr,2fr,1fr,1fr,1fr,auto] gap-4 items-center p-4">
+                      <div className="text-center">
+                          <span className={`text-xs font-bold py-1 px-3 rounded-full capitalize ${displayStatus.color}`}>{displayStatus.text}</span>
+                      </div>
                       <span className="font-medium text-slate-800">{doc.documentNumber}</span>
                       <span className="text-slate-700 truncate">{doc.clientDetails.name}</span>
                       <span className="text-slate-500 text-sm">{new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}</span>
                       <span className="font-medium text-red-600 text-right">{formatCurrency(balanceDue)}</span>
                       <span className="font-medium text-slate-800 text-right">{formatCurrency(doc.total)}</span>
-                      <div className="text-center">
-                          <span className={`text-xs font-bold py-1 px-3 rounded-full capitalize ${displayStatus.color}`}>{displayStatus.text}</span>
-                      </div>
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-end">
+                          <button onClick={() => handleRecordPaymentClick(doc)} title="Record Payment" className="p-2 text-slate-500 hover:bg-slate-100 rounded-full"><CashIcon/></button>
                           {doc.status !== InvoiceStatus.Paid && (
                               <>
                                   <button onClick={() => handleSendReminder(doc, 'email')} title="Send Email Reminder" className="p-2 text-slate-500 hover:bg-slate-100 rounded-full"><MailIcon /></button>
                                   <button onClick={() => handleSendReminder(doc, 'whatsapp')} title="Send WhatsApp Reminder" className="p-2 text-slate-500 hover:bg-slate-100 rounded-full"><WhatsAppIcon /></button>
                               </>
                           )}
-                          <button onClick={() => handleRecordPaymentClick(doc)} title="Record Payment" className="p-2 text-slate-500 hover:bg-slate-100 rounded-full"><CashIcon/></button>
-                          <button onClick={() => handleLoadDocument(doc)} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-50 text-xs">View</button>
-                          <button onClick={() => handleDeleteDocument(doc.id)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-50 text-xs">Delete</button>
+                          <button onClick={() => handleLoadDocument(doc)} title="View Invoice" className="p-2 text-slate-500 hover:bg-slate-100 rounded-full"><ViewIcon/></button>
+                          <button onClick={() => handleDeleteDocument(doc.id)} title="Delete Invoice" className="p-2 text-red-500 hover:bg-red-50 rounded-full"><TrashIcon/></button>
                       </div>
                   </div>
                 </div>

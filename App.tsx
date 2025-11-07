@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment } from './types';
 import { generateDescription } from './services/geminiService';
-import { SparklesIcon, PlusIcon, TrashIcon, CogIcon, UsersIcon, ListIcon, DocumentIcon, MailIcon, WhatsAppIcon, FileTextIcon, DownloadIcon } from './components/Icons';
+import { SparklesIcon, PlusIcon, TrashIcon, CogIcon, UsersIcon, ListIcon, DocumentIcon, MailIcon, WhatsAppIcon, FileTextIcon, DownloadIcon, MoreVerticalIcon, PrinterIcon } from './components/Icons';
 import DocumentPreview from './components/DocumentPreview';
 import SetupPage from './components/SetupPage';
 import ClientListPage from './components/ClientListPage';
@@ -16,6 +16,7 @@ declare const html2canvas: any;
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<'editor' | 'setup' | 'clients' | 'items' | 'invoices' | 'quotations'>('editor');
   const [documentType, setDocumentType] = useState<DocumentType>(DocumentType.Quotation);
+  const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
   
   const [companies, setCompanies] = useState<Company[]>(() => {
     try {
@@ -212,6 +213,17 @@ const App: React.FC = () => {
     setDueDateOption('custom');
   };
   // --- End Due Date Calculation ---
+
+  // --- Close action menu on outside click ---
+  useEffect(() => {
+    const closeMenu = () => setIsActionMenuOpen(false);
+    if (isActionMenuOpen) {
+      window.addEventListener('click', closeMenu);
+    }
+    return () => {
+      window.removeEventListener('click', closeMenu);
+    };
+  }, [isActionMenuOpen]);
 
   const handleLineItemChange = useCallback((id: number, field: keyof Omit<LineItem, 'id'>, value: string | number) => {
     setLineItems(prevItems =>
@@ -791,24 +803,58 @@ const App: React.FC = () => {
     if (currentView === 'editor') {
         return (
             <div className="flex items-center gap-2">
-                <button onClick={handleShareEmail} title="Share via Email" className="p-2 text-slate-500 hover:bg-slate-100 rounded-full">
-                    <MailIcon />
-                </button>
-                <button onClick={handleShareWhatsApp} title="Share via WhatsApp" className="p-2 text-slate-500 hover:bg-slate-100 rounded-full">
-                    <WhatsAppIcon />
-                </button>
-                <button onClick={handleCreateNew} title="Create New Document" className="bg-slate-500 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-600 transition-colors duration-200">
-                    <span>New</span>
-                </button>
-                <button onClick={handleSaveDocument} className="bg-slate-500 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-600 transition-colors duration-200">
-                    <span>Save</span>
-                </button>
-                <button onClick={() => window.print()} title="Print" className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 transition-colors duration-200">
-                    Print
-                </button>
-                <button onClick={handleSavePdf} title="Save as PDF" className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 transition-colors duration-200">
-                    PDF
-                </button>
+                {/* Desktop View: Full buttons */}
+                <div className="hidden sm:flex items-center gap-2">
+                    <button onClick={handleShareEmail} title="Share via Email" className="p-2 text-slate-500 hover:bg-slate-100 rounded-full"> <MailIcon /> </button>
+                    <button onClick={handleShareWhatsApp} title="Share via WhatsApp" className="p-2 text-slate-500 hover:bg-slate-100 rounded-full"> <WhatsAppIcon /> </button>
+                    <div className="w-px h-6 bg-slate-200 mx-2"></div>
+                    <button onClick={handleCreateNew} title="Create New Document" className="bg-slate-500 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-600 transition-colors duration-200">
+                        <span>New</span>
+                    </button>
+                    <button onClick={handleSaveDocument} className="bg-slate-500 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-600 transition-colors duration-200">
+                        <span>Save</span>
+                    </button>
+                    <button onClick={() => window.print()} title="Print" className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 transition-colors duration-200">
+                        Print
+                    </button>
+                    <button onClick={handleSavePdf} title="Save as PDF" className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 transition-colors duration-200">
+                        PDF
+                    </button>
+                </div>
+                
+                {/* Mobile View: Dropdown */}
+                <div className="sm:hidden flex items-center gap-2">
+                    <button onClick={handleCreateNew} title="Create New Document" className="bg-slate-500 text-white font-semibold py-2 px-3 rounded-lg shadow-md hover:bg-slate-600 transition-colors duration-200">
+                        <span>New</span>
+                    </button>
+                    <button onClick={handleSaveDocument} className="bg-slate-500 text-white font-semibold py-2 px-3 rounded-lg shadow-md hover:bg-slate-600 transition-colors duration-200">
+                        <span>Save</span>
+                    </button>
+                    <div className="relative">
+                        <button onClick={(e) => { e.stopPropagation(); setIsActionMenuOpen(prev => !prev); }} className="p-2 text-slate-500 hover:bg-slate-100 rounded-full">
+                            <MoreVerticalIcon />
+                        </button>
+                        {isActionMenuOpen && (
+                            <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-30 ring-1 ring-black ring-opacity-5" onClick={e => e.stopPropagation()}>
+                                <div className="py-1">
+                                    <button onClick={() => { handleShareEmail(); setIsActionMenuOpen(false); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">
+                                        <MailIcon /> Share via Email
+                                    </button>
+                                    <button onClick={() => { handleShareWhatsApp(); setIsActionMenuOpen(false); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">
+                                        <WhatsAppIcon /> Share via WhatsApp
+                                    </button>
+                                    <div className="border-t my-1"></div>
+                                    <button onClick={() => { window.print(); setIsActionMenuOpen(false); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">
+                                       <PrinterIcon/> Print
+                                    </button>
+                                    <button onClick={() => { handleSavePdf(); setIsActionMenuOpen(false); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">
+                                       <DownloadIcon/> Save as PDF
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
             </div>
         );
     }

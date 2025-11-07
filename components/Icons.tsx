@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 export const SparklesIcon: React.FC<{ isLoading?: boolean }> = ({ isLoading }) => (
@@ -85,5 +86,18 @@ export const CashIcon: React.FC = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
       <path d="M8.433 7.418c.158-.103.346-.196.567-.267v1.698a2.5 2.5 0 00-1.162-.328zM11 12.849v-1.698c.22.071.408.164.567.267a1.5 1.5 0 01-1.162 1.431z" />
       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.743.559A1.5 1.5 0 008 7.5c0 .354.116.686.321.956a4.498 4.498 0 011.836 1.991c.33.626.33 1.357 0 1.983a4.498 4.498 0 01-1.836 1.991A1.5 1.5 0 008 16.5c0 .584.328 1.096.78 1.342A4.535 4.535 0 0010 18.408a1 1 0 102 0v-.092a4.535 4.535 0 001.743-.559A1.5 1.5 0 0012 16.5c0-.354-.116-.686-.321-.956a4.498 4.498 0 01-1.836-1.991c-.33-.626-.33-1.357 0-1.983a4.498 4.498 0 011.836-1.991A1.5 1.5 0 0012 7.5c0-.584-.328-1.096-.78-1.342A4.535 4.535 0 0010 5.592V5z" clipRule="evenodd" />
+    </svg>
+);
+
+export const MoreVerticalIcon: React.FC = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+        <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+    </svg>
+);
+
+export const ViewIcon: React.FC = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+        <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+        <path fillRule="evenodd" d="M.458 10C3.732 4.943 9.522 3 10 3s6.268 1.943 9.542 7c-3.274 5.057-9.03 7-9.542 7S3.732 15.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
     </svg>
 );
