@@ -53,6 +53,8 @@ export interface Company {
   defaultNotes: string;
   taxRate: number;
   currency: string;
+  template: string;
+  accentColor: string;
 }
 
 export interface Client extends Details {
@@ -84,4 +86,14 @@ export interface SavedDocument {
   quotationStatus?: QuotationStatus | null;
   paidDate?: string | null;
   payments?: Payment[];
+  template: string;
+  accentColor: string;
+}
+
+export interface AppDataBackup {
+  companies: Company[];
+  clients: Client[];
+  items: Item[];
+  savedInvoices: SavedDocument[];
+  savedQuotations: SavedDocument[];
 }

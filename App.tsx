@@ -35,6 +35,8 @@ const App: React.FC = () => {
       defaultNotes: '',
       taxRate: 0,
       currency: '',
+      template: 'classic',
+      accentColor: '#4f46e5',
     }];
   });
   const [activeCompanyId, setActiveCompanyId] = useState<number>(companies[0].id);
@@ -48,6 +50,8 @@ const App: React.FC = () => {
   const [notes, setNotes] = useState(activeCompany.defaultNotes);
   const [taxRate, setTaxRate] = useState(activeCompany.taxRate);
   const [currency, setCurrency] = useState(activeCompany.currency);
+  const [template, setTemplate] = useState(activeCompany.template);
+  const [accentColor, setAccentColor] = useState(activeCompany.accentColor);
 
   useEffect(() => {
     if (activeCompany) {
@@ -57,6 +61,8 @@ const App: React.FC = () => {
       setNotes(activeCompany.defaultNotes);
       setTaxRate(activeCompany.taxRate);
       setCurrency(activeCompany.currency);
+      setTemplate(activeCompany.template);
+      setAccentColor(activeCompany.accentColor);
     }
   }, [activeCompany]);
 
@@ -309,6 +315,8 @@ const App: React.FC = () => {
 
     if (activeCompany) {
       setNotes(activeCompany.defaultNotes);
+      setTemplate(activeCompany.template);
+      setAccentColor(activeCompany.accentColor);
     }
   }, [activeCompany, documentType]);
 
@@ -393,6 +401,8 @@ const App: React.FC = () => {
       quotationStatus: documentType === DocumentType.Quotation ? QuotationStatus.Active : null,
       paidDate: finalPaidDate,
       payments: documentType === DocumentType.Invoice ? payments : [],
+      template,
+      accentColor,
     };
 
     if (documentType === DocumentType.Invoice) {
@@ -454,6 +464,8 @@ const App: React.FC = () => {
     setCurrency(doc.currency);
     setPayments(doc.payments || []);
     setStatus(doc.status);
+    setTemplate(doc.template || 'classic');
+    setAccentColor(doc.accentColor || '#4f46e5');
     setCurrentView('editor');
   };
 
@@ -814,6 +826,8 @@ const App: React.FC = () => {
             formatCurrency={formatCurrency}
             payments={payments}
             status={status}
+            template={template}
+            accentColor={accentColor}
           />
         </div>
       </div>
@@ -924,7 +938,19 @@ const App: React.FC = () => {
       
       <main className={`container mx-auto p-4 sm:p-6 lg:p-8 ${currentView === 'editor' ? 'grid grid-cols-1 lg:grid-cols-5 gap-8' : ''}`}>
         {currentView === 'editor' && renderEditor()}
-        {currentView === 'setup' && <SetupPage companies={companies} setCompanies={setCompanies} onDone={() => setCurrentView('editor')} />}
+        {currentView === 'setup' && <SetupPage 
+            companies={companies} 
+            setCompanies={setCompanies} 
+            clients={clients}
+            setClients={setClients}
+            items={items}
+            setItems={setItems}
+            savedInvoices={savedInvoices}
+            setSavedInvoices={setSavedInvoices}
+            savedQuotations={savedQuotations}
+            setSavedQuotations={setSavedQuotations}
+            onDone={() => setCurrentView('editor')} 
+        />}
         {currentView === 'clients' && <ClientListPage clients={clients} setClients={setClients} onDone={() => setCurrentView('editor')} />}
         {currentView === 'items' && <ItemListPage items={items} setItems={setItems} formatCurrency={formatCurrency} onDone={() => setCurrentView('editor')} />}
         {currentView === 'invoices' && <DocumentListPage documents={savedInvoices} setDocuments={setSavedInvoices} formatCurrency={formatCurrency} handleSendReminder={handleSendReminder} handleLoadDocument={handleLoadDocument} />}

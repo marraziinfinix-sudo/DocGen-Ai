@@ -19,9 +19,11 @@ interface DocumentPreviewProps {
   formatCurrency: (amount: number) => string;
   payments?: Payment[];
   status?: InvoiceStatus | null;
+  template: string;
+  accentColor: string;
 }
 
-const StatusStamp: React.FC<{ status: InvoiceStatus | null }> = ({ status }) => {
+const StatusStamp: React.FC<{ status: InvoiceStatus | null, color: string }> = ({ status, color }) => {
   if (!status || status === InvoiceStatus.Pending) return null;
 
   let text = '';
@@ -41,10 +43,15 @@ const StatusStamp: React.FC<{ status: InvoiceStatus | null }> = ({ status }) => 
   }
 
   return (
-    <div className={`absolute top-1/4 right-8 sm:right-16 border-4 ${colorClasses} rounded-lg p-4 transform rotate-[-15deg] opacity-70`}>
+    <div style={{ borderColor: status === InvoiceStatus.Paid ? '#22c55e' : '#3b82f6', color: status === InvoiceStatus.Paid ? '#22c55e' : '#3b82f6' }} className={`absolute top-1/4 right-8 sm:right-16 border-4 rounded-lg p-4 transform rotate-[-15deg] opacity-70`}>
       <h2 className="text-3xl sm:text-5xl font-bold tracking-widest">{text}</h2>
     </div>
   );
+};
+
+const hexToRgb = (hex: string) => {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : null;
 };
 
 
@@ -66,6 +73,8 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
   formatCurrency,
   payments,
   status,
+  template,
+  accentColor
 }) => {
 
   const amountPaid = payments?.reduce((sum, p) => sum + p.amount, 0) || 0;
@@ -74,11 +83,12 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
     balanceDue = 0;
   }
 
+  const rgbAccent = hexToRgb(accentColor);
+  const lightAccentBg = rgbAccent ? `rgba(${rgbAccent}, 0.1)` : '#f0f0f0';
 
-  return (
-    <div id="print-area" className="relative bg-white rounded-lg shadow-lg p-6 sm:p-8 md:p-12 text-sm text-slate-700 border">
-      {documentType === DocumentType.Invoice && <StatusStamp status={status} />}
 
+  const renderClassicTemplate = () => (
+    <>
       <header className="flex flex-col sm:flex-row justify-between items-start pb-8 border-b border-slate-200 gap-4 sm:gap-2">
         <div className="flex items-start gap-4">
           {companyLogo && <img src={companyLogo} alt="Company Logo" className="w-20 h-20 sm:w-24 sm:h-24 object-contain" />}
@@ -92,7 +102,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
           </div>
         </div>
         <div className="text-left sm:text-right w-full sm:w-auto">
-          <h2 className="text-2xl sm:text-3xl font-bold uppercase text-indigo-600">{documentType}</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold uppercase" style={{ color: accentColor }}>{documentType}</h2>
           <p className="text-slate-500"># {documentNumber}</p>
         </div>
       </header>
@@ -122,12 +132,12 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
       
       <section className="overflow-x-auto">
         <table className="w-full text-left">
-          <thead className="bg-slate-100">
+          <thead style={{ backgroundColor: accentColor, color: 'white' }}>
             <tr>
-              <th className="p-3 font-semibold text-slate-600 uppercase w-1/2">Item</th>
-              <th className="p-3 font-semibold text-slate-600 uppercase text-center">Qty</th>
-              <th className="p-3 font-semibold text-slate-600 uppercase text-right">Price</th>
-              <th className="p-3 font-semibold text-slate-600 uppercase text-right">Total</th>
+              <th className="p-3 font-semibold uppercase w-1/2">Item</th>
+              <th className="p-3 font-semibold uppercase text-center">Qty</th>
+              <th className="p-3 font-semibold uppercase text-right">Price</th>
+              <th className="p-3 font-semibold uppercase text-right">Total</th>
             </tr>
           </thead>
           <tbody>
@@ -142,6 +152,80 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
           </tbody>
         </table>
       </section>
+    </>
+  );
+
+  const renderModernTemplate = () => (
+    <>
+      <header className="flex justify-between items-start pb-8 mb-8 border-b-4" style={{borderColor: accentColor}}>
+        <div className="flex items-center gap-6">
+          {companyLogo && <img src={companyLogo} alt="Company Logo" className="w-28 h-28 object-contain" />}
+          <div>
+            <h1 className="text-3xl font-bold text-slate-800">{companyDetails.name}</h1>
+            <p className="text-slate-500 mt-2">{companyDetails.address}</p>
+            <div className="text-slate-500 text-sm mt-1">
+                <span>{companyDetails.email}</span>
+                {companyDetails.phone && <span> &bull; {companyDetails.phone}</span>}
+            </div>
+            {companyDetails.website && <p className="text-slate-500 text-sm">{companyDetails.website}</p>}
+            {companyDetails.taxId && <p className="text-slate-500 text-sm">Tax ID: {companyDetails.taxId}</p>}
+          </div>
+        </div>
+        <div className="text-right">
+          <h2 className="text-4xl font-bold uppercase" style={{ color: accentColor }}>{documentType}</h2>
+          <p className="text-slate-500 text-lg"># {documentNumber}</p>
+        </div>
+      </header>
+      
+      <section className="grid grid-cols-2 gap-8 my-8 p-4 rounded-lg" style={{backgroundColor: lightAccentBg}}>
+        <div>
+          <h3 className="font-semibold text-slate-500 uppercase tracking-wider mb-2">
+            {documentType === DocumentType.Invoice ? 'Billed To' : 'Quote To'}
+          </h3>
+          <p className="font-bold text-slate-800 text-lg">{clientDetails.name}</p>
+          <p className="text-slate-600">{clientDetails.address}</p>
+          <p className="text-slate-600">{clientDetails.email}</p>
+        </div>
+        <div className="text-right">
+            <p className="font-semibold text-slate-500">Date Issued</p>
+            <p className="font-medium text-slate-800 text-lg mb-2">{new Date(issueDate + 'T00:00:00').toLocaleDateString()}</p>
+            <p className="font-semibold text-slate-500">
+              {documentType === DocumentType.Invoice ? 'Due Date' : 'Valid Until'}
+            </p>
+            <p className="font-medium text-slate-800 text-lg">{new Date(dueDate + 'T00:00:00').toLocaleDateString()}</p>
+        </div>
+      </section>
+      
+      <section className="overflow-x-auto">
+        <table className="w-full text-left">
+          <thead >
+            <tr className="border-b-2 border-slate-200">
+              <th className="p-3 font-semibold uppercase w-1/2" style={{color: accentColor}}>Item</th>
+              <th className="p-3 font-semibold uppercase text-center" style={{color: accentColor}}>Qty</th>
+              <th className="p-3 font-semibold uppercase text-right" style={{color: accentColor}}>Price</th>
+              <th className="p-3 font-semibold uppercase text-right" style={{color: accentColor}}>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {lineItems.map(item => (
+              <tr key={item.id} className="border-b border-slate-100">
+                <td className="p-3 text-slate-800 font-medium">{item.description}</td>
+                <td className="p-3 text-center text-slate-600">{item.quantity}</td>
+                <td className="p-3 text-right text-slate-600">{formatCurrency(item.price)}</td>
+                <td className="p-3 text-right font-medium text-slate-800">{formatCurrency(item.price * item.quantity)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+    </>
+  );
+
+  return (
+    <div id="print-area" className="relative bg-white rounded-lg shadow-lg p-6 sm:p-8 md:p-12 text-sm text-slate-700 border">
+      {documentType === DocumentType.Invoice && <StatusStamp status={status} color={accentColor} />}
+      
+      {template === 'modern' ? renderModernTemplate() : renderClassicTemplate()}
       
       <section className="flex justify-end mt-8">
         <div className="w-full md:w-1/2 lg:w-2/5 space-y-2">
@@ -155,7 +239,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
           </div>
           <div className="border-t-2 border-slate-200 mt-2 pt-2 flex justify-between">
             <p className="font-bold text-lg text-slate-800">Total</p>
-            <p className="font-bold text-lg text-indigo-600">{formatCurrency(total)}</p>
+            <p className="font-bold text-lg" style={{color: accentColor}}>{formatCurrency(total)}</p>
           </div>
           {documentType === DocumentType.Invoice && payments && payments.length > 0 && (
             <>
@@ -163,9 +247,9 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
                 <p className="text-slate-500">Amount Paid</p>
                 <p className="font-medium text-slate-800">{formatCurrency(amountPaid)}</p>
               </div>
-              <div className="bg-indigo-50 p-2 rounded-md flex justify-between">
+              <div className="p-2 rounded-md flex justify-between" style={{backgroundColor: lightAccentBg}}>
                 <p className="font-bold text-lg text-slate-800">Balance Due</p>
-                <p className="font-bold text-lg text-indigo-600">{formatCurrency(balanceDue)}</p>
+                <p className="font-bold text-lg" style={{color: accentColor}}>{formatCurrency(balanceDue)}</p>
               </div>
             </>
           )}
