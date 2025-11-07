@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company } from './types';
 import { generateDescription } from './services/geminiService';
-import { SparklesIcon, PlusIcon, TrashIcon, PrinterIcon, CogIcon, UsersIcon, ListIcon, DocumentIcon, MailIcon, WhatsAppIcon, FileTextIcon } from './components/Icons';
+import { SparklesIcon, PlusIcon, TrashIcon, PrinterIcon, CogIcon, UsersIcon, ListIcon, DocumentIcon, MailIcon, WhatsAppIcon, FileTextIcon, DownloadIcon } from './components/Icons';
 import DocumentPreview from './components/DocumentPreview';
 import SetupPage from './components/SetupPage';
 import ClientListPage from './components/ClientListPage';
@@ -10,11 +10,8 @@ import ItemListPage from './components/ItemListPage';
 import DocumentListPage from './components/DocumentListPage';
 import QuotationListPage from './components/QuotationListPage';
 
-// @ts-ignore
-const { jsPDF } = window.jspdf;
-// @ts-ignore
+declare const jspdf: any;
 declare const html2canvas: any;
-
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<'editor' | 'setup' | 'clients' | 'items' | 'invoices' | 'quotations'>('editor');
@@ -122,9 +119,6 @@ const App: React.FC = () => {
 
   const [selectedSavedItemId, setSelectedSavedItemId] = useState<string>('');
   const [selectedClientId, setSelectedClientId] = useState<string>('');
-  
-  const [showPostSaveModal, setShowPostSaveModal] = useState(false);
-  const [lastSavedDocument, setLastSavedDocument] = useState<SavedDocument | null>(null);
 
   // --- LocalStorage Persistence ---
   useEffect(() => {
@@ -322,46 +316,6 @@ const App: React.FC = () => {
       clearAndPrepareNewDocument();
     }
   };
-  
-  const generatePdfAndShowModal = async (doc: SavedDocument) => {
-    // Add a slight delay to allow the UI to update if needed, and to make the flow feel less abrupt.
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    const printArea = document.getElementById('print-area');
-    if (!printArea) {
-      alert('Could not find document preview to generate PDF.');
-      return;
-    }
-
-    try {
-      const canvas = await html2canvas(printArea, { scale: 2 }); // Higher scale for better quality
-      const imgData = canvas.toDataURL('image/png');
-      
-      const pdf = new jsPDF({
-        orientation: 'p',
-        unit: 'px',
-        format: 'a4',
-        hotfixes: ['px_scaling'],
-      });
-
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const canvasWidth = canvas.width;
-      const canvasHeight = canvas.height;
-      const ratio = canvasWidth / canvasHeight;
-
-      const imgHeight = canvasHeight * pdfWidth / canvasWidth;
-      
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, imgHeight);
-      pdf.save(`${doc.documentType}-${doc.documentNumber}.pdf`);
-      
-      setShowPostSaveModal(true);
-
-    } catch (error) {
-      console.error('Error generating PDF:', error);
-      alert('There was an error generating the PDF file.');
-    }
-  };
-
 
   const handleSaveDocument = () => {
     // Basic validation
@@ -374,10 +328,12 @@ const App: React.FC = () => {
       return;
     }
 
-    if (!window.confirm(`Are you sure you want to save this ${documentType.toLowerCase()}? A PDF will be generated and downloaded.`)) {
-        return;
+    // Confirmation dialog
+    if (!window.confirm(`Are you sure you want to save this ${documentType.toLowerCase()}? Please review the details before confirming.`)) {
+        return; // Stop if user cancels
     }
 
+    // Check if client is new and ask to save
     if (clientDetails.name && clientDetails.name.trim() !== '') {
       const isExistingClient = clients.some(c => 
         c.name.trim().toLowerCase() === clientDetails.name.trim().toLowerCase() && 
@@ -418,12 +374,36 @@ const App: React.FC = () => {
 
     if (documentType === DocumentType.Invoice) {
       setSavedInvoices(prev => [newDocument, ...prev]);
+      alert('Invoice saved successfully!');
     } else {
       setSavedQuotations(prev => [newDocument, ...prev]);
+      alert('Quotation saved successfully!');
     }
-    
-    setLastSavedDocument(newDocument);
-    generatePdfAndShowModal(newDocument);
+  };
+
+  const handleSavePdf = async () => {
+    const input = document.getElementById('print-area');
+    if (input) {
+      try {
+        const canvas = await html2canvas(input, { scale: 2, useCORS: true });
+        const imgData = canvas.toDataURL('image/png');
+        
+        // Use jsPDF from the global scope
+        const pdf = new jspdf.jsPDF({
+          orientation: 'portrait',
+          unit: 'px',
+          format: [canvas.width, canvas.height],
+        });
+        
+        pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+        
+        const filename = `${documentType}-${documentNumber}.pdf`;
+        pdf.save(filename);
+      } catch (error) {
+        console.error("Error generating PDF:", error);
+        alert("Sorry, there was an error generating the PDF. Please try again.");
+      }
+    }
   };
   
   const handleSelectClient = (clientId: string) => {
@@ -622,28 +602,6 @@ const App: React.FC = () => {
 
     const url = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
     window.open(url, '_blank');
-  };
-  
-  const handleShareEmailFromModal = () => {
-    if (!lastSavedDocument) return;
-    const subject = `${lastSavedDocument.documentType} #${lastSavedDocument.documentNumber} from ${lastSavedDocument.companyDetails.name}`;
-    const pdfFileName = `${lastSavedDocument.documentType}-${lastSavedDocument.documentNumber}.pdf`;
-    const body = `Hi ${lastSavedDocument.clientDetails.name},\n\nPlease find our ${lastSavedDocument.documentType.toLowerCase()} attached.\n\n(To attach the file, please find '${pdfFileName}' in your Downloads folder.)\n\nThank you,\n${lastSavedDocument.companyDetails.name}`;
-    window.location.href = `mailto:${lastSavedDocument.clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    setShowPostSaveModal(false);
-  };
-
-  const handleShareWhatsAppFromModal = () => {
-    if (!lastSavedDocument) return;
-    if (!lastSavedDocument.clientDetails.phone || lastSavedDocument.clientDetails.phone.trim() === '') {
-      alert("Client phone number is missing.");
-      return;
-    }
-    const phoneNumber = lastSavedDocument.clientDetails.phone.replace(/\D/g, '');
-    const message = `Hi ${lastSavedDocument.clientDetails.name}, here is our ${lastSavedDocument.documentType.toLowerCase()} #${lastSavedDocument.documentNumber}. Please attach the PDF file you just downloaded to this message.`;
-    const url = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
-    window.open(url, '_blank');
-    setShowPostSaveModal(false);
   };
 
   const renderEditor = () => (
@@ -875,16 +833,19 @@ const App: React.FC = () => {
                 <button onClick={handleShareWhatsApp} title="Share via WhatsApp" className="p-2 text-slate-500 hover:bg-slate-100 rounded-full">
                     <WhatsAppIcon />
                 </button>
-                <button onClick={handleCreateNew} title="Create New Document" className="flex items-center gap-2 bg-slate-100 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-200 transition-colors duration-200">
+                <button onClick={handleCreateNew} title="Create New Document" className="flex items-center gap-2 text-slate-600 font-semibold py-2 px-4 rounded-lg hover:bg-slate-100 transition-colors duration-200">
                     <PlusIcon />
                     <span className="hidden sm:inline">New</span>
                 </button>
-                 <button onClick={handleSaveDocument} className="flex items-center gap-2 bg-slate-500 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-600 transition-colors duration-200">
-                    <span>Save & PDF</span>
+                <button onClick={handleSaveDocument} className="flex items-center gap-2 bg-slate-500 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-600 transition-colors duration-200">
+                    <span>Save</span>
                 </button>
-                <button onClick={() => window.print()} className="flex items-center gap-2 bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 transition-colors duration-200">
-                    <PrinterIcon />
-                    <span className="hidden sm:inline">Print</span>
+                <button onClick={() => window.print()} title="Print" className="p-2 text-slate-500 hover:bg-slate-100 rounded-full">
+                  <PrinterIcon />
+                </button>
+                <button onClick={handleSavePdf} className="flex items-center gap-2 bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 transition-colors duration-200">
+                    <DownloadIcon />
+                    <span className="hidden sm:inline">Save PDF</span>
                 </button>
             </div>
         );
@@ -928,26 +889,6 @@ const App: React.FC = () => {
         {currentView === 'invoices' && <DocumentListPage documents={savedInvoices} setDocuments={setSavedInvoices} formatCurrency={formatCurrency} handleSendReminder={handleSendReminder} handleLoadDocument={handleLoadDocument} />}
         {currentView === 'quotations' && <QuotationListPage documents={savedQuotations} setDocuments={setSavedQuotations} formatCurrency={formatCurrency} handleCreateInvoiceFromQuote={handleCreateInvoiceFromQuote} handleLoadDocument={handleLoadDocument} />}
       </main>
-      
-      {showPostSaveModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
-          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md text-center">
-            <h3 className="text-xl font-bold text-slate-800 mb-2">Saved & PDF Generated!</h3>
-            <p className="text-slate-600 mb-6">Your PDF has been downloaded. Click a share option below, then manually attach the downloaded file to your message.</p>
-            <div className="flex flex-col sm:flex-row justify-center gap-4">
-              <button onClick={handleShareEmailFromModal} className="flex items-center justify-center gap-2 bg-blue-500 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-blue-600 transition-colors">
-                <MailIcon /> Share via Email
-              </button>
-              <button onClick={handleShareWhatsAppFromModal} className="flex items-center justify-center gap-2 bg-green-500 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-green-600 transition-colors">
-                <WhatsAppIcon /> Share via WhatsApp
-              </button>
-            </div>
-            <button onClick={() => setShowPostSaveModal(false)} className="mt-6 text-sm text-slate-500 hover:text-slate-700">
-              Close
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
