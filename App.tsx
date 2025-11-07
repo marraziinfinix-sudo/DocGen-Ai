@@ -481,26 +481,42 @@ const App: React.FC = () => {
   };
   
   const handleCreateInvoiceFromQuote = (quotation: SavedDocument) => {
-    setDocumentType(DocumentType.Invoice);
+    if (!window.confirm(`Are you sure you want to create an invoice from quotation #${quotation.documentNumber}? This will be saved immediately.`)) {
+      return;
+    }
 
-    setCompanyDetails(quotation.companyDetails);
-    setCompanyLogo(quotation.companyLogo);
-    setBankQRCode(quotation.bankQRCode);
-    setClientDetails(quotation.clientDetails);
-    setLineItems(quotation.lineItems.map(item => ({ ...item, id: Date.now() + Math.random() }))); 
-    setNotes(quotation.notes);
-    setTaxRate(quotation.taxRate);
-    setCurrency(quotation.currency);
-
-    const today = new Date().toISOString().split('T')[0];
-    setIssueDate(today);
+    // Calculate new invoice number
+    const highestInvoiceNum = savedInvoices.reduce((max, doc) => {
+      const num = parseInt(doc.documentNumber, 10);
+      return isNaN(num) ? max : Math.max(max, num);
+    }, 0);
+    const newInvoiceNumber = String(highestInvoiceNum + 1).padStart(3, '0');
     
-    const newDueDate = new Date();
-    newDueDate.setDate(newDueDate.getDate() + 30);
-    setDueDate(newDueDate.toISOString().split('T')[0]);
-    setDueDateOption('30days');
+    // Calculate dates
+    const today = new Date();
+    const issueDate = today.toISOString().split('T')[0];
+    const dueDate = new Date(today);
+    dueDate.setDate(today.getDate() + 30); // Default to 30 days
+    const dueDateString = dueDate.toISOString().split('T')[0];
 
-    setCurrentView('editor');
+    // Create new invoice object
+    const newInvoice: SavedDocument = {
+      ...quotation, // Copy most fields from quotation
+      id: Date.now(),
+      documentType: DocumentType.Invoice,
+      documentNumber: newInvoiceNumber,
+      issueDate: issueDate,
+      dueDate: dueDateString,
+      status: InvoiceStatus.Pending,
+      paidDate: null,
+    };
+    
+    // Add to savedInvoices
+    setSavedInvoices(prev => [newInvoice, ...prev]);
+
+    // User feedback and navigation
+    alert(`Invoice #${newInvoiceNumber} created successfully!`);
+    setCurrentView('invoices');
   };
 
   const handleShareEmail = () => {
