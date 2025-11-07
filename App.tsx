@@ -127,7 +127,7 @@ const App: React.FC = () => {
 
   const [selectedSavedItemId, setSelectedSavedItemId] = useState<string>('');
   const [selectedClientId, setSelectedClientId] = useState<string>('');
-  const [loadedDocumentInfo, setLoadedDocumentInfo] = useState<{ id: number; status: InvoiceStatus | null; docType: DocumentType } | null>(null);
+  const [loadedDocumentInfo, setLoadedDocumentInfo] = useState<{ id: number; status: InvoiceStatus | QuotationStatus | null; docType: DocumentType } | null>(null);
 
 
   // --- LocalStorage Persistence ---
@@ -174,14 +174,14 @@ const App: React.FC = () => {
   
   // --- Document Number Management ---
   useEffect(() => {
-    if (currentView !== 'editor') return;
+    if (currentView !== 'editor' || loadedDocumentInfo) return;
     const relevantDocs = documentType === DocumentType.Invoice ? savedInvoices : savedQuotations;
     const highestNum = relevantDocs.reduce((max, doc) => {
       const num = parseInt(doc.documentNumber, 10);
       return isNaN(num) ? max : Math.max(max, num);
     }, 0);
     setDocumentNumber(String(highestNum + 1).padStart(3, '0'));
-  }, [documentType, savedInvoices, savedQuotations, currentView]);
+  }, [documentType, savedInvoices, savedQuotations, currentView, loadedDocumentInfo]);
   // --- End Document Number Management ---
 
   // --- Auto-update saved client on detail change ---
@@ -332,7 +332,6 @@ const App: React.FC = () => {
       return;
     }
 
-    // Find the original document if we are editing one
     let originalDoc: SavedDocument | undefined = undefined;
     if (loadedDocumentInfo) {
       const list = loadedDocumentInfo.docType === DocumentType.Invoice ? savedInvoices : savedQuotations;
@@ -341,29 +340,23 @@ const App: React.FC = () => {
 
     const isUpdating = !!originalDoc;
 
-    // Block modification of non-pending invoices or non-active quotations
     if (originalDoc) {
       if (originalDoc.documentType === DocumentType.Invoice && originalDoc.status !== InvoiceStatus.Pending) {
         alert('This invoice is already Paid or Partially Paid and cannot be modified. Please create a new invoice instead.');
         return;
       }
       if (originalDoc.documentType === DocumentType.Quotation) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const validUntil = new Date(originalDoc.dueDate + 'T00:00:00');
-        
         if (originalDoc.quotationStatus === QuotationStatus.Agreed) {
           alert('This quotation has been converted to an invoice and cannot be modified.');
           return;
         }
-        if (validUntil < today) {
+        if (originalDoc.quotationStatus === QuotationStatus.Expired) {
           alert('This quotation has expired and cannot be modified.');
           return;
         }
       }
     }
 
-    // Check for duplicate document numbers, excluding the current document if updating
     const existingDocs = documentType === DocumentType.Invoice ? savedInvoices : savedQuotations;
     const isDuplicate = existingDocs.some(
       doc => doc.documentNumber.trim().toLowerCase() === documentNumber.trim().toLowerCase() && doc.id !== originalDoc?.id
@@ -378,7 +371,6 @@ const App: React.FC = () => {
       return;
     }
 
-    // Save new client if needed
     if (clientDetails.name && clientDetails.name.trim() !== '') {
       const isExistingClient = clients.some(c => 
         c.name.trim().toLowerCase() === clientDetails.name.trim().toLowerCase() && 
@@ -391,7 +383,6 @@ const App: React.FC = () => {
       }
     }
 
-    // Determine final status for invoices
     let finalStatus: InvoiceStatus | null = null;
     let finalPaidDate: string | null | undefined = null;
     if (documentType === DocumentType.Invoice) {
@@ -406,7 +397,6 @@ const App: React.FC = () => {
         }
     }
 
-    // Construct the document data
     const documentData: Omit<SavedDocument, 'id'> = {
       documentNumber,
       documentType,
@@ -429,7 +419,6 @@ const App: React.FC = () => {
       accentColor,
     };
     
-    // Perform Update or Create
     if (isUpdating && originalDoc) {
       const updatedDocument: SavedDocument = { ...documentData, id: originalDoc.id };
       if (documentType === DocumentType.Invoice) {
@@ -439,7 +428,7 @@ const App: React.FC = () => {
         setSavedQuotations(prev => prev.map(doc => doc.id === originalDoc.id ? updatedDocument : doc));
         alert('Quotation updated successfully!');
       }
-    } else { // Create new
+    } else {
       const newDocument: SavedDocument = { ...documentData, id: Date.now() };
       if (documentType === DocumentType.Invoice) {
         setSavedInvoices(prev => [newDocument, ...prev]);
@@ -486,7 +475,7 @@ const App: React.FC = () => {
   };
 
   const handleLoadDocument = (doc: SavedDocument) => {
-    setLoadedDocumentInfo({ id: doc.id, status: doc.status, docType: doc.documentType });
+    setLoadedDocumentInfo({ id: doc.id, status: doc.status || doc.quotationStatus, docType: doc.documentType });
     setDocumentType(doc.documentType);
     setCompanyDetails(doc.companyDetails || activeCompany.details);
     setCompanyLogo(doc.companyLogo);
@@ -702,7 +691,14 @@ const App: React.FC = () => {
         <div className="bg-white p-4 rounded-lg shadow-sm grid grid-cols-1 md:grid-cols-3 gap-4">
            <div>
               <label className="block text-sm font-medium text-slate-600 mb-1">{documentType} #</label>
-              <input type="text" value={documentNumber} onChange={e => setDocumentNumber(e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+              <input 
+                type="text" 
+                value={documentNumber} 
+                onChange={e => setDocumentNumber(e.target.value)} 
+                readOnly={!!loadedDocumentInfo}
+                className={`w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${!!loadedDocumentInfo ? 'bg-slate-100 cursor-not-allowed' : ''}`}
+                title={!!loadedDocumentInfo ? 'Document number cannot be changed for a saved document.' : ''}
+              />
           </div>
           <div>
               <label className="block text-sm font-medium text-slate-600 mb-1">Date Issued</label>
