@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Company, Details } from '../types';
-import { PlusIcon } from './Icons';
+import { PlusIcon, DownloadIcon, UploadIcon } from './Icons';
 
 interface SetupPageProps {
   companies: Company[];
@@ -182,6 +182,7 @@ const SetupPage: React.FC<SetupPageProps> = ({
 }) => {
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingCompany, setEditingCompany] = useState<Company | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleAddNew = () => {
         setEditingCompany({ ...emptyCompany });
@@ -217,6 +218,91 @@ const SetupPage: React.FC<SetupPageProps> = ({
         setIsFormOpen(false);
         setEditingCompany(null);
     };
+    
+    const handleExportData = () => {
+        try {
+            const dataToExport: { [key: string]: any } = {};
+            const keys = ['companies', 'clients', 'items', 'savedInvoices', 'savedQuotations'];
+            
+            keys.forEach(key => {
+                const item = localStorage.getItem(key);
+                if (item) {
+                    dataToExport[key] = JSON.parse(item);
+                }
+            });
+
+            if (Object.keys(dataToExport).length === 0) {
+                alert('No data to export.');
+                return;
+            }
+
+            const jsonString = JSON.stringify(dataToExport, null, 2);
+            const blob = new Blob([jsonString], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            const date = new Date().toISOString().split('T')[0];
+            link.download = `invquo-ai-backup-${date}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            alert('Data exported successfully!');
+        } catch (error) {
+            console.error('Failed to export data:', error);
+            alert('An error occurred while exporting data.');
+        }
+    };
+
+    const handleImportClick = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        if (!window.confirm('This will overwrite all existing data. This action cannot be undone. Are you sure you want to proceed?')) {
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const text = e.target?.result as string;
+                const data = JSON.parse(text);
+                
+                const requiredKeys = ['companies', 'clients', 'items', 'savedInvoices', 'savedQuotations'];
+                const importedKeys = Object.keys(data);
+                const hasAllKeys = requiredKeys.every(key => importedKeys.includes(key));
+                
+                if (!hasAllKeys) {
+                    alert('Invalid backup file. The file is missing required data sections.');
+                    return;
+                }
+
+                requiredKeys.forEach(key => {
+                    if (data[key]) {
+                        localStorage.setItem(key, JSON.stringify(data[key]));
+                    }
+                });
+
+                alert('Data imported successfully! The application will now reload.');
+                window.location.reload();
+            } catch (error) {
+                console.error('Failed to import data:', error);
+                alert('An error occurred while importing data. The file might be corrupted or in the wrong format.');
+            } finally {
+                if (fileInputRef.current) {
+                    fileInputRef.current.value = '';
+                }
+            }
+        };
+        reader.readAsText(file);
+    };
 
   return (
     <main className="container mx-auto p-4 sm:p-6 lg:p-8">
@@ -249,10 +335,31 @@ const SetupPage: React.FC<SetupPageProps> = ({
             ))}
         </div>
         
-        <div className="mt-8 pt-6 border-t text-right">
+        <div className="mt-8 pt-6 border-t">
+          <div className="mb-8">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Data Management</h2>
+            <p className="text-slate-600 mb-4">Save all your company profiles, clients, items, invoices, and quotations to a file on your computer for backup. You can restore from this file later.</p>
+            <div className="flex flex-col sm:flex-row gap-4">
+              <button onClick={handleExportData} className="flex-1 flex items-center justify-center gap-2 bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-700">
+                <DownloadIcon /> Export All Data
+              </button>
+              <button onClick={handleImportClick} className="flex-1 flex items-center justify-center gap-2 bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-700">
+                <UploadIcon /> Import Data
+              </button>
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                accept=".json"
+                className="hidden"
+              />
+            </div>
+          </div>
+          <div className="text-right">
             <button onClick={onDone} className="bg-slate-500 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-slate-600 transition-colors duration-200">
                 Done
             </button>
+          </div>
         </div>
       </div>
 
