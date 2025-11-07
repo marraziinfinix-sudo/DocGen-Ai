@@ -1,21 +1,16 @@
-
-import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus, AppDataBackup } from './types';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus } from './types';
 import { generateDescription } from './services/geminiService';
-import { SparklesIcon, PlusIcon, TrashIcon, CogIcon, UsersIcon, ListIcon, DocumentIcon, MailIcon, WhatsAppIcon, FileTextIcon, DownloadIcon, MoreVerticalIcon, PrinterIcon, CloudIcon } from './components/Icons';
+import { SparklesIcon, PlusIcon, TrashIcon, CogIcon, UsersIcon, ListIcon, DocumentIcon, MailIcon, WhatsAppIcon, FileTextIcon, DownloadIcon, MoreVerticalIcon, PrinterIcon } from './components/Icons';
 import DocumentPreview from './components/DocumentPreview';
 import SetupPage from './components/SetupPage';
 import ClientListPage from './components/ClientListPage';
 import ItemListPage from './components/ItemListPage';
 import DocumentListPage from './components/DocumentListPage';
 import QuotationListPage from './components/QuotationListPage';
-import * as GoogleDriveService from './services/googleDriveService';
 
 declare const jspdf: any;
 declare const html2canvas: any;
-declare const gapi: any;
-
-export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'error' | 'disconnected';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<'editor' | 'setup' | 'clients' | 'items' | 'invoices' | 'quotations'>('editor');
@@ -135,15 +130,6 @@ const App: React.FC = () => {
   const [loadedDocumentInfo, setLoadedDocumentInfo] = useState<{ id: number; status: InvoiceStatus | QuotationStatus | null; docType: DocumentType } | null>(null);
   const [isCreatingNew, setIsCreatingNew] = useState(true);
 
-  // --- Google Drive Sync State ---
-  const [googleClientId, setGoogleClientId] = useState(() => localStorage.getItem('googleClientId') || '');
-  const [isGapiReady, setIsGapiReady] = useState(false);
-  const [isSignedIn, setIsSignedIn] = useState(false);
-  const [isAutoSyncEnabled, setIsAutoSyncEnabled] = useState(() => localStorage.getItem('isAutoSyncEnabled') === 'true');
-  const [syncStatus, setSyncStatus] = useState<SyncStatus>('disconnected');
-  // FIX: Replaced NodeJS.Timeout with 'number' for browser compatibility.
-  const debouncedSync = useRef<number | null>(null);
-
 
   // --- LocalStorage Persistence ---
   useEffect(() => {
@@ -259,84 +245,6 @@ const App: React.FC = () => {
       window.removeEventListener('click', closeMenu);
     };
   }, [isActionMenuOpen]);
-
-
-  // --- Google Drive Sync Effects ---
-  const handleTokenResponse = async (tokenResponse: any) => {
-    if (tokenResponse.error) {
-        console.error(tokenResponse.error);
-        setIsSignedIn(false);
-        setSyncStatus('error');
-        localStorage.removeItem('googleAuthToken');
-        alert(`Error connecting to Google Drive: ${tokenResponse.error_description}`);
-        return;
-    }
-    localStorage.setItem('googleAuthToken', JSON.stringify(gapi.client.getToken()));
-    setIsSignedIn(true);
-    setSyncStatus('idle');
-  };
-
-  useEffect(() => {
-      const initGapi = () => {
-          GoogleDriveService.gapiInit(() => {
-              setIsGapiReady(true);
-              const token = localStorage.getItem('googleAuthToken');
-              if (token) {
-                  gapi.client.setToken(JSON.parse(token));
-                  setIsSignedIn(true);
-                  setSyncStatus('idle');
-              } else {
-                  setSyncStatus('disconnected');
-              }
-          });
-      };
-      // FIX: Used `typeof gapi` to safely check for the gapi object without TypeScript errors on the window object.
-      if (typeof gapi !== 'undefined' && gapi) {
-          GoogleDriveService.loadGapi(initGapi);
-      }
-  }, []);
-
-  const performSync = async () => {
-    if (!isAutoSyncEnabled || !isSignedIn || !isGapiReady) return;
-    setSyncStatus('syncing');
-    try {
-        const backupData: AppDataBackup = {
-            companies,
-            clients,
-            items,
-            savedInvoices,
-            savedQuotations,
-        };
-        await GoogleDriveService.saveBackupToDrive(backupData);
-        setSyncStatus('synced');
-        setTimeout(() => {
-            if (syncStatus === 'synced') setSyncStatus('idle');
-        }, 3000);
-    } catch (error: any) {
-        console.error("Auto-sync failed:", error);
-        setSyncStatus('error');
-        if (error.message.includes("invalid authentication")) {
-            // Token likely expired
-            setIsSignedIn(false);
-            localStorage.removeItem('googleAuthToken');
-        }
-    }
-  };
-
-  useEffect(() => {
-    if (debouncedSync.current) {
-        clearTimeout(debouncedSync.current);
-    }
-    if (isAutoSyncEnabled && isSignedIn) {
-        debouncedSync.current = window.setTimeout(performSync, 5000); // Sync 5s after last change
-    }
-    return () => {
-        if (debouncedSync.current) {
-            clearTimeout(debouncedSync.current);
-        }
-    };
-  }, [companies, clients, items, savedInvoices, savedQuotations, isAutoSyncEnabled, isSignedIn]);
-  // --- End Google Drive Sync Effects ---
 
   const handleLineItemChange = useCallback((id: number, field: keyof Omit<LineItem, 'id'>, value: string | number) => {
     setLineItems(prevItems =>
@@ -671,32 +579,6 @@ const App: React.FC = () => {
       const docDataForMessage = { ...doc, subtotal, taxAmount, formatCurrency };
       
       const reminderPrefix = `*Friendly Reminder*\n\nDear ${doc.clientDetails.name},\nThis is a reminder for the following invoice which was due on ${new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}:\n\n---\n\n`;
-      const messageContent = generateWhatsAppMessage(docDataForMessage);
-      const fullMessage = reminderPrefix + messageContent;
-
-      const url = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(fullMessage)}`;
-      window.open(url, '_blank');
-    }
-  };
-
-  const handleSendQuotationReminder = (doc: SavedDocument, channel: 'email' | 'whatsapp') => {
-    const reminderMessage = `Dear ${doc.clientDetails.name},\n\nThis is a friendly reminder regarding quotation #${doc.documentNumber} for ${formatCurrency(doc.total)}, which is valid until ${new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}.\n\nPlease let us know if you would like to proceed or if you have any questions.\n\nBest regards,\n${doc.companyDetails.name}`;
-    
-    if (channel === 'email') {
-      const subject = `Reminder: Quotation #${doc.documentNumber} is expiring soon`;
-      window.location.href = `mailto:${doc.clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(reminderMessage)}`;
-    } else {
-      if (!doc.clientDetails.phone || doc.clientDetails.phone.trim() === '') {
-        alert(`Please add a phone number for '${doc.clientDetails.name}' to send a WhatsApp reminder.`);
-        return;
-      }
-      const phoneNumber = doc.clientDetails.phone.replace(/\D/g, '');
-
-      const subtotal = doc.lineItems.reduce((acc, item) => acc + item.quantity * item.price, 0);
-      const taxAmount = subtotal * (doc.taxRate / 100);
-      const docDataForMessage = { ...doc, subtotal, taxAmount, formatCurrency };
-      
-      const reminderPrefix = `*Friendly Reminder*\n\nDear ${doc.clientDetails.name},\nThis is a reminder for the following quotation which is valid until ${new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}:\n\n---\n\n`;
       const messageContent = generateWhatsAppMessage(docDataForMessage);
       const fullMessage = reminderPrefix + messageContent;
 
@@ -1077,64 +959,14 @@ const App: React.FC = () => {
     return <button onClick={() => setCurrentView('editor')} className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700">Back To Main Menu</button>;
   };
 
-  const SyncStatusIndicator: React.FC<{ status: SyncStatus }> = ({ status }) => {
-    let title = '';
-    let iconColor = 'text-slate-400';
-    let content = <CloudIcon />;
-    let isSpinning = false;
-  
-    switch (status) {
-      case 'disconnected':
-        title = 'Cloud sync disconnected';
-        break;
-      case 'idle':
-        title = 'Cloud sync active';
-        iconColor = 'text-slate-500';
-        break;
-      case 'syncing':
-        title = 'Syncing data to cloud...';
-        iconColor = 'text-indigo-500';
-        isSpinning = true;
-        break;
-      case 'synced':
-        title = 'Data synced successfully!';
-        iconColor = 'text-green-500';
-        content = (
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3 3m0 0l-3-3m3 3V9" />
-          </svg>
-        );
-        break;
-      case 'error':
-        title = 'Cloud sync error. Check setup.';
-        iconColor = 'text-red-500';
-        content = (
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
-        );
-        break;
-    }
-  
-    if (isAutoSyncEnabled) {
-      return (
-        <div title={title} className={`relative p-2 rounded-full ${iconColor} ${isSpinning ? 'animate-spin' : ''}`}>
-          {content}
-        </div>
-      );
-    }
-    return null;
-  };
-
 
   return (
     <div className="min-h-screen font-sans text-slate-800">
       <header className="bg-white shadow-md sticky top-0 z-20 no-print">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-wrap items-center justify-between gap-4">
             {/* Title on the far left */}
-            <div className="flex-shrink-0 flex items-center gap-4">
+            <div className="flex-shrink-0">
                 <h1 className="text-xl sm:text-2xl font-bold text-indigo-600">QuotInv AI</h1>
-                <SyncStatusIndicator status={syncStatus} />
             </div>
             
             {/* Nav in the middle, will wrap to a new line on mobile */}
@@ -1169,22 +1001,11 @@ const App: React.FC = () => {
             savedQuotations={savedQuotations}
             setSavedQuotations={setSavedQuotations}
             onDone={() => setCurrentView('editor')} 
-            googleClientId={googleClientId}
-            setGoogleClientId={setGoogleClientId}
-            isGapiReady={isGapiReady}
-            isSignedIn={isSignedIn}
-            setIsSignedIn={setIsSignedIn}
-            syncStatus={syncStatus}
-            setSyncStatus={setSyncStatus}
-            isAutoSyncEnabled={isAutoSyncEnabled}
-            setIsAutoSyncEnabled={setIsAutoSyncEnabled}
-            handleTokenResponse={handleTokenResponse}
-            performSync={performSync}
         />}
         {currentView === 'clients' && <ClientListPage clients={clients} setClients={setClients} onDone={() => setCurrentView('editor')} />}
         {currentView === 'items' && <ItemListPage items={items} setItems={setItems} formatCurrency={formatCurrency} onDone={() => setCurrentView('editor')} />}
         {currentView === 'invoices' && <DocumentListPage documents={savedInvoices} setDocuments={setSavedInvoices} formatCurrency={formatCurrency} handleSendReminder={handleSendReminder} handleLoadDocument={handleLoadDocument} />}
-        {currentView === 'quotations' && <QuotationListPage documents={savedQuotations} setDocuments={setSavedQuotations} formatCurrency={formatCurrency} handleCreateInvoiceFromQuote={handleCreateInvoiceFromQuote} handleLoadDocument={handleLoadDocument} handleSendQuotationReminder={handleSendQuotationReminder} />}
+        {currentView === 'quotations' && <QuotationListPage documents={savedQuotations} setDocuments={setSavedQuotations} formatCurrency={formatCurrency} handleCreateInvoiceFromQuote={handleCreateInvoiceFromQuote} handleLoadDocument={handleLoadDocument} />}
       </main>
     </div>
   );
