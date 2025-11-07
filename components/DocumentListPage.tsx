@@ -108,7 +108,11 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
   };
 
   const getDisplayStatus = (doc: SavedDocument) => {
-    const isOverdue = doc.status !== InvoiceStatus.Paid && new Date(doc.dueDate + 'T00:00:00') < new Date();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dueDate = new Date(doc.dueDate + 'T00:00:00');
+    
+    const isOverdue = doc.status !== InvoiceStatus.Paid && dueDate < today;
     if (isOverdue) return { text: 'Overdue', color: 'bg-red-100 text-red-700' };
 
     switch (doc.status) {
@@ -201,7 +205,10 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
 
             {documents.length > 0 ? documents.map(doc => {
               const amountPaid = doc.payments?.reduce((sum, p) => sum + p.amount, 0) || 0;
-              const balanceDue = doc.total - amountPaid;
+              let balanceDue = doc.total - amountPaid;
+              if (doc.status === InvoiceStatus.Paid || balanceDue < 0) {
+                balanceDue = 0;
+              }
               const displayStatus = getDisplayStatus(doc);
 
               return (

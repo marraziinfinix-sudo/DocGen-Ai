@@ -69,7 +69,11 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
 }) => {
 
   const amountPaid = payments?.reduce((sum, p) => sum + p.amount, 0) || 0;
-  const balanceDue = total - amountPaid;
+  let balanceDue = total - amountPaid;
+  if (status === InvoiceStatus.Paid || balanceDue < 0) {
+    balanceDue = 0;
+  }
+
 
   return (
     <div id="print-area" className="relative bg-white rounded-lg shadow-lg p-6 sm:p-8 md:p-12 text-sm text-slate-700 border">
