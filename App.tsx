@@ -88,10 +88,10 @@ const App: React.FC = () => {
   
   const [dueDate, setDueDate] = useState(() => {
     const date = new Date();
-    date.setDate(date.getDate() + 30);
+    date.setDate(date.getDate() + 15);
     return date.toISOString().split('T')[0];
   });
-  const [dueDateOption, setDueDateOption] = useState<string>('30days');
+  const [dueDateOption, setDueDateOption] = useState<string>('15days');
   
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   
@@ -300,9 +300,9 @@ const App: React.FC = () => {
     const today = new Date().toISOString().split('T')[0];
     setIssueDate(today);
     const newDueDate = new Date();
-    newDueDate.setDate(newDueDate.getDate() + 30);
+    newDueDate.setDate(newDueDate.getDate() + 15);
     setDueDate(newDueDate.toISOString().split('T')[0]);
-    setDueDateOption('30days');
+    setDueDateOption('15days');
 
     // Reset notes to company default
     if (activeCompany) {
@@ -523,7 +523,7 @@ const App: React.FC = () => {
     const today = new Date();
     const issueDate = today.toISOString().split('T')[0];
     const dueDate = new Date(today);
-    dueDate.setDate(today.getDate() + 30); // Default to 30 days
+    dueDate.setDate(today.getDate() + 15); // Default to 15 days
     const dueDateString = dueDate.toISOString().split('T')[0];
 
     // Create new invoice object
@@ -833,15 +833,14 @@ const App: React.FC = () => {
                 <button onClick={handleShareWhatsApp} title="Share via WhatsApp" className="p-2 text-slate-500 hover:bg-slate-100 rounded-full">
                     <WhatsAppIcon />
                 </button>
-                <button onClick={handleCreateNew} title="Create New Document" className="flex items-center gap-2 text-slate-600 font-semibold py-2 px-4 rounded-lg hover:bg-slate-100 transition-colors duration-200">
-                    <PlusIcon />
-                    <span className="hidden sm:inline">New</span>
+                <button onClick={handleCreateNew} title="Create New Document" className="bg-slate-500 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-600 transition-colors duration-200">
+                    <span>New</span>
                 </button>
-                <button onClick={handleSaveDocument} className="flex items-center gap-2 bg-slate-500 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-600 transition-colors duration-200">
+                <button onClick={handleSaveDocument} className="bg-slate-500 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-600 transition-colors duration-200">
                     <span>Save</span>
                 </button>
-                <button onClick={() => window.print()} title="Print" className="p-2 text-slate-500 hover:bg-slate-100 rounded-full">
-                  <PrinterIcon />
+                <button onClick={() => window.print()} title="Print" className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 transition-colors duration-200">
+                    Print
                 </button>
                 <button onClick={handleSavePdf} title="Save as PDF" className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 transition-colors duration-200">
                     PDF
