@@ -361,9 +361,6 @@ const App: React.FC = () => {
       setSavedQuotations(prev => [newDocument, ...prev]);
       alert('Quotation saved successfully!');
     }
-
-    // Clear the form for the next entry
-    clearAndPrepareNewDocument();
   };
   
   const handleSelectClient = (clientId: string) => {
