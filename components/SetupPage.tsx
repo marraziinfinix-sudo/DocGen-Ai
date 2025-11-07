@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Company, Details, Client, Item, SavedDocument, AppDataBackup } from '../types';
-import { PlusIcon, LinkIcon } from './Icons';
+import { PlusIcon, DownloadIcon } from './Icons';
 
 interface SetupPageProps {
   companies: Company[];
@@ -194,9 +194,9 @@ const SetupPage: React.FC<SetupPageProps> = ({
 }) => {
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingCompany, setEditingCompany] = useState<Company | null>(null);
-    const [isDriveLinked, setIsDriveLinked] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
     const [syncMessage, setSyncMessage] = useState('');
+    const restoreInputRef = useRef<HTMLInputElement>(null);
 
     const handleAddNew = () => {
         setEditingCompany({ ...emptyCompany });
@@ -233,62 +233,85 @@ const SetupPage: React.FC<SetupPageProps> = ({
         setEditingCompany(null);
     };
 
-    const handleLinkDrive = () => {
-        alert("This feature requires a Google Cloud project setup with an OAuth 2.0 Client ID to function. This is a placeholder for the linking process.");
-        // In a real application, you would initialize the Google Client here
-        // using your Google Cloud Client ID and request an access token.
-        // For demonstration, we'll just toggle the state.
-        setIsDriveLinked(true);
-        setSyncMessage("Successfully linked to Google Drive (Demo).");
-    };
-
-    const handleSync = () => {
+    const handleDownloadBackup = () => {
         setIsSyncing(true);
-        setSyncMessage('Syncing data to Google Drive...');
-
-        // 1. Collect all data into a single object
-        const backupData: AppDataBackup = {
-            companies,
-            clients,
-            items,
-            savedInvoices,
-            savedQuotations,
-        };
-        const dataToSave = JSON.stringify(backupData, null, 2);
-
-        // 2. In a real application, you would use the Google Drive API (`gapi`) here
-        //    to find or create a file (e.g., 'quotinv_ai_backup.json') and upload the `dataToSave`.
-        console.log("Simulating sync with data:", dataToSave);
-
-        setTimeout(() => { // Simulate API call
+        setSyncMessage('Generating backup file...');
+        try {
+            const backupData: AppDataBackup = {
+                companies,
+                clients,
+                items,
+                savedInvoices,
+                savedQuotations,
+            };
+            const dataToSave = JSON.stringify(backupData, null, 2);
+            const blob = new Blob([dataToSave], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'quotinv_ai_backup.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            setSyncMessage(`Backup file generated at ${new Date().toLocaleString()}. Please upload it to your Google Drive.`);
+        } catch (error) {
+            console.error('Failed to generate backup:', error);
+            setSyncMessage('Error: Failed to generate backup file.');
+            alert('Error: Failed to generate backup file.');
+        } finally {
             setIsSyncing(false);
-            setSyncMessage(`Last synced: ${new Date().toLocaleString()}`);
-        }, 1500);
+        }
     };
 
-    const handleRestore = () => {
-        if (!window.confirm("Are you sure you want to restore data from Google Drive? This will overwrite your current local data.")) {
+    const handleRestoreClick = () => {
+        restoreInputRef.current?.click();
+    };
+
+    const handleFileRestore = (event: React.ChangeEvent<HTMLInputElement>) => {
+        if (!window.confirm("Are you sure you want to restore data? This will overwrite your current local data.")) {
+            if (event.target) event.target.value = '';
             return;
         }
 
+        const file = event.target.files?.[0];
+        if (!file) return;
+
         setIsSyncing(true);
-        setSyncMessage('Restoring data from Google Drive...');
+        setSyncMessage('Restoring data from file...');
 
-        // In a real application, you would use the Google Drive API to download the backup file content,
-        // parse it, and then call all the setter functions (setCompanies, setClients, etc.).
-        setTimeout(() => {
-            alert("Restore functionality is a placeholder. In a real app, this would fetch your data from Google Drive and replace your local data.");
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const text = e.target?.result as string;
+                const data: AppDataBackup = JSON.parse(text);
+
+                if (Array.isArray(data.companies) && Array.isArray(data.clients) && Array.isArray(data.items) && Array.isArray(data.savedInvoices) && Array.isArray(data.savedQuotations)) {
+                    setCompanies(data.companies);
+                    setClients(data.clients);
+                    setItems(data.items);
+                    setSavedInvoices(data.savedInvoices);
+                    setSavedQuotations(data.savedQuotations);
+                    setSyncMessage(`Data restored successfully at ${new Date().toLocaleString()}.`);
+                } else {
+                    throw new Error("Invalid backup file format.");
+                }
+            } catch (error) {
+                console.error("Failed to restore backup:", error);
+                const errorMessage = 'Error: Failed to restore. The file might be corrupted or in the wrong format.';
+                setSyncMessage(errorMessage);
+                alert(errorMessage);
+            } finally {
+                setIsSyncing(false);
+                if (event.target) event.target.value = '';
+            }
+        };
+        reader.onerror = () => {
+            setSyncMessage('Error reading the backup file.');
             setIsSyncing(false);
-            setSyncMessage('Restore simulation complete.');
-        }, 1500);
+        };
+        reader.readAsText(file);
     };
-
-    const handleDisconnect = () => {
-        // In a real application, you would revoke the Google OAuth token here.
-        setIsDriveLinked(false);
-        setSyncMessage('Disconnected from Google Drive.');
-    };
-
 
   return (
     <main className="container mx-auto p-4 sm:p-6 lg:p-8">
@@ -322,32 +345,26 @@ const SetupPage: React.FC<SetupPageProps> = ({
         </div>
 
         <div className="mt-8 pt-6 border-t">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">Data Backup & Sync</h2>
-            <div className="bg-slate-50 p-4 rounded-lg border flex flex-col sm:flex-row justify-between items-center gap-4">
-                <div>
-                    <h3 className="font-bold text-slate-800">Google Drive Sync</h3>
-                    <p className="text-sm text-slate-500 max-w-md">
-                        Backup and restore all your data (profiles, clients, items, and documents) to a file in your personal Google Drive. This is a secure way to keep your data safe.
-                    </p>
-                    {syncMessage && <p className="text-sm font-medium mt-2 text-indigo-600">{syncMessage}</p>}
-                </div>
-                <div className="flex-shrink-0">
-                    {!isDriveLinked ? (
-                        <button onClick={handleLinkDrive} className="flex items-center gap-2 bg-white text-slate-700 font-semibold py-2 px-4 rounded-lg border border-slate-300 hover:bg-slate-100">
-                            <LinkIcon />
-                            Link to Google Drive
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Data Backup & Restore</h2>
+            <div className="bg-slate-50 p-4 rounded-lg border">
+                <h3 className="font-bold text-slate-800">Manual Backup via Google Drive</h3>
+                <p className="text-sm text-slate-500 max-w-2xl mb-4">
+                    Download a backup file of all your data (profiles, clients, items, documents). You can save this file securely in your Google Drive or any other location. To restore, simply upload the backup file.
+                </p>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div className="flex-grow">
+                        {syncMessage && <p className="text-sm font-medium mt-2 text-indigo-600">{syncMessage}</p>}
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                        <input type="file" ref={restoreInputRef} onChange={handleFileRestore} style={{ display: 'none' }} accept=".json" />
+                        <button onClick={handleDownloadBackup} disabled={isSyncing} className="flex items-center gap-2 bg-white text-slate-700 font-semibold py-2 px-4 rounded-lg border border-slate-300 hover:bg-slate-100 disabled:bg-slate-100 disabled:text-slate-400">
+                            <DownloadIcon />
+                            {isSyncing && syncMessage.startsWith('Generating') ? 'Generating...' : 'Download Backup'}
                         </button>
-                    ) : (
-                        <div className="flex items-center gap-2">
-                            <button onClick={handleSync} disabled={isSyncing} className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 disabled:bg-indigo-300">
-                                {isSyncing ? 'Syncing...' : 'Sync Now'}
-                            </button>
-                            <button onClick={handleRestore} disabled={isSyncing} className="text-indigo-600 font-semibold py-2 px-4 rounded-lg hover:bg-indigo-50 disabled:text-indigo-300">
-                                Restore
-                            </button>
-                            <button onClick={handleDisconnect} disabled={isSyncing} className="text-sm text-slate-500 hover:underline">Disconnect</button>
-                        </div>
-                    )}
+                        <button onClick={handleRestoreClick} disabled={isSyncing} className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 disabled:bg-indigo-300">
+                            {isSyncing && syncMessage.startsWith('Restoring') ? 'Restoring...' : 'Restore from File'}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
