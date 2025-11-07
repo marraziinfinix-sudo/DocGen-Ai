@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SavedDocument, InvoiceStatus, Payment } from '../types';
-import { MailIcon, WhatsAppIcon, CashIcon, ViewIcon, TrashIcon } from './Icons';
+import { MailIcon, WhatsAppIcon, CashIcon, ViewIcon, TrashIcon, MoreVerticalIcon } from './Icons';
 import PaymentModal from './PaymentModal';
 
 interface DocumentListPageProps {
@@ -15,6 +15,20 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<SavedDocument | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [openDropdownId, setOpenDropdownId] = useState<number | null>(null);
+
+  useEffect(() => {
+    const handleClickOutside = () => {
+      if (openDropdownId !== null) {
+        setOpenDropdownId(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [openDropdownId]);
+
 
   const handleRecordPaymentClick = (doc: SavedDocument) => {
     setSelectedInvoice(doc);
@@ -108,6 +122,50 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
   const isIndeterminate = selectedIds.size > 0 && selectedIds.size < documents.length;
 
 
+  const renderActionsDropdown = (doc: SavedDocument) => (
+    <div className="relative">
+      <button 
+        onClick={(e) => {
+            e.stopPropagation();
+            setOpenDropdownId(openDropdownId === doc.id ? null : doc.id);
+        }}
+        className="p-2 text-slate-500 hover:bg-slate-100 rounded-full"
+      >
+        <MoreVerticalIcon />
+      </button>
+      {openDropdownId === doc.id && (
+        <div 
+            className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg z-20 ring-1 ring-black ring-opacity-5"
+            onClick={(e) => e.stopPropagation()}
+        >
+            <div className="py-1" role="menu" aria-orientation="vertical">
+                <button onClick={() => { handleRecordPaymentClick(doc); setOpenDropdownId(null); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">
+                    <CashIcon /> Record Payment
+                </button>
+                <button onClick={() => { handleLoadDocument(doc); setOpenDropdownId(null); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">
+                    <ViewIcon /> View Invoice
+                </button>
+                 {doc.status !== InvoiceStatus.Paid && (
+                    <>
+                        <div className="border-t my-1"></div>
+                        <button onClick={() => { handleSendReminder(doc, 'email'); setOpenDropdownId(null); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">
+                            <MailIcon /> Send Email Reminder
+                        </button>
+                        <button onClick={() => { handleSendReminder(doc, 'whatsapp'); setOpenDropdownId(null); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">
+                            <WhatsAppIcon /> Send WhatsApp Reminder
+                        </button>
+                    </>
+                 )}
+                <div className="border-t my-1"></div>
+                <button onClick={() => { handleDeleteDocument(doc.id); setOpenDropdownId(null); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50">
+                    <TrashIcon /> Delete Invoice
+                </button>
+            </div>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <>
       <main className="container mx-auto p-4 sm:p-6 lg:p-8">
@@ -180,21 +238,7 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
                     <p className="text-sm text-slate-600 ml-8">Due: <span className="font-medium">{new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}</span></p>
 
                     <div className="pt-3 border-t flex flex-wrap justify-end items-center gap-2 ml-8">
-                        <button onClick={() => handleRecordPaymentClick(doc)} className="flex-grow sm:flex-grow-0 flex items-center justify-center gap-2 bg-green-500 text-white font-semibold py-2 px-4 rounded-lg shadow-sm hover:bg-green-600 transition-colors text-sm">
-                            <CashIcon/> Record Payment
-                        </button>
-                        <div className="flex items-center gap-1">
-                            <button onClick={() => handleLoadDocument(doc)} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-50 text-sm">View</button>
-                            {doc.status !== InvoiceStatus.Paid && (
-                                <>
-                                  <button onClick={() => handleSendReminder(doc, 'email')} title="Send Email Reminder" className="p-2 text-slate-500 hover:bg-slate-100 rounded-full"><MailIcon /></button>
-                                  <button onClick={() => handleSendReminder(doc, 'whatsapp')} title="Send WhatsApp Reminder" className="p-2 text-slate-500 hover:bg-slate-100 rounded-full"><WhatsAppIcon /></button>
-                                </>
-                            )}
-                            <button onClick={() => handleDeleteDocument(doc.id)} title="Delete Invoice" className="p-2 text-red-500 hover:bg-red-50 rounded-full">
-                                <TrashIcon/>
-                            </button>
-                        </div>
+                       {renderActionsDropdown(doc)}
                     </div>
                   </div>
 
@@ -216,15 +260,7 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
                       <span className="font-medium text-red-600 text-right">{formatCurrency(balanceDue)}</span>
                       <span className="font-medium text-slate-800 text-right">{formatCurrency(doc.total)}</span>
                       <div className="flex items-center justify-end">
-                          <button onClick={() => handleRecordPaymentClick(doc)} title="Record Payment" className="p-2 text-slate-500 hover:bg-slate-100 rounded-full"><CashIcon/></button>
-                          {doc.status !== InvoiceStatus.Paid && (
-                              <>
-                                  <button onClick={() => handleSendReminder(doc, 'email')} title="Send Email Reminder" className="p-2 text-slate-500 hover:bg-slate-100 rounded-full"><MailIcon /></button>
-                                  <button onClick={() => handleSendReminder(doc, 'whatsapp')} title="Send WhatsApp Reminder" className="p-2 text-slate-500 hover:bg-slate-100 rounded-full"><WhatsAppIcon /></button>
-                              </>
-                          )}
-                          <button onClick={() => handleLoadDocument(doc)} title="View Invoice" className="p-2 text-slate-500 hover:bg-slate-100 rounded-full"><ViewIcon/></button>
-                          <button onClick={() => handleDeleteDocument(doc.id)} title="Delete Invoice" className="p-2 text-red-500 hover:bg-red-50 rounded-full"><TrashIcon/></button>
+                         {renderActionsDropdown(doc)}
                       </div>
                   </div>
                 </div>

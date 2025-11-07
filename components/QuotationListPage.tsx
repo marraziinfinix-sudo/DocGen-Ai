@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SavedDocument, QuotationStatus } from '../types';
-import { DocumentIcon, ViewIcon, TrashIcon } from './Icons';
+import { DocumentIcon, ViewIcon, TrashIcon, MoreVerticalIcon } from './Icons';
 
 interface QuotationListPageProps {
   documents: SavedDocument[];
@@ -12,6 +12,19 @@ interface QuotationListPageProps {
 
 const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDocuments, formatCurrency, handleCreateInvoiceFromQuote, handleLoadDocument }) => {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [openDropdownId, setOpenDropdownId] = useState<number | null>(null);
+
+  useEffect(() => {
+    const handleClickOutside = () => {
+      if (openDropdownId !== null) {
+        setOpenDropdownId(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [openDropdownId]);
 
   const handleDeleteDocument = (id: number) => {
     if (window.confirm('Are you sure you want to delete this quotation? This action cannot be undone.')) {
@@ -64,6 +77,48 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
   const isAllSelected = documents.length > 0 && selectedIds.size === documents.length;
   const isIndeterminate = selectedIds.size > 0 && selectedIds.size < documents.length;
 
+  const renderActionsDropdown = (doc: SavedDocument) => {
+      const statusInfo = getQuotationDisplayStatus(doc);
+      const isActionable = statusInfo.text === 'Active';
+      return (
+        <div className="relative">
+            <button 
+                onClick={(e) => {
+                    e.stopPropagation();
+                    setOpenDropdownId(openDropdownId === doc.id ? null : doc.id);
+                }}
+                className="p-2 text-slate-500 hover:bg-slate-100 rounded-full"
+            >
+                <MoreVerticalIcon />
+            </button>
+            {openDropdownId === doc.id && (
+                <div 
+                    className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg z-20 ring-1 ring-black ring-opacity-5"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div className="py-1" role="menu" aria-orientation="vertical">
+                        <button
+                            onClick={() => { handleCreateInvoiceFromQuote(doc); setOpenDropdownId(null); }}
+                            disabled={!isActionable}
+                            title={!isActionable ? (statusInfo.text === 'Agreed' ? 'Already converted to invoice' : 'Quotation has expired') : "Convert to Invoice"}
+                            className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed disabled:hover:bg-white"
+                        >
+                            <DocumentIcon /> Convert to Invoice
+                        </button>
+                        <button onClick={() => { handleLoadDocument(doc); setOpenDropdownId(null); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">
+                            <ViewIcon /> View Quotation
+                        </button>
+                        <div className="border-t my-1"></div>
+                        <button onClick={() => { handleDeleteDocument(doc.id); setOpenDropdownId(null); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50">
+                            <TrashIcon /> Delete Quotation
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
+      );
+  }
+
   return (
     <main className="container mx-auto p-4 sm:p-6 lg:p-8">
       <div className="max-w-6xl mx-auto bg-white p-4 sm:p-8 rounded-lg shadow-md">
@@ -97,7 +152,6 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
 
           {documents.length > 0 ? documents.map(doc => {
             const statusInfo = getQuotationDisplayStatus(doc);
-            const isActionable = statusInfo.text === 'Active';
 
             return (
               <div key={doc.id} className={`p-4 rounded-lg border lg:p-0 lg:shadow-none lg:rounded-none lg:border-b ${selectedIds.has(doc.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-white'}`}>
@@ -123,18 +177,7 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
                         <p>Valid Until: <span className="font-medium">{new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}</span></p>
                     </div>
                     <div className="mt-4 pt-3 border-t flex justify-end items-center gap-2 ml-8">
-                        <button 
-                            onClick={() => handleCreateInvoiceFromQuote(doc)}
-                            disabled={!isActionable}
-                            className="font-semibold text-green-600 py-1 px-3 rounded-lg hover:bg-green-50 text-sm whitespace-nowrap disabled:text-slate-400 disabled:bg-transparent disabled:cursor-not-allowed"
-                            title={!isActionable ? (statusInfo.text === 'Agreed' ? 'Already converted to invoice' : 'Quotation has expired') : "Convert to Invoice"}
-                        >
-                            Create Invoice
-                        </button>
-                        <button onClick={() => handleLoadDocument(doc)} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-50 text-sm">View</button>
-                        <button onClick={() => handleDeleteDocument(doc.id)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-50 text-sm">
-                            Delete
-                        </button>
+                        {renderActionsDropdown(doc)}
                     </div>
                 </div>
 
@@ -153,21 +196,8 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
                     <span className="text-slate-700 truncate">{doc.clientDetails.name}</span>
                     <span className="text-slate-500 text-sm">{new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}</span>
                     <span className="font-medium text-slate-800 text-right">{formatCurrency(doc.total)}</span>
-                    <div className="col-span-2 flex items-center justify-end">
-                        <button 
-                            onClick={() => handleCreateInvoiceFromQuote(doc)}
-                            disabled={!isActionable}
-                            className="p-2 text-slate-500 hover:bg-slate-100 rounded-full disabled:text-slate-300 disabled:hover:bg-transparent disabled:cursor-not-allowed"
-                            title={!isActionable ? (statusInfo.text === 'Agreed' ? 'Already converted to invoice' : 'Quotation has expired') : "Convert to Invoice"}
-                        >
-                            <DocumentIcon/>
-                        </button>
-                        <button onClick={() => handleLoadDocument(doc)} title="View Quotation" className="p-2 text-slate-500 hover:bg-slate-100 rounded-full">
-                            <ViewIcon/>
-                        </button>
-                        <button onClick={() => handleDeleteDocument(doc.id)} title="Delete Quotation" className="p-2 text-red-500 hover:bg-red-50 rounded-full">
-                            <TrashIcon/>
-                        </button>
+                    <div className="flex items-center justify-end">
+                       {renderActionsDropdown(doc)}
                     </div>
                 </div>
               </div>
