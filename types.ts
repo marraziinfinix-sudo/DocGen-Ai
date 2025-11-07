@@ -89,11 +89,3 @@ export interface SavedDocument {
   template: string;
   accentColor: string;
 }
-
-export interface AppDataBackup {
-  companies: Company[];
-  clients: Client[];
-  items: Item[];
-  savedInvoices: SavedDocument[];
-  savedQuotations: SavedDocument[];
-}

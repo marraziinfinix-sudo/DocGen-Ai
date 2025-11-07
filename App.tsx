@@ -992,14 +992,6 @@ const App: React.FC = () => {
         {currentView === 'setup' && <SetupPage 
             companies={companies} 
             setCompanies={setCompanies} 
-            clients={clients}
-            setClients={setClients}
-            items={items}
-            setItems={setItems}
-            savedInvoices={savedInvoices}
-            setSavedInvoices={setSavedInvoices}
-            savedQuotations={savedQuotations}
-            setSavedQuotations={setSavedQuotations}
             onDone={() => setCurrentView('editor')} 
         />}
         {currentView === 'clients' && <ClientListPage clients={clients} setClients={setClients} onDone={() => setCurrentView('editor')} />}
