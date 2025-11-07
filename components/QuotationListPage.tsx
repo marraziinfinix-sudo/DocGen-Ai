@@ -151,7 +151,26 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
             )}
         </div>
         
-        <div className="flex flex-wrap items-center gap-2 mb-4">
+        <div className="mb-4">
+          {/* Mobile Filter: Dropdown */}
+          <div className="sm:hidden">
+            <label htmlFor="status-filter" className="block text-sm font-medium text-slate-600 mb-1">
+              Filter by status:
+            </label>
+            <select
+              id="status-filter"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            >
+              {filterOptions.map(option => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Desktop Filter: Buttons */}
+          <div className="hidden sm:flex flex-wrap items-center gap-2">
             <span className="text-sm font-medium text-slate-600">Filter by status:</span>
             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
                 {filterOptions.map(option => (
@@ -169,6 +188,7 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
                 ))}
             </div>
           </div>
+        </div>
 
         <div className="space-y-4">
           {/* Header for large screens */}

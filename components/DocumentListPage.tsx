@@ -210,24 +210,45 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
             )}
           </div>
           
-          <div className="flex flex-wrap items-center gap-2 mb-4">
-            <span className="text-sm font-medium text-slate-600">Filter by status:</span>
-            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
+          <div className="mb-4">
+            {/* Mobile Filter: Dropdown */}
+            <div className="sm:hidden">
+              <label htmlFor="status-filter" className="block text-sm font-medium text-slate-600 mb-1">
+                Filter by status:
+              </label>
+              <select
+                id="status-filter"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              >
                 {filterOptions.map(option => (
-                    <button
-                        key={option}
-                        onClick={() => setStatusFilter(option)}
-                        className={`px-3 py-1 text-sm font-semibold rounded-md transition-colors ${
-                            statusFilter === option
-                                ? 'bg-white text-indigo-700 shadow'
-                                : 'text-slate-600 hover:bg-slate-200'
-                        }`}
-                    >
-                        {option}
-                    </button>
+                  <option key={option} value={option}>{option}</option>
                 ))}
+              </select>
+            </div>
+
+            {/* Desktop Filter: Buttons */}
+            <div className="hidden sm:flex flex-wrap items-center gap-2">
+              <span className="text-sm font-medium text-slate-600">Filter by status:</span>
+              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
+                  {filterOptions.map(option => (
+                      <button
+                          key={option}
+                          onClick={() => setStatusFilter(option)}
+                          className={`px-3 py-1 text-sm font-semibold rounded-md transition-colors ${
+                              statusFilter === option
+                                  ? 'bg-white text-indigo-700 shadow'
+                                  : 'text-slate-600 hover:bg-slate-200'
+                          }`}
+                      >
+                          {option}
+                      </button>
+                  ))}
+              </div>
             </div>
           </div>
+
 
           <div className="space-y-4">
             {/* Header for large screens */}
