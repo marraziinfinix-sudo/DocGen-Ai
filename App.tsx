@@ -843,9 +843,8 @@ const App: React.FC = () => {
                 <button onClick={() => window.print()} title="Print" className="p-2 text-slate-500 hover:bg-slate-100 rounded-full">
                   <PrinterIcon />
                 </button>
-                <button onClick={handleSavePdf} className="flex items-center gap-2 bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 transition-colors duration-200">
-                    <DownloadIcon />
-                    <span className="hidden sm:inline">Save PDF</span>
+                <button onClick={handleSavePdf} title="Save as PDF" className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 transition-colors duration-200">
+                    PDF
                 </button>
             </div>
         );
