@@ -586,6 +586,32 @@ const App: React.FC = () => {
       window.open(url, '_blank');
     }
   };
+
+  const handleSendQuotationReminder = (doc: SavedDocument, channel: 'email' | 'whatsapp') => {
+    const reminderMessage = `Dear ${doc.clientDetails.name},\n\nThis is a friendly reminder regarding quotation #${doc.documentNumber} for ${formatCurrency(doc.total)}, which is valid until ${new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}.\n\nPlease let us know if you would like to proceed or if you have any questions.\n\nBest regards,\n${doc.companyDetails.name}`;
+    
+    if (channel === 'email') {
+      const subject = `Reminder: Quotation #${doc.documentNumber} is expiring soon`;
+      window.location.href = `mailto:${doc.clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(reminderMessage)}`;
+    } else {
+      if (!doc.clientDetails.phone || doc.clientDetails.phone.trim() === '') {
+        alert(`Please add a phone number for '${doc.clientDetails.name}' to send a WhatsApp reminder.`);
+        return;
+      }
+      const phoneNumber = doc.clientDetails.phone.replace(/\D/g, '');
+
+      const subtotal = doc.lineItems.reduce((acc, item) => acc + item.quantity * item.price, 0);
+      const taxAmount = subtotal * (doc.taxRate / 100);
+      const docDataForMessage = { ...doc, subtotal, taxAmount, formatCurrency };
+      
+      const reminderPrefix = `*Friendly Reminder*\n\nDear ${doc.clientDetails.name},\nThis is a reminder for the following quotation which is valid until ${new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}:\n\n---\n\n`;
+      const messageContent = generateWhatsAppMessage(docDataForMessage);
+      const fullMessage = reminderPrefix + messageContent;
+
+      const url = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(fullMessage)}`;
+      window.open(url, '_blank');
+    }
+  };
   
   const handleCreateInvoiceFromQuote = (quotation: SavedDocument) => {
     if (!window.confirm(`Create an invoice from quotation #${quotation.documentNumber}? This will be saved immediately.`)) {
@@ -1005,7 +1031,7 @@ const App: React.FC = () => {
         {currentView === 'clients' && <ClientListPage clients={clients} setClients={setClients} onDone={() => setCurrentView('editor')} />}
         {currentView === 'items' && <ItemListPage items={items} setItems={setItems} formatCurrency={formatCurrency} onDone={() => setCurrentView('editor')} />}
         {currentView === 'invoices' && <DocumentListPage documents={savedInvoices} setDocuments={setSavedInvoices} formatCurrency={formatCurrency} handleSendReminder={handleSendReminder} handleLoadDocument={handleLoadDocument} />}
-        {currentView === 'quotations' && <QuotationListPage documents={savedQuotations} setDocuments={setSavedQuotations} formatCurrency={formatCurrency} handleCreateInvoiceFromQuote={handleCreateInvoiceFromQuote} handleLoadDocument={handleLoadDocument} />}
+        {currentView === 'quotations' && <QuotationListPage documents={savedQuotations} setDocuments={setSavedQuotations} formatCurrency={formatCurrency} handleCreateInvoiceFromQuote={handleCreateInvoiceFromQuote} handleLoadDocument={handleLoadDocument} handleSendQuotationReminder={handleSendQuotationReminder} />}
       </main>
     </div>
   );
