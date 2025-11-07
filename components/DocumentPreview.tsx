@@ -1,5 +1,5 @@
 import React from 'react';
-import { DocumentType, LineItem, Details } from '../types';
+import { DocumentType, LineItem, Details, Payment, InvoiceStatus } from '../types';
 
 interface DocumentPreviewProps {
   documentType: DocumentType;
@@ -17,7 +17,36 @@ interface DocumentPreviewProps {
   companyLogo: string | null;
   bankQRCode: string | null;
   formatCurrency: (amount: number) => string;
+  payments?: Payment[];
+  status?: InvoiceStatus | null;
 }
+
+const StatusStamp: React.FC<{ status: InvoiceStatus | null }> = ({ status }) => {
+  if (!status || status === InvoiceStatus.Pending) return null;
+
+  let text = '';
+  let colorClasses = '';
+
+  switch (status) {
+    case InvoiceStatus.Paid:
+      text = 'PAID';
+      colorClasses = 'border-green-500 text-green-500';
+      break;
+    case InvoiceStatus.PartiallyPaid:
+      text = 'PARTIALLY PAID';
+      colorClasses = 'border-blue-500 text-blue-500';
+      break;
+    default:
+      return null;
+  }
+
+  return (
+    <div className={`absolute top-1/4 right-8 sm:right-16 border-4 ${colorClasses} rounded-lg p-4 transform rotate-[-15deg] opacity-70`}>
+      <h2 className="text-3xl sm:text-5xl font-bold tracking-widest">{text}</h2>
+    </div>
+  );
+};
+
 
 const DocumentPreview: React.FC<DocumentPreviewProps> = ({
   documentType,
@@ -35,10 +64,17 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
   companyLogo,
   bankQRCode,
   formatCurrency,
+  payments,
+  status,
 }) => {
 
+  const amountPaid = payments?.reduce((sum, p) => sum + p.amount, 0) || 0;
+  const balanceDue = total - amountPaid;
+
   return (
-    <div id="print-area" className="bg-white rounded-lg shadow-lg p-6 sm:p-8 md:p-12 text-sm text-slate-700 border">
+    <div id="print-area" className="relative bg-white rounded-lg shadow-lg p-6 sm:p-8 md:p-12 text-sm text-slate-700 border">
+      {documentType === DocumentType.Invoice && <StatusStamp status={status} />}
+
       <header className="flex flex-col sm:flex-row justify-between items-start pb-8 border-b border-slate-200 gap-4 sm:gap-2">
         <div className="flex items-start gap-4">
           {companyLogo && <img src={companyLogo} alt="Company Logo" className="w-20 h-20 sm:w-24 sm:h-24 object-contain" />}
@@ -117,6 +153,18 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
             <p className="font-bold text-lg text-slate-800">Total</p>
             <p className="font-bold text-lg text-indigo-600">{formatCurrency(total)}</p>
           </div>
+          {documentType === DocumentType.Invoice && payments && payments.length > 0 && (
+            <>
+              <div className="border-t border-slate-200 pt-2 flex justify-between">
+                <p className="text-slate-500">Amount Paid</p>
+                <p className="font-medium text-slate-800">{formatCurrency(amountPaid)}</p>
+              </div>
+              <div className="bg-indigo-50 p-2 rounded-md flex justify-between">
+                <p className="font-bold text-lg text-slate-800">Balance Due</p>
+                <p className="font-bold text-lg text-indigo-600">{formatCurrency(balanceDue)}</p>
+              </div>
+            </>
+          )}
         </div>
       </section>
       
@@ -125,7 +173,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
           <h4 className="font-semibold text-slate-600 mb-2">Notes</h4>
           <p className="text-slate-500 whitespace-pre-wrap">{notes}</p>
         </div>
-        <div>
+        <div className="space-y-6">
           {(companyDetails.bankName || companyDetails.accountNumber || bankQRCode) && (
             <div>
               <h4 className="font-semibold text-slate-600 mb-2">Payment Details</h4>
@@ -138,6 +186,29 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
                   <img src={bankQRCode} alt="Payment QR Code" className="w-24 h-24 object-contain" />
                 )}
               </div>
+            </div>
+          )}
+          {documentType === DocumentType.Invoice && payments && payments.length > 0 && (
+            <div>
+              <h4 className="font-semibold text-slate-600 mb-2">Payment History</h4>
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b">
+                    <th className="p-1 font-medium text-slate-500">Date</th>
+                    <th className="p-1 font-medium text-slate-500">Method</th>
+                    <th className="p-1 font-medium text-slate-500 text-right">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {payments.map(p => (
+                    <tr key={p.id}>
+                      <td className="p-1 text-slate-600">{new Date(p.date + 'T00:00:00').toLocaleDateString()}</td>
+                      <td className="p-1 text-slate-600">{p.method}</td>
+                      <td className="p-1 text-slate-600 text-right">{formatCurrency(p.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>

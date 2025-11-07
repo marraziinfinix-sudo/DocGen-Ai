@@ -10,6 +10,15 @@ export enum DocumentType {
 export enum InvoiceStatus {
   Pending = 'Pending',
   Paid = 'Paid',
+  PartiallyPaid = 'Partially Paid',
+}
+
+export interface Payment {
+  id: number;
+  amount: number;
+  date: string;
+  method: string;
+  notes?: string;
 }
 
 export interface LineItem {
@@ -67,4 +76,5 @@ export interface SavedDocument {
   total: number;
   status: InvoiceStatus | null;
   paidDate?: string | null;
+  payments?: Payment[];
 }

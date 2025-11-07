@@ -1,8 +1,8 @@
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company } from './types';
+import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment } from './types';
 import { generateDescription } from './services/geminiService';
-import { SparklesIcon, PlusIcon, TrashIcon, PrinterIcon, CogIcon, UsersIcon, ListIcon, DocumentIcon, MailIcon, WhatsAppIcon, FileTextIcon, DownloadIcon } from './components/Icons';
+import { SparklesIcon, PlusIcon, TrashIcon, CogIcon, UsersIcon, ListIcon, DocumentIcon, MailIcon, WhatsAppIcon, FileTextIcon, DownloadIcon } from './components/Icons';
 import DocumentPreview from './components/DocumentPreview';
 import SetupPage from './components/SetupPage';
 import ClientListPage from './components/ClientListPage';
@@ -94,6 +94,8 @@ const App: React.FC = () => {
   const [dueDateOption, setDueDateOption] = useState<string>('15days');
   
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [status, setStatus] = useState<InvoiceStatus | null>(null);
   
   const [generatingStates, setGeneratingStates] = useState<Record<number, boolean>>({});
 
@@ -164,24 +166,22 @@ const App: React.FC = () => {
   
   // --- Document Number Management ---
   useEffect(() => {
+    if (currentView !== 'editor') return;
     const relevantDocs = documentType === DocumentType.Invoice ? savedInvoices : savedQuotations;
     const highestNum = relevantDocs.reduce((max, doc) => {
       const num = parseInt(doc.documentNumber, 10);
       return isNaN(num) ? max : Math.max(max, num);
     }, 0);
     setDocumentNumber(String(highestNum + 1).padStart(3, '0'));
-  }, [documentType, savedInvoices, savedQuotations]);
+  }, [documentType, savedInvoices, savedQuotations, currentView]);
   // --- End Document Number Management ---
 
   // --- Auto-update saved client on detail change ---
   useEffect(() => {
-    // Only update if there is a selected client.
-    // This prevents updating the list when creating a new client from a blank form.
     if (selectedClientId) {
       setClients(prevClients =>
         prevClients.map(client =>
           client.id === parseInt(selectedClientId, 10)
-            // Spread the original client to preserve the ID, then overwrite with form details
             ? { ...client, ...clientDetails }
             : client
         )
@@ -193,26 +193,15 @@ const App: React.FC = () => {
   useEffect(() => {
     if (dueDateOption === 'custom' || !issueDate) return;
 
-    const newDueDate = new Date(issueDate + 'T00:00:00'); // Use UTC midnight to avoid timezone issues
+    const newDueDate = new Date(issueDate + 'T00:00:00'); 
     
     switch (dueDateOption) {
-        case 'sameday':
-            // Due date is the same as issue date, so no change to newDueDate
-            break;
-        case '15days':
-            newDueDate.setDate(newDueDate.getDate() + 15);
-            break;
-        case '30days':
-            newDueDate.setDate(newDueDate.getDate() + 30);
-            break;
-        case '45days':
-            newDueDate.setDate(newDueDate.getDate() + 45);
-            break;
-        case '60days':
-            newDueDate.setDate(newDueDate.getDate() + 60);
-            break;
-        default:
-            return; // Don't change if it's an unknown option
+        case 'sameday': break;
+        case '15days': newDueDate.setDate(newDueDate.getDate() + 15); break;
+        case '30days': newDueDate.setDate(newDueDate.getDate() + 30); break;
+        case '45days': newDueDate.setDate(newDueDate.getDate() + 45); break;
+        case '60days': newDueDate.setDate(newDueDate.getDate() + 60); break;
+        default: return;
     }
 
     setDueDate(newDueDate.toISOString().split('T')[0]);
@@ -255,7 +244,6 @@ const App: React.FC = () => {
     }
   };
 
-
   const removeLineItem = useCallback((id: number) => {
     setLineItems(prevItems => prevItems.filter(item => item.id !== id));
   }, []);
@@ -295,8 +283,9 @@ const App: React.FC = () => {
     setClientDetails({ name: '', address: '', email: '', phone: '' });
     setLineItems([]);
     setSelectedSavedItemId('');
+    setPayments([]);
+    setStatus(documentType === DocumentType.Invoice ? InvoiceStatus.Pending : null);
     
-    // Reset dates
     const today = new Date().toISOString().split('T')[0];
     setIssueDate(today);
     const newDueDate = new Date();
@@ -304,12 +293,10 @@ const App: React.FC = () => {
     setDueDate(newDueDate.toISOString().split('T')[0]);
     setDueDateOption('15days');
 
-    // Reset notes to company default
     if (activeCompany) {
       setNotes(activeCompany.defaultNotes);
     }
-    // The document number is handled by the useEffect hook
-  }, [activeCompany]);
+  }, [activeCompany, documentType]);
 
   const handleCreateNew = () => {
     if (window.confirm("Are you sure you want to start a new document? All unsaved changes will be lost.")) {
@@ -318,40 +305,40 @@ const App: React.FC = () => {
   };
 
   const handleSaveDocument = () => {
-    // Basic validation
-    if (lineItems.length === 0) {
-      alert('Please add at least one line item before saving.');
-      return;
-    }
-    if (!clientDetails.name.trim()) {
-      alert('Please enter a client name before saving.');
+    if (lineItems.length === 0 || !clientDetails.name.trim()) {
+      alert('Please add at least one line item and a client name before saving.');
       return;
     }
 
-    // Confirmation dialog
-    if (!window.confirm(`Are you sure you want to save this ${documentType.toLowerCase()}? Please review the details before confirming.`)) {
-        return; // Stop if user cancels
+    if (!window.confirm(`Are you sure you want to save this ${documentType.toLowerCase()}? Please review the details.`)) {
+        return;
     }
 
-    // Check if client is new and ask to save
     if (clientDetails.name && clientDetails.name.trim() !== '') {
       const isExistingClient = clients.some(c => 
         c.name.trim().toLowerCase() === clientDetails.name.trim().toLowerCase() && 
         c.email.trim().toLowerCase() === clientDetails.email.trim().toLowerCase()
       );
 
-      if (!isExistingClient) {
-        if (window.confirm(`'${clientDetails.name}' is not in your client list. Would you like to save this client for future use?`)) {
-          const newClient: Client = {
-            id: Date.now(),
-            name: clientDetails.name,
-            address: clientDetails.address,
-            email: clientDetails.email,
-            phone: clientDetails.phone,
-          };
+      if (!isExistingClient && window.confirm(`'${clientDetails.name}' is not saved. Save to client list?`)) {
+          const newClient: Client = { id: Date.now(), ...clientDetails };
           setClients(prev => [...prev, newClient]);
-        }
       }
+    }
+
+    let finalStatus: InvoiceStatus | null = null;
+    let finalPaidDate: string | null | undefined = null;
+
+    if (documentType === DocumentType.Invoice) {
+        const amountPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+        if (amountPaid >= total) {
+            finalStatus = InvoiceStatus.Paid;
+            finalPaidDate = payments.length > 0 ? payments[payments.length - 1].date : new Date().toISOString().split('T')[0];
+        } else if (amountPaid > 0) {
+            finalStatus = InvoiceStatus.PartiallyPaid;
+        } else {
+            finalStatus = InvoiceStatus.Pending;
+        }
     }
 
     const newDocument: SavedDocument = {
@@ -369,7 +356,9 @@ const App: React.FC = () => {
       taxRate,
       currency,
       total,
-      status: documentType === DocumentType.Invoice ? InvoiceStatus.Pending : null,
+      status: finalStatus,
+      paidDate: finalPaidDate,
+      payments: documentType === DocumentType.Invoice ? payments : [],
     };
 
     if (documentType === DocumentType.Invoice) {
@@ -388,7 +377,6 @@ const App: React.FC = () => {
         const canvas = await html2canvas(input, { scale: 2, useCORS: true });
         const imgData = canvas.toDataURL('image/png');
         
-        // Use jsPDF from the global scope
         const pdf = new jspdf.jsPDF({
           orientation: 'portrait',
           unit: 'px',
@@ -401,7 +389,7 @@ const App: React.FC = () => {
         pdf.save(filename);
       } catch (error) {
         console.error("Error generating PDF:", error);
-        alert("Sorry, there was an error generating the PDF. Please try again.");
+        alert("Sorry, there was an error generating the PDF.");
       }
     }
   };
@@ -429,14 +417,15 @@ const App: React.FC = () => {
     setNotes(doc.notes);
     setTaxRate(doc.taxRate);
     setCurrency(doc.currency);
+    setPayments(doc.payments || []);
+    setStatus(doc.status);
     setCurrentView('editor');
   };
 
   const generateWhatsAppMessage = (docData: any) => {
     let message = `*${docData.documentType.toUpperCase()}*\n\n`;
 
-    message += `*FROM:*\n`;
-    message += `${docData.companyDetails.name}\n`;
+    message += `*FROM:*\n${docData.companyDetails.name}\n`;
     if (docData.companyDetails.address) message += `${docData.companyDetails.address}\n`;
     if (docData.companyDetails.email) message += `Email: ${docData.companyDetails.email}\n`;
     if (docData.companyDetails.phone) message += `Phone: ${docData.companyDetails.phone}\n`;
@@ -444,8 +433,7 @@ const App: React.FC = () => {
     if (docData.companyDetails.taxId) message += `Tax ID: ${docData.companyDetails.taxId}\n\n`;
 
     const billedToLabel = docData.documentType === DocumentType.Invoice ? 'BILLED TO' : 'QUOTE TO';
-    message += `*${billedToLabel}:*\n`;
-    message += `${docData.clientDetails.name}\n`;
+    message += `*${billedToLabel}:*\n${docData.clientDetails.name}\n`;
     if (docData.clientDetails.address) message += `${docData.clientDetails.address}\n`;
     if (docData.clientDetails.email) message += `Email: ${docData.clientDetails.email}\n\n`;
 
@@ -454,23 +442,24 @@ const App: React.FC = () => {
     const dueDateLabel = docData.documentType === DocumentType.Invoice ? 'Due Date' : 'Valid Until';
     message += `*${dueDateLabel}:* ${new Date(docData.dueDate + 'T00:00:00').toLocaleDateString()}\n\n`;
 
-    message += `*ITEMS*\n`;
-    message += `-----------------------------------\n`;
+    message += `*ITEMS*\n-----------------------------------\n`;
     docData.lineItems.forEach((item: LineItem) => {
-        message += `${item.description}\n`;
-        message += `(${item.quantity} x ${docData.formatCurrency(item.price)}) = *${docData.formatCurrency(item.price * item.quantity)}*\n`;
-        message += `-----------------------------------\n`;
+        message += `${item.description}\n(${item.quantity} x ${docData.formatCurrency(item.price)}) = *${docData.formatCurrency(item.price * item.quantity)}*\n-----------------------------------\n`;
     });
     message += `\n`;
 
     message += `Subtotal: ${docData.formatCurrency(docData.subtotal)}\n`;
     message += `Tax (${docData.taxRate}%): ${docData.formatCurrency(docData.taxAmount)}\n`;
     message += `*TOTAL: ${docData.formatCurrency(docData.total)}*\n\n`;
-
-    if (docData.notes) {
-        message += `*Notes:*\n`;
-        message += `${docData.notes}\n\n`;
+    
+    if(docData.payments && docData.payments.length > 0) {
+        const amountPaid = docData.payments.reduce((sum: number, p: Payment) => sum + p.amount, 0);
+        const balanceDue = docData.total - amountPaid;
+        message += `Amount Paid: ${docData.formatCurrency(amountPaid)}\n`;
+        message += `*Balance Due: ${docData.formatCurrency(balanceDue)}*\n\n`;
     }
+
+    if (docData.notes) message += `*Notes:*\n${docData.notes}\n\n`;
 
     if (docData.companyDetails.bankName || docData.companyDetails.accountNumber) {
         message += `*Payment Details:*\n`;
@@ -508,27 +497,21 @@ const App: React.FC = () => {
   };
   
   const handleCreateInvoiceFromQuote = (quotation: SavedDocument) => {
-    if (!window.confirm(`Are you sure you want to create an invoice from quotation #${quotation.documentNumber}? This will be saved immediately.`)) {
+    if (!window.confirm(`Create an invoice from quotation #${quotation.documentNumber}? This will be saved immediately.`)) {
       return;
     }
 
-    // Calculate new invoice number
-    const highestInvoiceNum = savedInvoices.reduce((max, doc) => {
-      const num = parseInt(doc.documentNumber, 10);
-      return isNaN(num) ? max : Math.max(max, num);
-    }, 0);
+    const highestInvoiceNum = savedInvoices.reduce((max, doc) => Math.max(max, parseInt(doc.documentNumber, 10) || 0), 0);
     const newInvoiceNumber = String(highestInvoiceNum + 1).padStart(3, '0');
     
-    // Calculate dates
     const today = new Date();
     const issueDate = today.toISOString().split('T')[0];
     const dueDate = new Date(today);
-    dueDate.setDate(today.getDate() + 15); // Default to 15 days
+    dueDate.setDate(today.getDate() + 15);
     const dueDateString = dueDate.toISOString().split('T')[0];
 
-    // Create new invoice object
     const newInvoice: SavedDocument = {
-      ...quotation, // Copy most fields from quotation
+      ...quotation,
       id: Date.now(),
       documentType: DocumentType.Invoice,
       documentNumber: newInvoiceNumber,
@@ -536,12 +519,11 @@ const App: React.FC = () => {
       dueDate: dueDateString,
       status: InvoiceStatus.Pending,
       paidDate: null,
+      payments: [],
     };
     
-    // Add to savedInvoices
     setSavedInvoices(prev => [newInvoice, ...prev]);
 
-    // User feedback and navigation
     alert(`Invoice #${newInvoiceNumber} created successfully!`);
     setCurrentView('invoices');
   };
@@ -550,19 +532,9 @@ const App: React.FC = () => {
       const subject = `${documentType} #${documentNumber} from ${companyDetails.name}`;
       
       const docDataForMessage = {
-          documentType,
-          companyDetails,
-          clientDetails,
-          documentNumber,
-          issueDate,
-          dueDate,
-          lineItems,
-          notes,
-          subtotal,
-          taxAmount,
-          taxRate,
-          total,
-          formatCurrency,
+          documentType, companyDetails, clientDetails, documentNumber,
+          issueDate, dueDate, lineItems, notes, subtotal, taxAmount, taxRate, total,
+          formatCurrency, payments,
       };
       
       const messagePrefix = `Hi ${clientDetails.name},\n\nPlease find the details of our ${documentType.toLowerCase()} #${documentNumber} below.\n\n---\n\n`;
@@ -581,19 +553,9 @@ const App: React.FC = () => {
     const phoneNumber = clientDetails.phone.replace(/\D/g, '');
     
     const docDataForMessage = {
-        documentType,
-        companyDetails,
-        clientDetails,
-        documentNumber,
-        issueDate,
-        dueDate,
-        lineItems,
-        notes,
-        subtotal,
-        taxAmount,
-        taxRate,
-        total,
-        formatCurrency,
+        documentType, companyDetails, clientDetails, documentNumber,
+        issueDate, dueDate, lineItems, notes, subtotal, taxAmount, taxRate, total,
+        formatCurrency, payments,
     };
     
     const messagePrefix = `Hi ${clientDetails.name}, here is our ${documentType.toLowerCase()} #${documentNumber}:\n\n---\n\n`;
@@ -805,6 +767,8 @@ const App: React.FC = () => {
             companyLogo={companyLogo}
             bankQRCode={bankQRCode}
             formatCurrency={formatCurrency}
+            payments={payments}
+            status={status}
           />
         </div>
       </div>
