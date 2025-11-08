@@ -34,7 +34,8 @@ const ClientListPage: React.FC<ClientListPageProps> = ({ clients, setClients, on
     const lowercasedQuery = searchQuery.toLowerCase();
     return clients.filter(client =>
         client.name.toLowerCase().includes(lowercasedQuery) ||
-        client.email.toLowerCase().includes(lowercasedQuery)
+        client.email.toLowerCase().includes(lowercasedQuery) ||
+        client.phone.toLowerCase().includes(lowercasedQuery)
     );
   }, [clients, searchQuery]);
 
@@ -136,7 +137,7 @@ const ClientListPage: React.FC<ClientListPageProps> = ({ clients, setClients, on
             <div className="mb-4">
                 <input
                     type="text"
-                    placeholder="Search clients by name or email..."
+                    placeholder="Search clients by name, email, or phone..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
