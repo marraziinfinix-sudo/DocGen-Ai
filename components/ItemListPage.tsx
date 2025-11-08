@@ -169,7 +169,8 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed;
+          // FIX: Cast parsed data to string[] to resolve type error on .map().
+          return parsed as string[];
         }
       }
       return [];

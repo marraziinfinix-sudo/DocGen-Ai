@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Company, Details } from '../types';
 import { PlusIcon, DownloadIcon, UploadIcon, ChevronDownIcon, FolderIcon } from './Icons';
@@ -19,6 +20,27 @@ const emptyCompany: Company = {
   template: 'classic',
   accentColor: '#4f46e5',
 };
+
+const DB_NAME = 'InvQuoAISettings';
+const STORE_NAME = 'SettingsStore';
+const HANDLE_KEY = 'saveDirectoryHandle';
+
+// Helper to verify and request permissions for the File System Access API.
+async function verifyPermission(handle: FileSystemDirectoryHandle) {
+    const options = { mode: 'readwrite' as const };
+    // Check if permission was already granted.
+    // FIX: Cast handle to `any` to access experimental File System Access API permission methods, which may not be in the default TS typings.
+    if ((await (handle as any).queryPermission(options)) === 'granted') {
+        return true;
+    }
+    // Request permission. If the user grants permission, return true.
+    // FIX: Cast handle to `any` to access experimental File System Access API permission methods, which may not be in the default TS typings.
+    if ((await (handle as any).requestPermission(options)) === 'granted') {
+        return true;
+    }
+    // The user didn't grant permission, so return false.
+    return false;
+}
 
 const CompanyForm: React.FC<{
   company: Company;
@@ -197,6 +219,37 @@ const SetupPage: React.FC<SetupPageProps> = ({
         return () => window.removeEventListener('click', closeMenu);
     }, [isExportMenuOpen]);
 
+    useEffect(() => {
+        if (!isFileSystemApiSupported) return;
+
+        const loadHandle = async () => {
+            const dbRequest = indexedDB.open(DB_NAME, 1);
+            dbRequest.onupgradeneeded = () => dbRequest.result.createObjectStore(STORE_NAME);
+            dbRequest.onsuccess = () => {
+                const db = dbRequest.result;
+                const tx = db.transaction(STORE_NAME, 'readonly');
+                const store = tx.objectStore(STORE_NAME);
+                const getRequest = store.get(HANDLE_KEY);
+                
+                getRequest.onsuccess = async () => {
+                    const handle = getRequest.result as FileSystemDirectoryHandle | undefined;
+                    if (handle) {
+                        if (await verifyPermission(handle)) {
+                            setDirectoryHandle(handle);
+                            setDirectoryName(handle.name);
+                        } else {
+                            // Permission denied or revoked. Clear the stored handle.
+                            const deleteTx = db.transaction(STORE_NAME, 'readwrite');
+                            deleteTx.objectStore(STORE_NAME).delete(HANDLE_KEY);
+                        }
+                    }
+                };
+                tx.oncomplete = () => db.close();
+            };
+        };
+        loadHandle();
+    }, [isFileSystemApiSupported]);
+
     const handleAddNew = () => {
         setEditingCompany({ ...emptyCompany });
         setIsFormOpen(true);
@@ -238,18 +291,35 @@ const SetupPage: React.FC<SetupPageProps> = ({
             return;
         }
         try {
-            // FIX: Cast window to 'any' to bypass TypeScript error for experimental API.
             const handle = await (window as any).showDirectoryPicker();
             setDirectoryHandle(handle);
             setDirectoryName(handle.name);
-        } catch (error) {
-            console.error('Error selecting directory:', error);
+            
+            const dbRequest = indexedDB.open(DB_NAME, 1);
+            dbRequest.onupgradeneeded = () => dbRequest.result.createObjectStore(STORE_NAME);
+            dbRequest.onsuccess = () => {
+                const db = dbRequest.result;
+                const tx = db.transaction(STORE_NAME, 'readwrite');
+                tx.objectStore(STORE_NAME).put(handle, HANDLE_KEY);
+                tx.oncomplete = () => db.close();
+            };
+        } catch (error: any) {
+            if (error.name !== 'AbortError') {
+              console.error('Error selecting directory:', error);
+            }
         }
     };
 
     const handleClearSaveLocation = () => {
         setDirectoryHandle(null);
         setDirectoryName(null);
+        const dbRequest = indexedDB.open(DB_NAME, 1);
+        dbRequest.onsuccess = () => {
+            const db = dbRequest.result;
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            tx.objectStore(STORE_NAME).delete(HANDLE_KEY);
+            tx.oncomplete = () => db.close();
+        };
     };
 
     const prepareDataForSave = (category: string) => {
@@ -288,13 +358,13 @@ const SetupPage: React.FC<SetupPageProps> = ({
         const jsonString = JSON.stringify(data, null, 2);
         const blob = new Blob([jsonString], { type: 'application/json' });
 
-        if (directoryHandle) {
+        if (directoryHandle && await verifyPermission(directoryHandle)) {
             try {
                 const fileHandle = await directoryHandle.getFileHandle(fileName, { create: true });
                 const writable = await fileHandle.createWritable();
                 await writable.write(blob);
                 await writable.close();
-                alert(`Data successfully exported to your selected folder!`);
+                alert(`Data successfully exported to '${directoryHandle.name}'!`);
                 return;
             } catch (error: any) {
                 console.error('Error saving with File System Access API:', error);

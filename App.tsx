@@ -23,7 +23,8 @@ const App: React.FC = () => {
       const saved = localStorage.getItem('companies');
       const parsed = saved ? JSON.parse(saved) : null;
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+        // FIX: Cast parsed data to Company[] to resolve type error on .map()
+        return parsed as Company[];
       }
     } catch (e) {
       console.error('Failed to load companies from localStorage', e);
@@ -77,7 +78,8 @@ const App: React.FC = () => {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed;
+          // FIX: Cast parsed data to Client[] to ensure type safety.
+          return parsed as Client[];
         }
       }
       return [];
@@ -94,7 +96,8 @@ const App: React.FC = () => {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed;
+          // FIX: Cast parsed data to Item[] to ensure type safety.
+          return parsed as Item[];
         }
       }
       return [];
@@ -127,7 +130,8 @@ const App: React.FC = () => {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed;
+          // FIX: Cast parsed data to SavedDocument[] to ensure type safety.
+          return parsed as SavedDocument[];
         }
       }
       return [];
@@ -144,7 +148,8 @@ const App: React.FC = () => {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed;
+          // FIX: Cast parsed data to SavedDocument[] to ensure type safety.
+          return parsed as SavedDocument[];
         }
       }
       return [];
