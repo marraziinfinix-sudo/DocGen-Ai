@@ -221,15 +221,23 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
     const price = parseFloat(formState.price);
     if (!formState.description || isNaN(price)) return;
     
+    const trimmedDescription = formState.description.trim();
     const newCategory = formState.category.trim();
+
     if (newCategory && !categories.includes(newCategory)) {
         setCategories(prev => [...prev, newCategory].sort());
     }
 
     if (isEditing && formState.id) {
-      setItems(prev => prev.map(i => i.id === formState.id ? { ...formState, id: i.id, price, category: newCategory } : i));
+      const updatedItem: Item = {
+        id: formState.id,
+        description: trimmedDescription,
+        price: price,
+        category: newCategory,
+      };
+      setItems(prev => prev.map(i => (i.id === updatedItem.id ? updatedItem : i)));
     } else {
-      setItems(prev => [{ id: Date.now(), description: formState.description.trim(), price, category: newCategory }, ...prev]);
+      setItems(prev => [{ id: Date.now(), description: trimmedDescription, price, category: newCategory }, ...prev]);
     }
     setFormState(emptyFormState);
     setIsEditing(false);
@@ -385,9 +393,6 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
                             className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                             onChange={handleSelectAll}
                             checked={isAllSelected}
-                            // FIX: The ref callback for an indeterminate checkbox should not return a value.
-                            // The original implementation was an expression that implicitly returned a boolean,
-                            // causing a type error. This is corrected by using a statement block.
                             ref={el => { if (el) { el.indeterminate = isIndeterminate; } }}
                         />
                         <label className="ml-3 text-sm font-medium text-gray-600">Select All</label>
