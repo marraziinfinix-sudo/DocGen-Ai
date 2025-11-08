@@ -1,6 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Company, Details } from '../types';
-import { PlusIcon, DownloadIcon, UploadIcon } from './Icons';
+import { PlusIcon, DownloadIcon, UploadIcon, ChevronDownIcon } from './Icons';
 
 interface SetupPageProps {
   companies: Company[];
@@ -182,7 +182,16 @@ const SetupPage: React.FC<SetupPageProps> = ({
 }) => {
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingCompany, setEditingCompany] = useState<Company | null>(null);
+    const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        const closeMenu = () => setIsExportMenuOpen(false);
+        if (isExportMenuOpen) {
+            window.addEventListener('click', closeMenu);
+        }
+        return () => window.removeEventListener('click', closeMenu);
+    }, [isExportMenuOpen]);
 
     const handleAddNew = () => {
         setEditingCompany({ ...emptyCompany });
@@ -219,39 +228,49 @@ const SetupPage: React.FC<SetupPageProps> = ({
         setEditingCompany(null);
     };
     
-    const handleExportData = () => {
+    const handleExport = (dataType: string, data: any) => {
         try {
-            const dataToExport: { [key: string]: any } = {};
-            const keys = ['companies', 'clients', 'items', 'savedInvoices', 'savedQuotations'];
-            
-            keys.forEach(key => {
-                const item = localStorage.getItem(key);
-                if (item) {
-                    dataToExport[key] = JSON.parse(item);
-                }
-            });
-
-            if (Object.keys(dataToExport).length === 0) {
-                alert('No data to export.');
+            const dataIsPresent = data && (!Array.isArray(data) || data.length > 0) && (Object.keys(data).length > 0);
+            if (!dataIsPresent) {
+                alert(`No data to export for "${dataType}".`);
                 return;
             }
 
-            const jsonString = JSON.stringify(dataToExport, null, 2);
+            const jsonString = JSON.stringify(data, null, 2);
             const blob = new Blob([jsonString], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
             const date = new Date().toISOString().split('T')[0];
-            link.download = `invquo-ai-backup-${date}.json`;
+            link.download = `invquo-ai-backup-${dataType}-${date}.json`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
-            alert('Data exported successfully!');
+            alert(`${dataType.charAt(0).toUpperCase() + dataType.slice(1)} data exported successfully!`);
         } catch (error) {
-            console.error('Failed to export data:', error);
-            alert('An error occurred while exporting data.');
+            console.error(`Failed to export ${dataType} data:`, error);
+            alert(`An error occurred while exporting ${dataType} data.`);
+        } finally {
+            setIsExportMenuOpen(false);
         }
+    };
+
+    const exportSingleCategory = (key: string, name: string) => {
+        const item = localStorage.getItem(key);
+        handleExport(name, item ? JSON.parse(item) : []);
+    };
+
+    const exportAllData = () => {
+        const dataToExport: { [key: string]: any } = {};
+        const keys = ['companies', 'clients', 'items', 'savedInvoices', 'savedQuotations'];
+        keys.forEach(key => {
+            const item = localStorage.getItem(key);
+            if (item) {
+                dataToExport[key] = JSON.parse(item);
+            }
+        });
+        handleExport('all', dataToExport);
     };
 
     const handleImportClick = () => {
@@ -277,16 +296,20 @@ const SetupPage: React.FC<SetupPageProps> = ({
                 
                 const requiredKeys = ['companies', 'clients', 'items', 'savedInvoices', 'savedQuotations'];
                 const importedKeys = Object.keys(data);
-                const hasAllKeys = requiredKeys.every(key => importedKeys.includes(key));
                 
-                if (!hasAllKeys) {
-                    alert('Invalid backup file. The file is missing required data sections.');
+                const isFullBackup = requiredKeys.every(key => importedKeys.includes(key));
+                const isPartialBackup = requiredKeys.some(key => importedKeys.includes(key) && Array.isArray(data[key]));
+
+                if (!isFullBackup && !isPartialBackup) {
+                    alert('Invalid backup file. The file does not appear to contain valid data.');
                     return;
                 }
-
+                
                 requiredKeys.forEach(key => {
                     if (data[key]) {
                         localStorage.setItem(key, JSON.stringify(data[key]));
+                    } else if (isFullBackup) {
+                        localStorage.removeItem(key);
                     }
                 });
 
@@ -340,9 +363,34 @@ const SetupPage: React.FC<SetupPageProps> = ({
             <h2 className="text-xl font-bold text-gray-800 mb-4">Data Management</h2>
             <p className="text-slate-600 mb-4">Save all your company profiles, clients, items, invoices, and quotations to a file on your computer for backup. You can restore from this file later.</p>
             <div className="flex flex-col sm:flex-row gap-4">
-              <button onClick={handleExportData} className="flex-1 flex items-center justify-center gap-2 bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-700">
-                <DownloadIcon /> Export All Data
-              </button>
+               <div className="relative inline-block text-left w-full sm:w-auto">
+                    <div>
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setIsExportMenuOpen(prev => !prev);
+                            }}
+                            type="button"
+                            className="flex-1 w-full flex items-center justify-center gap-2 bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-700"
+                        >
+                            <DownloadIcon /> Export Data <ChevronDownIcon />
+                        </button>
+                    </div>
+                    {isExportMenuOpen && (
+                        <div className="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10" role="menu">
+                            <div className="py-1">
+                                <a href="#" onClick={(e) => { e.preventDefault(); exportAllData(); }} className="text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100" role="menuitem">Export All Data</a>
+                                <div className="border-t my-1"></div>
+                                <a href="#" onClick={(e) => { e.preventDefault(); exportSingleCategory('companies', 'companies'); }} className="text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100" role="menuitem">Export Companies</a>
+                                <a href="#" onClick={(e) => { e.preventDefault(); exportSingleCategory('clients', 'clients'); }} className="text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100" role="menuitem">Export Clients</a>
+                                <a href="#" onClick={(e) => { e.preventDefault(); exportSingleCategory('items', 'items'); }} className="text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100" role="menuitem">Export Items</a>
+                                <a href="#" onClick={(e) => { e.preventDefault(); exportSingleCategory('savedInvoices', 'invoices'); }} className="text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100" role="menuitem">Export Invoices</a>
+                                <a href="#" onClick={(e) => { e.preventDefault(); exportSingleCategory('savedQuotations', 'quotations'); }} className="text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100" role="menuitem">Export Quotations</a>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
               <button onClick={handleImportClick} className="flex-1 flex items-center justify-center gap-2 bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-700">
                 <UploadIcon /> Import Data
               </button>
