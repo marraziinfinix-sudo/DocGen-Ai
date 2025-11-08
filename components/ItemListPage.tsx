@@ -385,7 +385,7 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
                     onChange={e => setCategoryFilter(e.target.value)}
                     className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 >
-                    {/* FIX: Add Array.isArray check before calling .map() to prevent potential runtime errors and satisfy TypeScript compiler. */}
+                    {/* Fix: Added Array.isArray check to ensure 'categoryFilterOptions' is an array before mapping. This prevents a runtime error and satisfies the TypeScript compiler. */}
                     {Array.isArray(categoryFilterOptions) && categoryFilterOptions.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                 </select>
             </div>

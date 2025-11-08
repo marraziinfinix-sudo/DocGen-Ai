@@ -748,7 +748,7 @@ const App: React.FC = () => {
               <div className="bg-white p-4 rounded-lg shadow-sm mb-4">
                   <label className="block text-sm font-medium text-slate-600 mb-1">Active Company Profile</label>
                   <select onChange={(e) => setActiveCompanyId(Number(e.target.value))} value={activeCompanyId} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-                    {/* FIX: Add Array.isArray check before calling .map() to prevent potential runtime errors and satisfy TypeScript compiler. */}
+                    {/* Fix: Added Array.isArray check to ensure 'companies' is an array before mapping. This prevents a runtime error if localStorage data is malformed and satisfies the TypeScript compiler. */}
                     {Array.isArray(companies) && companies.map(c => <option key={c.id} value={c.id}>{c.details.name}</option>)}
                   </select>
               </div>
