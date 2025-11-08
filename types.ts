@@ -90,7 +90,7 @@ export interface SavedDocument {
   template: string;
   accentColor: string;
 }
-
+// FIX: Added the missing GDriveUser interface.
 export interface GDriveUser {
   name: string;
   email: string;

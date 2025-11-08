@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Company, Details, GDriveUser } from '../types';
-import { PlusIcon, DownloadIcon, UploadIcon, ChevronDownIcon, GoogleDriveIcon, ExternalLinkIcon } from './Icons';
-import * as googleDriveService from '../services/googleDriveService';
+import { Company, Details } from '../types';
+import { PlusIcon, DownloadIcon, UploadIcon, ChevronDownIcon, FolderIcon } from './Icons';
 
 interface SetupPageProps {
   companies: Company[];
@@ -55,7 +54,7 @@ const CompanyForm: React.FC<{
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-30 flex justify-center items-center p-4">
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
         <div className="bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <form onSubmit={handleSubmit}>
                 <div className="p-4 sm:p-8">
@@ -176,46 +175,6 @@ const CompanyForm: React.FC<{
   );
 };
 
-const LocationModal: React.FC<{
-    isOpen: boolean;
-    onClose: () => void;
-    title: string;
-    isGdriveConnected: boolean;
-    onLocal: () => void;
-    onGdrive: () => void;
-}> = ({ isOpen, onClose, title, isGdriveConnected, onLocal, onGdrive }) => {
-    if (!isOpen) return null;
-
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex justify-center items-center p-4" onClick={onClose}>
-            <div className="bg-white rounded-lg shadow-2xl max-w-sm w-full" onClick={e => e.stopPropagation()}>
-                <div className="p-6">
-                    <h3 className="text-lg font-bold text-gray-800 mb-4">{title}</h3>
-                    <div className="space-y-4">
-                        <button onClick={onLocal} className="w-full flex items-center gap-3 text-left p-4 rounded-lg border hover:bg-slate-50 transition-colors">
-                           <DownloadIcon />
-                           <div>
-                                <p className="font-semibold">Local Computer</p>
-                                <p className="text-sm text-slate-500">Save or load a file from your device.</p>
-                           </div>
-                        </button>
-                         <button onClick={onGdrive} disabled={!isGdriveConnected} className="w-full flex items-center gap-3 text-left p-4 rounded-lg border hover:bg-slate-50 transition-colors disabled:bg-slate-100 disabled:cursor-not-allowed">
-                           <GoogleDriveIcon />
-                           <div>
-                                <p className={`font-semibold ${!isGdriveConnected ? 'text-slate-400' : ''}`}>Google Drive</p>
-                                <p className="text-sm text-slate-500">{isGdriveConnected ? 'Save or load from your Google Drive.' : 'Connect your account first.'}</p>
-                           </div>
-                        </button>
-                    </div>
-                </div>
-                <div className="bg-slate-50 p-4 flex justify-end gap-4 border-t">
-                    <button type="button" onClick={onClose} className="bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300">Cancel</button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
 
 const SetupPage: React.FC<SetupPageProps> = ({ 
     companies, setCompanies, 
@@ -225,37 +184,10 @@ const SetupPage: React.FC<SetupPageProps> = ({
     const [editingCompany, setEditingCompany] = useState<Company | null>(null);
     const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [directoryHandle, setDirectoryHandle] = useState<FileSystemDirectoryHandle | null>(null);
+    const [directoryName, setDirectoryName] = useState<string | null>(null);
 
-    const [gdriveUser, setGdriveUser] = useState<GDriveUser | null>(null);
-    const [isGapiReady, setIsGapiReady] = useState(false);
-    const [isLoadingGdrive, setIsLoadingGdrive] = useState(true);
-
-    const [saveLocationModalOpen, setSaveLocationModalOpen] = useState(false);
-    const [loadLocationModalOpen, setLoadLocationModalOpen] = useState(false);
-    const [exportPayload, setExportPayload] = useState<{name: string, data: any} | null>(null);
-
-
-    useEffect(() => {
-        const storedUser = localStorage.getItem('gdriveUser');
-        if (storedUser) {
-            setGdriveUser(JSON.parse(storedUser));
-        }
-        
-        const script = document.createElement('script');
-        script.src = 'https://apis.google.com/js/api.js';
-        script.onload = () => {
-             googleDriveService.initClient((user) => {
-                setGdriveUser(user);
-                setIsGapiReady(true);
-                setIsLoadingGdrive(false);
-             });
-        };
-        document.body.appendChild(script);
-
-        return () => {
-            document.body.removeChild(script);
-        };
-    }, []);
+    const isFileSystemApiSupported = 'showDirectoryPicker' in window;
 
     useEffect(() => {
         const closeMenu = () => setIsExportMenuOpen(false);
@@ -264,18 +196,6 @@ const SetupPage: React.FC<SetupPageProps> = ({
         }
         return () => window.removeEventListener('click', closeMenu);
     }, [isExportMenuOpen]);
-    
-    const handleConnectGdrive = () => {
-        setIsLoadingGdrive(true);
-        googleDriveService.signIn(setGdriveUser);
-        setIsLoadingGdrive(false);
-    };
-
-    const handleDisconnectGdrive = () => {
-        googleDriveService.signOut(() => {
-            setGdriveUser(null);
-        });
-    };
 
     const handleAddNew = () => {
         setEditingCompany({ ...emptyCompany });
@@ -312,82 +232,97 @@ const SetupPage: React.FC<SetupPageProps> = ({
         setEditingCompany(null);
     };
     
-    const prepareAndShowExportModal = (dataType: string, data: any) => {
-        const dataIsPresent = data && (!Array.isArray(data) || data.length > 0) && (Object.keys(data).length > 0);
-        if (!dataIsPresent) {
-            alert(`No data to export for "${dataType}".`);
+    const handleSetSaveLocation = async () => {
+        if (!isFileSystemApiSupported) {
+            alert('Your browser does not support this feature.');
             return;
         }
-        const date = new Date().toISOString().split('T')[0];
-        const fileName = `invquo-ai-backup-${dataType}-${date}.json`;
-        setExportPayload({ name: fileName, data });
-        setSaveLocationModalOpen(true);
-        setIsExportMenuOpen(false);
-    };
-
-    const exportSingleCategory = (key: string, name: string) => {
-        const item = localStorage.getItem(key);
-        prepareAndShowExportModal(name, item ? JSON.parse(item) : []);
-    };
-
-    const exportAllData = () => {
-        const dataToExport: { [key: string]: any } = {};
-        const keys = ['companies', 'clients', 'items', 'savedInvoices', 'savedQuotations'];
-        keys.forEach(key => {
-            const item = localStorage.getItem(key);
-            if (item) {
-                dataToExport[key] = JSON.parse(item);
-            }
-        });
-        prepareAndShowExportModal('all', dataToExport);
-    };
-
-    const handleSaveToLocal = () => {
-        if (!exportPayload) return;
         try {
-            const jsonString = JSON.stringify(exportPayload.data, null, 2);
-            const blob = new Blob([jsonString], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = exportPayload.name;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-            alert(`Data exported successfully to your computer!`);
+            // FIX: Cast window to 'any' to bypass TypeScript error for experimental API.
+            const handle = await (window as any).showDirectoryPicker();
+            setDirectoryHandle(handle);
+            setDirectoryName(handle.name);
         } catch (error) {
-            console.error('Failed to export data locally:', error);
-            alert(`An error occurred while exporting data.`);
-        } finally {
-            setSaveLocationModalOpen(false);
-            setExportPayload(null);
+            console.error('Error selecting directory:', error);
         }
+    };
+
+    const handleClearSaveLocation = () => {
+        setDirectoryHandle(null);
+        setDirectoryName(null);
+    };
+
+    const prepareDataForSave = (category: string) => {
+        if (category === 'all') {
+            const dataToExport: { [key: string]: any } = {};
+            const keys = ['companies', 'clients', 'items', 'savedInvoices', 'savedQuotations'];
+            keys.forEach(key => {
+                const item = localStorage.getItem(key);
+                if (item) {
+                    try {
+                        dataToExport[key] = JSON.parse(item);
+                    } catch (e) {
+                        console.error(`Could not parse ${key} from localStorage`, e);
+                    }
+                }
+            });
+            return { name: 'all', data: dataToExport };
+        } else {
+            const item = localStorage.getItem(category);
+            return { name: category, data: item ? JSON.parse(item) : [] };
+        }
+    }
+
+    const handleExportData = async (category: string) => {
+        setIsExportMenuOpen(false);
+        const { name, data } = prepareDataForSave(category);
+
+        const dataIsPresent = data && (!Array.isArray(data) || data.length > 0) && (typeof data === 'object' && Object.keys(data).length > 0);
+        if (!dataIsPresent) {
+            alert(`No data to export for "${name}".`);
+            return;
+        }
+
+        const date = new Date().toISOString().split('T')[0];
+        const fileName = `invquo-ai-backup-${name}-${date}.json`;
+        const jsonString = JSON.stringify(data, null, 2);
+        const blob = new Blob([jsonString], { type: 'application/json' });
+
+        if (directoryHandle) {
+            try {
+                const fileHandle = await directoryHandle.getFileHandle(fileName, { create: true });
+                const writable = await fileHandle.createWritable();
+                await writable.write(blob);
+                await writable.close();
+                alert(`Data successfully exported to your selected folder!`);
+                return;
+            } catch (error: any) {
+                console.error('Error saving with File System Access API:', error);
+                if (error.name !== 'AbortError') {
+                    alert('Could not save to the selected directory. The file will be saved to your Downloads folder instead.');
+                } else {
+                    return; 
+                }
+            }
+        }
+
+        // Fallback to the standard download method
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
     };
     
-    const handleSaveToGdrive = async () => {
-        if (!exportPayload) return;
-        setIsLoadingGdrive(true);
-        const success = await googleDriveService.uploadFile(exportPayload.name, exportPayload.data);
-        if (success) {
-            alert('Data exported successfully to your Google Drive!');
-        } else {
-            alert('Failed to export data to Google Drive. Please try again.');
-        }
-        setIsLoadingGdrive(false);
-        setSaveLocationModalOpen(false);
-        setExportPayload(null);
-    };
-
-    const processImportedData = (jsonString: string | null) => {
-        if (!jsonString) return;
-        
+    const processImportedData = (jsonData: string) => {
         if (!window.confirm('This will overwrite all existing data. This action cannot be undone. Are you sure you want to proceed?')) {
             return;
         }
-
         try {
-            const data = JSON.parse(jsonString);
+            const data = JSON.parse(jsonData);
             const requiredKeys = ['companies', 'clients', 'items', 'savedInvoices', 'savedQuotations'];
             const importedKeys = Object.keys(data);
             
@@ -410,172 +345,132 @@ const SetupPage: React.FC<SetupPageProps> = ({
             alert('Data imported successfully! The application will now reload.');
             window.location.reload();
         } catch (error) {
-            console.error('Failed to import data:', error);
+            console.error('Failed to process imported data:', error);
             alert('An error occurred while importing data. The file might be corrupted or in the wrong format.');
         } finally {
-            if (fileInputRef.current) fileInputRef.current.value = '';
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
         }
     };
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
-
         const reader = new FileReader();
-        reader.onload = (e) => processImportedData(e.target?.result as string);
+        reader.onload = (e) => {
+            const text = e.target?.result as string;
+            processImportedData(text);
+        };
         reader.readAsText(file);
-    };
-    
-    const handleLoadFromLocal = () => {
-        setLoadLocationModalOpen(false);
-        fileInputRef.current?.click();
-    };
-
-    const handleLoadFromGdrive = async () => {
-        setLoadLocationModalOpen(false);
-        setIsLoadingGdrive(true);
-        const fileContent = await googleDriveService.showPicker();
-        setIsLoadingGdrive(false);
-        if (fileContent) {
-            processImportedData(fileContent);
-        }
     };
 
   return (
-    <main className="container mx-auto p-4 sm:p-6 lg:p-8">
-      <div className="max-w-4xl mx-auto bg-white p-4 sm:p-8 rounded-lg shadow-md">
-        <div className="flex justify-between items-center mb-6 border-b pb-4">
-            <h2 className="text-2xl font-bold text-gray-800">Company Profiles</h2>
-            <button onClick={handleAddNew} className="flex items-center gap-2 bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700">
-                <PlusIcon /> <span className="hidden sm:inline">Add New</span>
-            </button>
-        </div>
+    <>
+      <main className="container mx-auto p-4 sm:p-6 lg:p-8">
+        <div className="max-w-4xl mx-auto bg-white p-4 sm:p-8 rounded-lg shadow-md">
+            <div className="flex justify-between items-center mb-6 border-b pb-4">
+                <h2 className="text-2xl font-bold text-gray-800">Company Profiles</h2>
+                <button onClick={handleAddNew} className="flex items-center gap-2 bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700">
+                    <PlusIcon /> <span className="hidden sm:inline">Add New</span>
+                </button>
+            </div>
 
-        <div className="space-y-4">
-            {companies.map(company => (
-                 <div key={company.id} className="bg-slate-50 p-4 rounded-lg border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-2">
-                    <div className="flex items-center gap-4">
-                        {company.logo && <img src={company.logo} alt="logo" className="w-12 h-12 object-contain bg-white rounded-md p-1 border flex-shrink-0" />}
-                        <div>
-                            <p className="font-bold text-slate-800">{company.details.name}</p>
-                            <p className="text-sm text-slate-500 break-all">{company.details.email}</p>
-                        </div>
-                    </div>
-                    <div className="flex gap-2 items-center self-end sm:self-center flex-shrink-0">
-                        <div className="w-6 h-6 rounded-full border" style={{backgroundColor: company.accentColor}}></div>
-                        <span className="text-sm capitalize text-slate-600 font-medium">{company.template}</span>
-                        <div className="w-px h-5 bg-slate-200 mx-1"></div>
-                        <button onClick={() => handleEdit(company)} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-50">Edit</button>
-                        <button onClick={() => handleDelete(company.id)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-50">Delete</button>
-                    </div>
-                </div>
-            ))}
-        </div>
-        
-        <div className="mt-8 pt-6 border-t">
-          <div className="mb-8">
-            <h2 className="text-xl font-bold text-gray-800 mb-2">Data Management</h2>
-            <p className="text-slate-600 mb-6">Save your app data to a file on your computer or to Google Drive for backup. You can restore from this file later.</p>
-            
-            <div className="bg-slate-50 border rounded-lg p-4 mb-6">
-                 <h3 className="font-semibold text-gray-700 mb-3">Google Drive Integration</h3>
-                 {isLoadingGdrive && <p className="text-sm text-slate-500">Initializing...</p>}
-                 {!isLoadingGdrive && gdriveUser && (
-                     <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <img src={gdriveUser.picture} alt="user" className="w-10 h-10 rounded-full"/>
+            <div className="space-y-4">
+                {companies.map(company => (
+                    <div key={company.id} className="bg-slate-50 p-4 rounded-lg border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-2">
+                        <div className="flex items-center gap-4">
+                            {company.logo && <img src={company.logo} alt="logo" className="w-12 h-12 object-contain bg-white rounded-md p-1 border flex-shrink-0" />}
                             <div>
-                                <p className="font-semibold text-slate-800">{gdriveUser.name}</p>
-                                <p className="text-sm text-slate-500">{gdriveUser.email}</p>
+                                <p className="font-bold text-slate-800">{company.details.name}</p>
+                                <p className="text-sm text-slate-500 break-all">{company.details.email}</p>
                             </div>
                         </div>
-                        <button onClick={handleDisconnectGdrive} className="font-semibold text-red-600 text-sm py-2 px-3 rounded-lg hover:bg-red-50">Disconnect</button>
-                     </div>
-                 )}
-                 {!isLoadingGdrive && !gdriveUser && (
-                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                        <p className="text-sm text-slate-600 flex-grow">Connect your Google account to save and load backups from Google Drive.</p>
-                        <button onClick={handleConnectGdrive} disabled={!isGapiReady} className="flex items-center gap-2 bg-white text-slate-700 font-semibold py-2 px-4 rounded-lg shadow-sm border hover:bg-slate-50 disabled:bg-slate-200 disabled:cursor-not-allowed">
-                            <GoogleDriveIcon/> Connect to Google Drive
-                        </button>
-                     </div>
-                 )}
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-4">
-               <div className="relative inline-block text-left w-full sm:w-auto">
-                    <div>
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                setIsExportMenuOpen(prev => !prev);
-                            }}
-                            type="button"
-                            className="w-full flex items-center justify-center gap-2 bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-700"
-                        >
-                            <DownloadIcon /> Save Data Backup <ChevronDownIcon />
-                        </button>
+                        <div className="flex gap-2 items-center self-end sm:self-center flex-shrink-0">
+                            <div className="w-6 h-6 rounded-full border" style={{backgroundColor: company.accentColor}}></div>
+                            <span className="text-sm capitalize text-slate-600 font-medium">{company.template}</span>
+                            <div className="w-px h-5 bg-slate-200 mx-1"></div>
+                            <button onClick={() => handleEdit(company)} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-50">Edit</button>
+                            <button onClick={() => handleDelete(company.id)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-50">Delete</button>
+                        </div>
                     </div>
-                    {isExportMenuOpen && (
-                        <div className="origin-top-left absolute left-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10" role="menu">
-                            <div className="py-1">
-                                <a href="#" onClick={(e) => { e.preventDefault(); exportAllData(); }} className="text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100" role="menuitem">Save All Data</a>
-                                <div className="border-t my-1"></div>
-                                <a href="#" onClick={(e) => { e.preventDefault(); exportSingleCategory('companies', 'companies'); }} className="text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100" role="menuitem">Save Companies</a>
-                                <a href="#" onClick={(e) => { e.preventDefault(); exportSingleCategory('clients', 'clients'); }} className="text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100" role="menuitem">Save Clients</a>
-                                <a href="#" onClick={(e) => { e.preventDefault(); exportSingleCategory('items', 'items'); }} className="text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100" role="menuitem">Save Items</a>
-                                <a href="#" onClick={(e) => { e.preventDefault(); exportSingleCategory('savedInvoices', 'invoices'); }} className="text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100" role="menuitem">Save Invoices</a>
-                                <a href="#" onClick={(e) => { e.preventDefault(); exportSingleCategory('savedQuotations', 'quotations'); }} className="text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100" role="menuitem">Save Quotations</a>
-                            </div>
+                ))}
+            </div>
+            
+            <div className="mt-8 pt-6 border-t">
+                <div className="mb-8">
+                    <h2 className="text-xl font-bold text-gray-800 mb-4">Local Save Location</h2>
+                    { isFileSystemApiSupported ? (
+                        <div className="bg-slate-50 p-4 rounded-lg border">
+                            {directoryName ? (
+                                <div className="flex items-center justify-between gap-4">
+                                    <p className="text-sm text-slate-700">Current save folder: <span className="font-semibold text-indigo-700">{directoryName}</span></p>
+                                    <button onClick={handleClearSaveLocation} className="text-sm font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-50 flex-shrink-0">Clear</button>
+                                </div>
+                            ) : (
+                                <>
+                                    <p className="text-slate-600 mb-2">Set a default folder to save backups directly without a "Save As" prompt.</p>
+                                    <button onClick={handleSetSaveLocation} className="flex items-center justify-center gap-2 bg-white text-slate-700 font-semibold py-2 px-4 rounded-lg shadow-sm border hover:bg-slate-100">
+                                        <FolderIcon /> Set Save Location
+                                    </button>
+                                </>
+                            )}
                         </div>
-                    )}
+                     ) : (
+                         <div className="bg-slate-50 p-4 rounded-lg border">
+                            <p className="text-slate-600 text-sm">Your browser doesn't support setting a default save location. Backups will be saved to your Downloads folder.</p>
+                         </div>
+                     )}
                 </div>
 
-              <button onClick={() => setLoadLocationModalOpen(true)} className="flex-1 flex items-center justify-center gap-2 bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-700">
-                <UploadIcon /> Load Data Backup
-              </button>
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                accept=".json"
-                className="hidden"
-              />
+                <div className="mb-8">
+                    <h2 className="text-xl font-bold text-gray-800 mb-4">Data Management</h2>
+                    <p className="text-slate-600 mb-4">Save your data to a file for backup, or restore from a previously saved file.</p>
+                    <div className="flex flex-col sm:flex-row gap-4">
+                        <div className="relative inline-block text-left flex-1">
+                          <button onClick={(e) => { e.stopPropagation(); setIsExportMenuOpen(prev => !prev); }} className="w-full flex items-center justify-center gap-2 bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-700">
+                            <DownloadIcon />
+                            <span>Export Data</span>
+                            <ChevronDownIcon />
+                          </button>
+                          {isExportMenuOpen && (
+                            <div className="origin-top-right absolute right-0 mt-2 w-full rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
+                              <div className="py-1" role="menu">
+                                <button onClick={() => handleExportData('all')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" role="menuitem">Export All Data</button>
+                                <div className="border-t my-1"></div>
+                                <button onClick={() => handleExportData('companies')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" role="menuitem">Export Companies</button>
+                                <button onClick={() => handleExportData('clients')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" role="menuitem">Export Clients</button>
+                                <button onClick={() => handleExportData('items')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" role="menuitem">Export Items</button>
+                                <button onClick={() => handleExportData('savedInvoices')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" role="menuitem">Export Invoices</button>
+                                <button onClick={() => handleExportData('savedQuotations')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" role="menuitem">Export Quotations</button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <button onClick={() => fileInputRef.current?.click()} className="flex-1 flex items-center justify-center gap-2 bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-700">
+                            <UploadIcon /> Import Data
+                        </button>
+                        <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" className="hidden"/>
+                    </div>
+                </div>
+                <div className="text-right">
+                    <button onClick={onDone} className="bg-slate-500 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-slate-600 transition-colors duration-200">
+                        Done
+                    </button>
+                </div>
             </div>
-          </div>
-          <div className="text-right mt-8">
-            <button onClick={onDone} className="bg-slate-500 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-slate-600 transition-colors duration-200">
-                Done
-            </button>
-          </div>
         </div>
-      </div>
 
-      {isFormOpen && editingCompany && (
-        <CompanyForm 
-            company={editingCompany}
-            onSave={handleFormSave}
-            onCancel={handleFormCancel}
-        />
-      )}
-
-      <LocationModal 
-        isOpen={saveLocationModalOpen}
-        onClose={() => setSaveLocationModalOpen(false)}
-        title="Save Backup To"
-        isGdriveConnected={!!gdriveUser}
-        onLocal={handleSaveToLocal}
-        onGdrive={handleSaveToGdrive}
-      />
-      <LocationModal 
-        isOpen={loadLocationModalOpen}
-        onClose={() => setLoadLocationModalOpen(false)}
-        title="Load Backup From"
-        isGdriveConnected={!!gdriveUser}
-        onLocal={handleLoadFromLocal}
-        onGdrive={handleLoadFromGdrive}
-      />
-    </main>
+        {isFormOpen && editingCompany && (
+            <CompanyForm 
+                company={editingCompany}
+                onSave={handleFormSave}
+                onCancel={handleFormCancel}
+            />
+        )}
+      </main>
+    </>
   );
 };
 
