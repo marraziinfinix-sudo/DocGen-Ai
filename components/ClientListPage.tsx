@@ -1,3 +1,5 @@
+
+
 import React, { useState, useMemo } from 'react';
 import { Client } from '../types';
 import { TrashIcon } from './Icons';
@@ -28,6 +30,7 @@ const ClientListPage: React.FC<ClientListPageProps> = ({ clients, setClients, on
   };
 
   const filteredClients = useMemo(() => {
+    if (!Array.isArray(clients)) return [];
     if (!searchQuery) {
         return clients;
     }
@@ -152,8 +155,7 @@ const ClientListPage: React.FC<ClientListPageProps> = ({ clients, setClients, on
                             className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                             onChange={handleSelectAll}
                             checked={isAllSelected}
-                            // FIX: Corrected the ref callback to not return a value, resolving a TypeScript type error.
-                            ref={el => { if (el) el.indeterminate = isIndeterminate; }}
+                            ref={el => { if (el) { el.indeterminate = isIndeterminate; } }}
                             aria-label="Select all clients"
                         />
                         <label className="ml-3 text-sm font-medium text-gray-600">Select All</label>

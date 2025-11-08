@@ -166,11 +166,16 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
   const [categories, setCategories] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('itemCategories');
-      return saved ? JSON.parse(saved) : [];
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed as string[];
+        }
+      }
     } catch (e) {
       console.error('Failed to load categories from localStorage', e);
-      return [];
     }
+    return [];
   });
 
   useEffect(() => {
@@ -198,6 +203,7 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
   };
 
   const filteredItems = useMemo(() => {
+    if (!Array.isArray(items)) return [];
     return items.filter(item => {
         const matchesSearch = searchQuery ? item.description.toLowerCase().includes(searchQuery.toLowerCase()) : true;
         const matchesCategory = categoryFilter !== 'All' ? ((item.category || 'Uncategorized') === categoryFilter) : true;
@@ -205,7 +211,6 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
     });
   }, [items, searchQuery, categoryFilter]);
 
-  // FIX: Explicitly typing the accumulator of the reduce function with `reduce<Record<string, Item[]>>` ensures that TypeScript correctly infers the type of `acc` within the callback, and consequently the type of `groupedItems`. This resolves the issue where `itemsInCategory` was inferred as `unknown` during rendering.
   const groupedItems = useMemo(() => {
     return filteredItems.reduce<Record<string, Item[]>>((acc, item) => {
       const category = item.category || 'Uncategorized';
@@ -222,15 +227,23 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
     const price = parseFloat(formState.price);
     if (!formState.description || isNaN(price)) return;
     
+    const trimmedDescription = formState.description.trim();
     const newCategory = formState.category.trim();
+
     if (newCategory && !categories.includes(newCategory)) {
         setCategories(prev => [...prev, newCategory].sort());
     }
 
     if (isEditing && formState.id) {
-      setItems(prev => prev.map(i => i.id === formState.id ? { ...formState, id: i.id, price, category: newCategory } : i));
+      const updatedItem: Item = {
+        id: formState.id,
+        description: trimmedDescription,
+        price: price,
+        category: newCategory,
+      };
+      setItems(prev => prev.map(i => (i.id === updatedItem.id ? updatedItem : i)));
     } else {
-      setItems(prev => [{ id: Date.now(), description: formState.description.trim(), price, category: newCategory }, ...prev]);
+      setItems(prev => [{ id: Date.now(), description: trimmedDescription, price, category: newCategory }, ...prev]);
     }
     setFormState(emptyFormState);
     setIsEditing(false);
@@ -376,7 +389,8 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
                     {categoryFilterOptions.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                 </select>
             </div>
-            {items.length === 0 ? (
+            {/* FIX: Added an Array.isArray check for `items` before accessing its `length` property to prevent potential runtime errors if `items` is not an array. This also provides a type guard for the code inside the ternary, resolving the static analysis error. */}
+            {(!Array.isArray(items) || items.length === 0) ? (
                 <p className="text-slate-500 text-center py-4 bg-slate-50 rounded-lg">No items saved yet.</p>
             ) : (
                 <>
@@ -386,8 +400,7 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
                             className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                             onChange={handleSelectAll}
                             checked={isAllSelected}
-                            // FIX: Corrected the ref callback to not return a value, resolving a TypeScript type error.
-                            ref={el => { if (el) el.indeterminate = isIndeterminate; }}
+                            ref={el => { if (el) { el.indeterminate = isIndeterminate; } }}
                         />
                         <label className="ml-3 text-sm font-medium text-gray-600">Select All</label>
                     </div>

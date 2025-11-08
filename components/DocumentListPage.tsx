@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { SavedDocument, InvoiceStatus, Payment } from '../types';
 import { MailIcon, WhatsAppIcon, CashIcon, ViewIcon, TrashIcon, MoreVerticalIcon } from './Icons';
@@ -34,11 +35,53 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
   };
 
   const filteredDocuments = useMemo(() => {
+    if (!Array.isArray(documents)) return [];
     if (statusFilter === 'All') {
         return documents;
     }
     return documents.filter(doc => getDisplayStatusText(doc) === statusFilter);
   }, [documents, statusFilter]);
+  
+  const summary = useMemo(() => {
+    const initialSummary = {
+        Paid: { total: 0, count: 0 },
+        PartiallyPaid: { total: 0, balanceDue: 0, count: 0 },
+        Pending: { total: 0, count: 0 },
+        Overdue: { total: 0, count: 0 }
+    };
+
+    if (!Array.isArray(documents)) return initialSummary;
+
+    return documents.reduce((acc, doc) => {
+        const status = getDisplayStatusText(doc);
+        const amountPaid = doc.payments?.reduce((sum, p) => sum + p.amount, 0) || 0;
+        let balanceDue = doc.total - amountPaid;
+        if(doc.status === InvoiceStatus.Paid || balanceDue < 0.01) {
+            balanceDue = 0;
+        }
+
+        switch (status) {
+            case 'Paid':
+                acc.Paid.total += doc.total;
+                acc.Paid.count++;
+                break;
+            case 'Partially Paid':
+                acc.PartiallyPaid.total += doc.total;
+                acc.PartiallyPaid.balanceDue += balanceDue;
+                acc.PartiallyPaid.count++;
+                break;
+            case 'Pending':
+                acc.Pending.total += balanceDue;
+                acc.Pending.count++;
+                break;
+            case 'Overdue':
+                acc.Overdue.total += balanceDue;
+                acc.Overdue.count++;
+                break;
+        }
+        return acc;
+    }, initialSummary);
+  }, [documents]);
 
 
   useEffect(() => {
@@ -209,6 +252,29 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
                 </button>
             )}
           </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div className="bg-green-50 border border-green-200 p-4 rounded-lg">
+                <h3 className="text-sm font-semibold text-green-800">Total Paid</h3>
+                <p className="text-2xl font-bold text-green-700">{formatCurrency(summary.Paid.total)}</p>
+                <p className="text-xs text-green-600">{summary.Paid.count} invoice(s)</p>
+            </div>
+            <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
+                <h3 className="text-sm font-semibold text-blue-800">Partially Paid Balance</h3>
+                <p className="text-2xl font-bold text-blue-700">{formatCurrency(summary.PartiallyPaid.balanceDue)}</p>
+                <p className="text-xs text-blue-600">{summary.PartiallyPaid.count} invoice(s) totalling {formatCurrency(summary.PartiallyPaid.total)}</p>
+            </div>
+            <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
+                <h3 className="text-sm font-semibold text-yellow-800">Pending Balance</h3>
+                <p className="text-2xl font-bold text-yellow-700">{formatCurrency(summary.Pending.total)}</p>
+                <p className="text-xs text-yellow-600">{summary.Pending.count} invoice(s)</p>
+            </div>
+            <div className="bg-red-50 border border-red-200 p-4 rounded-lg">
+                <h3 className="text-sm font-semibold text-red-800">Overdue Balance</h3>
+                <p className="text-2xl font-bold text-red-700">{formatCurrency(summary.Overdue.total)}</p>
+                <p className="text-xs text-red-600">{summary.Overdue.count} invoice(s)</p>
+            </div>
+          </div>
           
           <div className="mb-4">
             {/* Mobile Filter: Dropdown */}
@@ -258,8 +324,7 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
                   className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                   onChange={handleSelectAll}
                   checked={isAllSelected}
-                  // FIX: Corrected the ref callback to not return a value, resolving a TypeScript type error.
-                  ref={el => { if (el) el.indeterminate = isIndeterminate; }}
+                  ref={el => { if (el) { el.indeterminate = isIndeterminate; } }}
                 />
                 <span className="font-semibold text-slate-600 uppercase text-sm text-center">Status</span>
                 <span className="font-semibold text-slate-600 uppercase text-sm">Invoice #</span>
