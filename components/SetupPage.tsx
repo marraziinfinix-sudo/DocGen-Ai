@@ -146,7 +146,7 @@ const CompanyForm: React.FC<{
                     </div>
                 </div>
                 
-                 <div className="mt-8 pt-6 border-t">
+                 <div className="p-4 sm:p-8 pt-0">
                     <h3 className="text-lg font-semibold text-gray-700 mb-4">Document Design</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
@@ -229,7 +229,7 @@ const SetupPage: React.FC<SetupPageProps> = ({
 
             if (exportOption === 'all') {
                 const allData: { [key: string]: any } = {};
-                const keys = ['companies', 'clients', 'items', 'savedInvoices', 'savedQuotations'];
+                const keys = ['companies', 'clients', 'items', 'savedInvoices', 'savedQuotations', 'itemCategories'];
                 keys.forEach(key => {
                     const item = localStorage.getItem(key);
                     if (item) {
@@ -245,6 +245,7 @@ const SetupPage: React.FC<SetupPageProps> = ({
                     items: 'items',
                     invoices: 'savedInvoices',
                     quotations: 'savedQuotations',
+                    categories: 'itemCategories'
                 };
                 const storageKey = keyMap[exportOption];
                 const item = localStorage.getItem(storageKey);
@@ -258,14 +259,15 @@ const SetupPage: React.FC<SetupPageProps> = ({
                 clients: "Clients",
                 items: "Items",
                 invoices: "Invoices",
-                quotations: "Quotations"
+                quotations: "Quotations",
+                categories: "Item Categories"
             };
 
-            if (
-                !dataToExport ||
+            const dataIsEmpty = !dataToExport ||
                 (Array.isArray(dataToExport) && dataToExport.length === 0) ||
-                (typeof dataToExport === 'object' && !Array.isArray(dataToExport) && Object.keys(dataToExport).length === 0)
-            ) {
+                (typeof dataToExport === 'object' && !Array.isArray(dataToExport) && Object.keys(dataToExport).length === 0);
+
+            if (dataIsEmpty) {
                 alert(`No data found for "${optionTextMap[exportOption]}" to export.`);
                 return;
             }
@@ -312,15 +314,16 @@ const SetupPage: React.FC<SetupPageProps> = ({
                 
                 const requiredKeys = ['companies', 'clients', 'items', 'savedInvoices', 'savedQuotations'];
                 const importedKeys = Object.keys(data);
-                const hasAllKeys = requiredKeys.every(key => importedKeys.includes(key));
                 
-                if (!hasAllKeys) {
-                    alert('Invalid backup file. The file is missing required data sections.');
+                const hasRequiredKeys = requiredKeys.every(key => importedKeys.includes(key));
+                
+                if (!hasRequiredKeys) {
+                    alert('Invalid backup file. The file is missing one or more required data sections (companies, clients, items, invoices, quotations).');
                     return;
                 }
 
-                requiredKeys.forEach(key => {
-                    if (data[key]) {
+                importedKeys.forEach(key => {
+                    if (data[key] && localStorage.hasOwnProperty(key)) {
                         localStorage.setItem(key, JSON.stringify(data[key]));
                     }
                 });
@@ -388,6 +391,7 @@ const SetupPage: React.FC<SetupPageProps> = ({
                           <option value="companies">Company Profiles</option>
                           <option value="clients">Clients</option>
                           <option value="items">Items</option>
+                          <option value="categories">Item Categories</option>
                           <option value="invoices">Invoices</option>
                           <option value="quotations">Quotations</option>
                       </select>

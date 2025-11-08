@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus } from './types';
 import { generateDescription } from './services/geminiService';
@@ -277,7 +278,7 @@ const App: React.FC = () => {
     );
   }, [items, itemSearchQuery]);
 
-  // FIX: Explicitly typing the accumulator of the reduce function with `reduce<Record<string, Item[]>>` ensures that TypeScript correctly infers the type of `groupedFilteredItems`. This resolves the issue where `items` was inferred as `unknown` during rendering, causing `items.map` to fail.
+  // FIX: Explicitly typing the accumulator of the reduce function ensures that TypeScript correctly infers the type of `groupedFilteredItems`. This resolves an error where properties of `items` could not be accessed in the render method.
   const groupedFilteredItems = useMemo(() => {
     return filteredSavedItems.reduce<Record<string, Item[]>>((acc, item) => {
       const category = item.category || 'Uncategorized';
