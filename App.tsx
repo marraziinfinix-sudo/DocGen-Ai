@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus } from './types';
 import { generateDescription } from './services/geminiService';
@@ -276,6 +277,18 @@ const App: React.FC = () => {
       item.description.toLowerCase().includes(itemSearchQuery.toLowerCase())
     );
   }, [items, itemSearchQuery]);
+
+  const groupedFilteredItems = useMemo(() => {
+    // FIX: Explicitly typed the accumulator in the `reduce` function. This corrects a TypeScript type inference issue where the item array was being typed as `unknown`.
+    return filteredSavedItems.reduce((acc: Record<string, Item[]>, item) => {
+      const category = item.category || 'Uncategorized';
+      if (!acc[category]) {
+        acc[category] = [];
+      }
+      acc[category].push(item);
+      return acc;
+    }, {});
+  }, [filteredSavedItems]);
 
   const handleAddFromSearch = (item: Item) => {
     addLineItemFromSaved(item);
@@ -852,15 +865,20 @@ const App: React.FC = () => {
                 />
                 {isItemSearchOpen && itemSearchQuery.length > 0 && (
                     <div className="absolute z-10 w-full mt-1 bg-white border border-slate-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                        {filteredSavedItems.length > 0 ? (
-                            filteredSavedItems.map(item => (
-                                <div
-                                    key={item.id}
-                                    onMouseDown={() => handleAddFromSearch(item)} // Use onMouseDown to trigger before onBlur
-                                    className="p-3 hover:bg-indigo-50 cursor-pointer border-b last:border-b-0"
-                                >
-                                    <p className="font-semibold text-slate-800">{item.description}</p>
-                                    <p className="text-sm text-slate-500">{formatCurrency(item.price)}</p>
+                        {Object.keys(groupedFilteredItems).length > 0 ? (
+                            Object.entries(groupedFilteredItems).map(([category, items]) => (
+                                <div key={category}>
+                                    <h4 className="font-bold text-xs uppercase text-slate-500 bg-slate-50 p-2 sticky top-0">{category}</h4>
+                                    {items.map(item => (
+                                        <div
+                                            key={item.id}
+                                            onMouseDown={() => handleAddFromSearch(item)} // Use onMouseDown to trigger before onBlur
+                                            className="p-3 hover:bg-indigo-50 cursor-pointer border-b last:border-b-0"
+                                        >
+                                            <p className="font-semibold text-slate-800">{item.description}</p>
+                                            <p className="text-sm text-slate-500">{formatCurrency(item.price)}</p>
+                                        </div>
+                                    ))}
                                 </div>
                             ))
                         ) : (

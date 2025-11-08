@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo } from 'react';
 import { Item } from '../types';
 import { TrashIcon } from './Icons';
@@ -10,10 +11,11 @@ interface ItemListPageProps {
   onDone: () => void;
 }
 
-const emptyFormState: Omit<Item, 'id' | 'price'> & { id: number | null; price: string } = {
+const emptyFormState: Omit<Item, 'id' | 'price'> & { id: number | null; price: string; category: string } = {
   id: null,
   description: '',
   price: '',
+  category: '',
 };
 
 const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurrency, onDone }) => {
@@ -21,21 +23,34 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
   const [isEditing, setIsEditing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('All');
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormState(prev => ({ ...prev, [name]: value }));
   };
 
+  const categories = useMemo(() => ['All', ...Array.from(new Set(items.map(i => i.category).filter(Boolean))) as string[]], [items]);
+
   const filteredItems = useMemo(() => {
-    if (!searchQuery) {
-        return items;
-    }
-    const lowercasedQuery = searchQuery.toLowerCase();
-    return items.filter(item =>
-        item.description.toLowerCase().includes(lowercasedQuery)
-    );
-  }, [items, searchQuery]);
+    return items.filter(item => {
+        const matchesSearch = searchQuery ? item.description.toLowerCase().includes(searchQuery.toLowerCase()) : true;
+        const matchesCategory = categoryFilter !== 'All' ? (item.category === categoryFilter || (categoryFilter === 'Uncategorized' && !item.category)) : true;
+        return matchesSearch && matchesCategory;
+    });
+  }, [items, searchQuery, categoryFilter]);
+
+  const groupedItems = useMemo(() => {
+    // FIX: Explicitly typed the accumulator in the `reduce` function. This corrects a TypeScript type inference issue where the item array was being typed as `unknown`.
+    return filteredItems.reduce((acc: Record<string, Item[]>, item) => {
+      const category = item.category || 'Uncategorized';
+      if (!acc[category]) {
+        acc[category] = [];
+      }
+      acc[category].push(item);
+      return acc;
+    }, {});
+  }, [filteredItems]);
 
 
   const handleSaveItem = () => {
@@ -43,16 +58,16 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
     if (!formState.description || isNaN(price)) return;
 
     if (isEditing && formState.id) {
-      setItems(prev => prev.map(i => i.id === formState.id ? { ...formState, id: i.id, price } : i));
+      setItems(prev => prev.map(i => i.id === formState.id ? { ...formState, id: i.id, price, category: formState.category.trim() } : i));
     } else {
-      setItems(prev => [{ id: Date.now(), description: formState.description, price }, ...prev]);
+      setItems(prev => [{ id: Date.now(), description: formState.description, price, category: formState.category.trim() }, ...prev]);
     }
     setFormState(emptyFormState);
     setIsEditing(false);
   };
   
   const handleEditItem = (item: Item) => {
-    setFormState({...item, price: String(item.price)});
+    setFormState({...item, price: String(item.price), category: item.category || ''});
     setIsEditing(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -114,9 +129,10 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
 
         <div className="bg-slate-50 p-6 rounded-lg mb-8 border border-slate-200">
             <h3 className="text-lg font-semibold text-gray-700 mb-4">{isEditing ? 'Edit Item' : 'Add New Item'}</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <textarea name="description" placeholder="Item Description" value={formState.description} onChange={handleInputChange} rows={2} className="md:col-span-2 w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"/>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <textarea name="description" placeholder="Item Description" value={formState.description} onChange={handleInputChange} rows={3} className="md:col-span-2 w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"/>
                 <input type="number" name="price" placeholder="Price" value={formState.price} onChange={handleInputChange} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"/>
+                <input type="text" name="category" placeholder="Category (optional)" value={formState.category} onChange={handleInputChange} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"/>
             </div>
             <div className="mt-4 flex gap-4">
                 <button onClick={handleSaveItem} className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700">
@@ -132,15 +148,24 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
 
         <div>
             <h3 className="text-lg font-semibold text-gray-700 mb-4">Saved Items</h3>
-            <div className="mb-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                 <input
                     type="text"
                     placeholder="Search items by description..."
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
-                    className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    className="md:col-span-2 w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                     aria-label="Search items"
                 />
+                <select 
+                    value={categoryFilter}
+                    onChange={e => setCategoryFilter(e.target.value)}
+                    className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                >
+                    <option value="All">All Categories</option>
+                    {categories.slice(1).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                    <option value="Uncategorized">Uncategorized</option>
+                </select>
             </div>
             {items.length === 0 ? (
                 <p className="text-slate-500 text-center py-4 bg-slate-50 rounded-lg">No items saved yet.</p>
@@ -156,28 +181,35 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
                         />
                         <label className="ml-3 text-sm font-medium text-gray-600">Select All</label>
                     </div>
-                    <div className="space-y-3">
-                        {filteredItems.length > 0 ? filteredItems.map(item => (
-                            <div key={item.id} className={`p-4 border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-2 ${selectedIds.has(item.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-white'}`}>
-                                <div className="flex items-start w-full sm:w-auto">
-                                    <input
-                                      type="checkbox"
-                                      className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mt-1"
-                                      checked={selectedIds.has(item.id)}
-                                      onChange={() => handleSelect(item.id)}
-                                    />
-                                    <div className="ml-4">
-                                        <p className="font-bold text-slate-800">{item.description}</p>
-                                        <p className="text-sm text-slate-500">{formatCurrency(item.price)}</p>
+                    <div className="space-y-4">
+                        {Object.keys(groupedItems).length > 0 ? (
+                          Object.entries(groupedItems).map(([category, itemsInCategory]) => (
+                            <div key={category}>
+                              <h4 className="font-bold text-sm uppercase text-slate-500 bg-slate-100 p-2 rounded-t-md mt-4">{category}</h4>
+                              {itemsInCategory.map(item => (
+                                <div key={item.id} className={`p-4 border-x border-b flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-2 ${selectedIds.has(item.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-white'}`}>
+                                    <div className="flex items-start w-full sm:w-auto">
+                                        <input
+                                          type="checkbox"
+                                          className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mt-1"
+                                          checked={selectedIds.has(item.id)}
+                                          onChange={() => handleSelect(item.id)}
+                                        />
+                                        <div className="ml-4">
+                                            <p className="font-bold text-slate-800">{item.description}</p>
+                                            <p className="text-sm text-slate-500">{formatCurrency(item.price)}</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2 self-end sm:self-center flex-shrink-0">
+                                        <button onClick={() => handleEditItem(item)} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-100">Edit</button>
+                                        <button onClick={() => handleDeleteItem(item.id)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-100">Delete</button>
                                     </div>
                                 </div>
-                                <div className="flex gap-2 self-end sm:self-center flex-shrink-0">
-                                    <button onClick={() => handleEditItem(item)} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-100">Edit</button>
-                                    <button onClick={() => handleDeleteItem(item.id)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-100">Delete</button>
-                                </div>
+                              ))}
                             </div>
-                        )) : (
-                            <p className="text-slate-500 text-center py-4 bg-slate-50 rounded-lg">No items match your search.</p>
+                          ))
+                        ) : (
+                            <p className="text-slate-500 text-center py-4 bg-slate-50 rounded-lg">No items match your search or filter.</p>
                         )}
                     </div>
                 </>
