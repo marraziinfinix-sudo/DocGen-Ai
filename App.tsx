@@ -1,12 +1,4 @@
 
-
-
-
-
-
-
-
-
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus } from './types';
 import { generateDescription } from './services/geminiService';
@@ -80,8 +72,15 @@ const App: React.FC = () => {
   
   const [clients, setClients] = useState<Client[]>(() => {
     try {
+      // FIX: Safely parse 'clients' from localStorage. The previous implementation could cause runtime errors if the stored value was not an array.
       const saved = localStorage.getItem('clients');
-      return saved ? JSON.parse(saved) : [];
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed;
+        }
+      }
+      return [];
     } catch (e) {
       console.error('Failed to load clients from localStorage', e);
       return [];
@@ -90,8 +89,15 @@ const App: React.FC = () => {
 
    const [items, setItems] = useState<Item[]>(() => {
     try {
+      // FIX: Safely parse 'items' from localStorage.
       const saved = localStorage.getItem('items');
-      return saved ? JSON.parse(saved) : [];
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed;
+        }
+      }
+      return [];
     } catch (e) {
       console.error('Failed to load items from localStorage', e);
       return [];
@@ -116,8 +122,15 @@ const App: React.FC = () => {
 
   const [savedInvoices, setSavedInvoices] = useState<SavedDocument[]>(() => {
     try {
+      // FIX: Safely parse 'savedInvoices' from localStorage.
       const saved = localStorage.getItem('savedInvoices');
-      return saved ? JSON.parse(saved) : [];
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed;
+        }
+      }
+      return [];
     } catch (e) {
       console.error('Failed to load savedInvoices from localStorage', e);
       return [];
@@ -126,8 +139,15 @@ const App: React.FC = () => {
 
   const [savedQuotations, setSavedQuotations] = useState<SavedDocument[]>(() => {
     try {
+      // FIX: Safely parse 'savedQuotations' from localStorage.
       const saved = localStorage.getItem('savedQuotations');
-      return saved ? JSON.parse(saved) : [];
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed;
+        }
+      }
+      return [];
     } catch (e) {
       console.error('Failed to load savedQuotations from localStorage', e);
       return [];
@@ -286,9 +306,7 @@ const App: React.FC = () => {
   }, [items, itemSearchQuery]);
 
   const groupedFilteredItems = useMemo(() => {
-    // FIX: Explicitly typed the arguments in the `reduce` callback. This ensures TypeScript correctly infers the return type as `Record<string, Item[]>`,
-    // which resolves an error where the `items` array in the component's render method was being typed as `unknown`.
-    return filteredSavedItems.reduce<Record<string, Item[]>>((acc: Record<string, Item[]>, item: Item) => {
+    return filteredSavedItems.reduce<Record<string, Item[]>>((acc, item) => {
       const category = item.category || 'Uncategorized';
       if (!acc[category]) {
         acc[category] = [];

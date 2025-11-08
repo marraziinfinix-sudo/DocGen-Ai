@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Item } from '../types';
 import { TrashIcon, PlusIcon } from './Icons';
@@ -163,8 +164,15 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
   
   const [categories, setCategories] = useState<string[]>(() => {
     try {
+      // FIX: Safely parse 'itemCategories' from localStorage. The previous implementation could cause runtime errors if the stored value was not an array.
       const saved = localStorage.getItem('itemCategories');
-      return saved ? JSON.parse(saved) : [];
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed;
+        }
+      }
+      return [];
     } catch (e) {
       console.error('Failed to load categories from localStorage', e);
       return [];
@@ -204,9 +212,7 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
   }, [items, searchQuery, categoryFilter]);
 
   const groupedItems = useMemo(() => {
-    // FIX: Explicitly typed the arguments in the `reduce` callback. This ensures TypeScript correctly infers the return type as `Record<string, Item[]>`,
-    // which resolves an error where the `itemsInCategory` array in the component's render method was being typed as `unknown`.
-    return filteredItems.reduce<Record<string, Item[]>>((acc: Record<string, Item[]>, item: Item) => {
+    return filteredItems.reduce<Record<string, Item[]>>((acc, item) => {
       const category = item.category || 'Uncategorized';
       if (!acc[category]) {
         acc[category] = [];
