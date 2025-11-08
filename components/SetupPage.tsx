@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Company, Details } from '../types';
 import { PlusIcon, DownloadIcon, UploadIcon, ChevronDownIcon, FolderIcon } from './Icons';
@@ -472,8 +471,8 @@ const SetupPage: React.FC<SetupPageProps> = ({
                      { isFileSystemApiSupported && !isInIframe ? (
                         <div className="bg-slate-50 p-4 rounded-lg border space-y-3">
                             <p className="text-slate-600 text-sm">Set a default folder to save backups directly without a "Save As" prompt.</p>
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                <p className="text-sm text-slate-700">
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                                <p className="flex-1 text-sm text-slate-700">
                                     Current save folder: 
                                     {directoryName ? (
                                         <span className="font-semibold text-indigo-700 ml-1 break-all">{directoryName}</span>
