@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { Company, Details } from '../types';
-import { PlusIcon, DownloadIcon, UploadIcon, ChevronDownIcon } from './Icons';
+import { PlusIcon, DownloadIcon, UploadIcon } from './Icons';
 
 interface SetupPageProps {
   companies: Company[];
@@ -54,7 +54,7 @@ const CompanyForm: React.FC<{
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-30 flex justify-center items-center p-4">
         <div className="bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <form onSubmit={handleSubmit}>
                 <div className="p-4 sm:p-8">
@@ -145,7 +145,7 @@ const CompanyForm: React.FC<{
                     </div>
                 </div>
                 
-                 <div className="mt-8 pt-6 border-t p-4 sm:p-8">
+                 <div className="mt-8 pt-6 border-t">
                     <h3 className="text-lg font-semibold text-gray-700 mb-4">Document Design</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
@@ -182,16 +182,7 @@ const SetupPage: React.FC<SetupPageProps> = ({
 }) => {
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingCompany, setEditingCompany] = useState<Company | null>(null);
-    const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
-
-    useEffect(() => {
-        const closeMenu = () => setIsExportMenuOpen(false);
-        if (isExportMenuOpen) {
-            window.addEventListener('click', closeMenu);
-        }
-        return () => window.removeEventListener('click', closeMenu);
-    }, [isExportMenuOpen]);
 
     const handleAddNew = () => {
         setEditingCompany({ ...emptyCompany });
@@ -227,183 +218,159 @@ const SetupPage: React.FC<SetupPageProps> = ({
         setIsFormOpen(false);
         setEditingCompany(null);
     };
-
-    const prepareDataForSave = (category: string) => {
-        if (category === 'all') {
+    
+    const handleExportData = () => {
+        try {
             const dataToExport: { [key: string]: any } = {};
             const keys = ['companies', 'clients', 'items', 'savedInvoices', 'savedQuotations'];
+            
             keys.forEach(key => {
                 const item = localStorage.getItem(key);
                 if (item) {
-                    try {
-                        dataToExport[key] = JSON.parse(item);
-                    } catch (e) {
-                        console.error(`Could not parse ${key} from localStorage`, e);
-                    }
+                    dataToExport[key] = JSON.parse(item);
                 }
             });
-            return { name: 'all', data: dataToExport };
-        } else {
-            const item = localStorage.getItem(category);
-            return { name: category, data: item ? JSON.parse(item) : [] };
-        }
-    }
 
-    const handleExportData = async (category: string) => {
-        setIsExportMenuOpen(false);
-        const { name, data } = prepareDataForSave(category);
-
-        const dataIsPresent = data && (!Array.isArray(data) || data.length > 0) && (typeof data === 'object' && Object.keys(data).length > 0);
-        if (!dataIsPresent) {
-            alert(`No data to export for "${name}".`);
-            return;
-        }
-
-        const date = new Date().toISOString().split('T')[0];
-        const fileName = `invquo-ai-backup-${name}-${date}.json`;
-        const jsonString = JSON.stringify(data, null, 2);
-        const blob = new Blob([jsonString], { type: 'application/json' });
-
-        // Standard download method
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = fileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-    };
-    
-    const processImportedData = (jsonData: string) => {
-        if (!window.confirm('This will overwrite all existing data. This action cannot be undone. Are you sure you want to proceed?')) {
-            return;
-        }
-        try {
-            const data = JSON.parse(jsonData);
-            const requiredKeys = ['companies', 'clients', 'items', 'savedInvoices', 'savedQuotations'];
-            const importedKeys = Object.keys(data);
-            
-            const isFullBackup = requiredKeys.every(key => importedKeys.includes(key));
-            const isPartialBackup = requiredKeys.some(key => importedKeys.includes(key) && Array.isArray(data[key]));
-
-            if (!isFullBackup && !isPartialBackup) {
-                alert('Invalid backup file. The file does not appear to contain valid data.');
+            if (Object.keys(dataToExport).length === 0) {
+                alert('No data to export.');
                 return;
             }
-            
-            requiredKeys.forEach(key => {
-                if (data[key]) {
-                    localStorage.setItem(key, JSON.stringify(data[key]));
-                } else if (isFullBackup) {
-                    localStorage.removeItem(key);
-                }
-            });
 
-            alert('Data imported successfully! The application will now reload.');
-            window.location.reload();
+            const jsonString = JSON.stringify(dataToExport, null, 2);
+            const blob = new Blob([jsonString], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            const date = new Date().toISOString().split('T')[0];
+            link.download = `invquo-ai-backup-${date}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            alert('Data exported successfully!');
         } catch (error) {
-            console.error('Failed to process imported data:', error);
-            alert('An error occurred while importing data. The file might be corrupted or in the wrong format.');
-        } finally {
-            if (fileInputRef.current) {
-                fileInputRef.current.value = '';
-            }
+            console.error('Failed to export data:', error);
+            alert('An error occurred while exporting data.');
         }
+    };
+
+    const handleImportClick = () => {
+        fileInputRef.current?.click();
     };
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
+
+        if (!window.confirm('This will overwrite all existing data. This action cannot be undone. Are you sure you want to proceed?')) {
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
+            return;
+        }
+
         const reader = new FileReader();
         reader.onload = (e) => {
-            const text = e.target?.result as string;
-            processImportedData(text);
+            try {
+                const text = e.target?.result as string;
+                const data = JSON.parse(text);
+                
+                const requiredKeys = ['companies', 'clients', 'items', 'savedInvoices', 'savedQuotations'];
+                const importedKeys = Object.keys(data);
+                const hasAllKeys = requiredKeys.every(key => importedKeys.includes(key));
+                
+                if (!hasAllKeys) {
+                    alert('Invalid backup file. The file is missing required data sections.');
+                    return;
+                }
+
+                requiredKeys.forEach(key => {
+                    if (data[key]) {
+                        localStorage.setItem(key, JSON.stringify(data[key]));
+                    }
+                });
+
+                alert('Data imported successfully! The application will now reload.');
+                window.location.reload();
+            } catch (error) {
+                console.error('Failed to import data:', error);
+                alert('An error occurred while importing data. The file might be corrupted or in the wrong format.');
+            } finally {
+                if (fileInputRef.current) {
+                    fileInputRef.current.value = '';
+                }
+            }
         };
         reader.readAsText(file);
     };
 
   return (
-    <>
-      <main className="container mx-auto p-4 sm:p-6 lg:p-8">
-        <div className="max-w-4xl mx-auto bg-white p-4 sm:p-8 rounded-lg shadow-md">
-            <div className="flex justify-between items-center mb-6 border-b pb-4">
-                <h2 className="text-2xl font-bold text-gray-800">Company Profiles</h2>
-                <button onClick={handleAddNew} className="flex items-center gap-2 bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700">
-                    <PlusIcon /> <span className="hidden sm:inline">Add New</span>
-                </button>
-            </div>
-
-            <div className="space-y-4">
-                {companies.map(company => (
-                    <div key={company.id} className="bg-slate-50 p-4 rounded-lg border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-2">
-                        <div className="flex items-center gap-4">
-                            {company.logo && <img src={company.logo} alt="logo" className="w-12 h-12 object-contain bg-white rounded-md p-1 border flex-shrink-0" />}
-                            <div>
-                                <p className="font-bold text-slate-800">{company.details.name}</p>
-                                <p className="text-sm text-slate-500 break-all">{company.details.email}</p>
-                            </div>
-                        </div>
-                        <div className="flex gap-2 items-center self-end sm:self-center flex-shrink-0">
-                            <div className="w-6 h-6 rounded-full border" style={{backgroundColor: company.accentColor}}></div>
-                            <span className="text-sm capitalize text-slate-600 font-medium">{company.template}</span>
-                            <div className="w-px h-5 bg-slate-200 mx-1"></div>
-                            <button onClick={() => handleEdit(company)} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-50">Edit</button>
-                            <button onClick={() => handleDelete(company.id)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-50">Delete</button>
-                        </div>
-                    </div>
-                ))}
-            </div>
-            
-            <div className="mt-8 pt-6 border-t">
-                <div className="mb-8">
-                    <h2 className="text-xl font-bold text-gray-800 mb-4">Data Management</h2>
-                    <p className="text-slate-600 mb-4">Save your data to a file for backup, or restore from a previously saved file.</p>
-                    <div className="flex flex-col sm:flex-row gap-4">
-                        <div className="relative inline-block text-left flex-1">
-                          <button onClick={(e) => { e.stopPropagation(); setIsExportMenuOpen(prev => !prev); }} className="w-full flex items-center justify-center gap-2 bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-700">
-                            <DownloadIcon />
-                            <span>Export Data</span>
-                            <ChevronDownIcon />
-                          </button>
-                          {isExportMenuOpen && (
-                            <div className="origin-top-right absolute right-0 mt-2 w-full rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
-                              <div className="py-1" role="menu">
-                                <button onClick={() => handleExportData('all')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" role="menuitem">Export All Data</button>
-                                <div className="border-t my-1"></div>
-                                <button onClick={() => handleExportData('companies')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" role="menuitem">Export Companies</button>
-                                <button onClick={() => handleExportData('clients')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" role="menuitem">Export Clients</button>
-                                <button onClick={() => handleExportData('items')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" role="menuitem">Export Items</button>
-                                <button onClick={() => handleExportData('savedInvoices')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" role="menuitem">Export Invoices</button>
-                                <button onClick={() => handleExportData('savedQuotations')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" role="menuitem">Export Quotations</button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        <button onClick={() => fileInputRef.current?.click()} className="flex-1 flex items-center justify-center gap-2 bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-700">
-                            <UploadIcon /> Import Data
-                        </button>
-                        <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" className="hidden"/>
-                    </div>
-                </div>
-                <div className="text-right">
-                    <button onClick={onDone} className="bg-slate-500 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-slate-600 transition-colors duration-200">
-                        Done
-                    </button>
-                </div>
-            </div>
+    <main className="container mx-auto p-4 sm:p-6 lg:p-8">
+      <div className="max-w-4xl mx-auto bg-white p-4 sm:p-8 rounded-lg shadow-md">
+        <div className="flex justify-between items-center mb-6 border-b pb-4">
+            <h2 className="text-2xl font-bold text-gray-800">Company Profiles</h2>
+            <button onClick={handleAddNew} className="flex items-center gap-2 bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700">
+                <PlusIcon /> <span className="hidden sm:inline">Add New</span>
+            </button>
         </div>
 
-        {isFormOpen && editingCompany && (
-            <CompanyForm 
-                company={editingCompany}
-                onSave={handleFormSave}
-                onCancel={handleFormCancel}
-            />
-        )}
-      </main>
-    </>
+        <div className="space-y-4">
+            {companies.map(company => (
+                 <div key={company.id} className="bg-slate-50 p-4 rounded-lg border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-2">
+                    <div className="flex items-center gap-4">
+                        {company.logo && <img src={company.logo} alt="logo" className="w-12 h-12 object-contain bg-white rounded-md p-1 border flex-shrink-0" />}
+                        <div>
+                            <p className="font-bold text-slate-800">{company.details.name}</p>
+                            <p className="text-sm text-slate-500 break-all">{company.details.email}</p>
+                        </div>
+                    </div>
+                    <div className="flex gap-2 items-center self-end sm:self-center flex-shrink-0">
+                        <div className="w-6 h-6 rounded-full border" style={{backgroundColor: company.accentColor}}></div>
+                        <span className="text-sm capitalize text-slate-600 font-medium">{company.template}</span>
+                        <div className="w-px h-5 bg-slate-200 mx-1"></div>
+                        <button onClick={() => handleEdit(company)} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-50">Edit</button>
+                        <button onClick={() => handleDelete(company.id)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-50">Delete</button>
+                    </div>
+                </div>
+            ))}
+        </div>
+        
+        <div className="mt-8 pt-6 border-t">
+          <div className="mb-8">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Data Management</h2>
+            <p className="text-slate-600 mb-4">Save all your company profiles, clients, items, invoices, and quotations to a file on your computer for backup. You can restore from this file later.</p>
+            <div className="flex flex-col sm:flex-row gap-4">
+              <button onClick={handleExportData} className="flex-1 flex items-center justify-center gap-2 bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-700">
+                <DownloadIcon /> Export All Data
+              </button>
+              <button onClick={handleImportClick} className="flex-1 flex items-center justify-center gap-2 bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-700">
+                <UploadIcon /> Import Data
+              </button>
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                accept=".json"
+                className="hidden"
+              />
+            </div>
+          </div>
+          <div className="text-right">
+            <button onClick={onDone} className="bg-slate-500 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-slate-600 transition-colors duration-200">
+                Done
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {isFormOpen && editingCompany && (
+        <CompanyForm 
+            company={editingCompany}
+            onSave={handleFormSave}
+            onCancel={handleFormCancel}
+        />
+      )}
+    </main>
   );
 };
 
