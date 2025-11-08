@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { Company, Details } from '../types';
 import { PlusIcon, DownloadIcon, UploadIcon } from './Icons';
@@ -219,7 +220,7 @@ const SetupPage: React.FC<SetupPageProps> = ({
         setIsFormOpen(false);
         setEditingCompany(null);
     };
-    
+
     const handleExportData = () => {
         try {
             const date = new Date().toISOString().split('T')[0];
@@ -370,16 +371,18 @@ const SetupPage: React.FC<SetupPageProps> = ({
         </div>
         
         <div className="mt-8 pt-6 border-t">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">Data Management</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-              <div className="bg-slate-50 p-4 rounded-lg border">
-                  <h3 className="font-semibold text-slate-700 mb-2">Export Data</h3>
-                  <p className="text-sm text-slate-500 mb-3">Select the data you want to export to a JSON file.</p>
-                  <div className="flex items-center gap-2">
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Data Management</h2>
+          <p className="text-slate-500 mb-6">Backup, restore, or export your application data.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* Export Card */}
+              <div className="bg-slate-50 p-6 rounded-lg shadow-inner border flex flex-col">
+                  <h3 className="text-xl font-bold text-gray-800 mb-2">Export Data</h3>
+                  <p className="text-sm text-slate-500 mb-4 flex-grow">Download your data as a JSON file. You can export all data for a complete backup, or select a specific data type.</p>
+                  <div className="flex flex-col sm:flex-row items-center gap-2">
                       <select
                           value={exportOption}
                           onChange={e => setExportOption(e.target.value)}
-                          className="flex-grow p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                          className="w-full sm:flex-grow p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
                       >
                           <option value="all">All Data (Backup)</option>
                           <option value="companies">Company Profiles</option>
@@ -388,15 +391,33 @@ const SetupPage: React.FC<SetupPageProps> = ({
                           <option value="invoices">Invoices</option>
                           <option value="quotations">Quotations</option>
                       </select>
-                      <button onClick={handleExportData} className="flex-shrink-0 flex items-center justify-center gap-2 bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-700">
+                      <button onClick={handleExportData} className="w-full sm:w-auto flex-shrink-0 flex items-center justify-center gap-2 bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-700">
                           <DownloadIcon /> Export
                       </button>
                   </div>
               </div>
-              <div className="bg-slate-50 p-4 rounded-lg border">
-                  <h3 className="font-semibold text-slate-700 mb-2">Import Data</h3>
-                  <p className="text-sm text-slate-500 mb-3">Restore all data from a backup file. This will overwrite existing data.</p>
-                  <button onClick={handleImportClick} className="w-full flex items-center justify-center gap-2 bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-700">
+
+              {/* Import Card */}
+              <div className="bg-slate-50 p-6 rounded-lg shadow-inner border flex flex-col">
+                  <h3 className="text-xl font-bold text-gray-800 mb-2">Import Data</h3>
+                  <p className="text-sm text-slate-500 mb-4 flex-grow">Restore your application data from a backup file (`.json`).</p>
+                  
+                  <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-lg mb-4">
+                      <div className="flex">
+                          <div className="flex-shrink-0">
+                              <svg className="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 3.001-1.742 3.001H4.42c-1.53 0-2.493-1.667-1.743-3.001l5.58-9.92zM10 13a1 1 0 110-2 1 1 0 010 2zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                              </svg>
+                          </div>
+                          <div className="ml-3">
+                              <p className="text-sm text-yellow-700">
+                                  <span className="font-bold">Warning:</span> Importing a backup file will overwrite all existing data. This action cannot be undone.
+                              </p>
+                          </div>
+                      </div>
+                  </div>
+                  
+                  <button onClick={handleImportClick} className="w-full flex items-center justify-center gap-2 bg-red-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-red-700">
                       <UploadIcon /> Import From Backup
                   </button>
               </div>
@@ -408,11 +429,12 @@ const SetupPage: React.FC<SetupPageProps> = ({
               accept=".json"
               className="hidden"
           />
-          <div className="text-right">
+        </div>
+
+        <div className="mt-8 pt-6 border-t text-right">
             <button onClick={onDone} className="bg-slate-500 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-slate-600 transition-colors duration-200">
                 Done
             </button>
-          </div>
         </div>
       </div>
 

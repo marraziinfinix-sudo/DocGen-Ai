@@ -1,13 +1,8 @@
 
-
-
-
-
-
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus } from './types';
 import { generateDescription } from './services/geminiService';
-import { SparklesIcon, PlusIcon, TrashIcon, CogIcon, UsersIcon, ListIcon, DocumentIcon, MailIcon, WhatsAppIcon, FileTextIcon, DownloadIcon, MoreVerticalIcon, PrinterIcon } from './components/Icons';
+import { SparklesIcon, PlusIcon, TrashIcon, CogIcon, UsersIcon, ListIcon, DocumentIcon, MailIcon, WhatsAppIcon, FileTextIcon, DownloadIcon, MoreVerticalIcon, PrinterIcon, DatabaseIcon } from './components/Icons';
 import DocumentPreview from './components/DocumentPreview';
 import SetupPage from './components/SetupPage';
 import ClientListPage from './components/ClientListPage';
@@ -282,16 +277,16 @@ const App: React.FC = () => {
     );
   }, [items, itemSearchQuery]);
 
-  // FIX: Explicitly typed the `reduce` function's accumulator to resolve an 'unknown' type error on the `items` variable when rendering.
+  // FIX: Explicitly typing the accumulator of the reduce function with `reduce<Record<string, Item[]>>` ensures that TypeScript correctly infers the type of `acc` within the callback, and consequently the type of `groupedFilteredItems`. This resolves the issue where `items` was inferred as `unknown` during rendering.
   const groupedFilteredItems = useMemo(() => {
-    return filteredSavedItems.reduce((acc, item) => {
+    return filteredSavedItems.reduce<Record<string, Item[]>>((acc, item) => {
       const category = item.category || 'Uncategorized';
       if (!acc[category]) {
         acc[category] = [];
       }
       acc[category].push(item);
       return acc;
-    }, {} as Record<string, Item[]>);
+    }, {});
   }, [filteredSavedItems]);
 
   const handleAddFromSearch = (item: Item) => {

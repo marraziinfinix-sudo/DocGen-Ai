@@ -205,16 +205,16 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
     });
   }, [items, searchQuery, categoryFilter]);
 
-  // FIX: Explicitly typed the `reduce` function's accumulator to resolve an 'unknown' type error on the `itemsInCategory` variable when rendering.
+  // FIX: Explicitly typing the accumulator of the reduce function with `reduce<Record<string, Item[]>>` ensures that TypeScript correctly infers the type of `acc` within the callback, and consequently the type of `groupedItems`. This resolves the issue where `itemsInCategory` was inferred as `unknown` during rendering.
   const groupedItems = useMemo(() => {
-    return filteredItems.reduce((acc, item) => {
+    return filteredItems.reduce<Record<string, Item[]>>((acc, item) => {
       const category = item.category || 'Uncategorized';
       if (!acc[category]) {
         acc[category] = [];
       }
       acc[category].push(item);
       return acc;
-    }, {} as Record<string, Item[]>);
+    }, {});
   }, [filteredItems]);
 
 
@@ -386,7 +386,8 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
                             className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                             onChange={handleSelectAll}
                             checked={isAllSelected}
-                            ref={el => el && (el.indeterminate = isIndeterminate)}
+                            // FIX: Corrected the ref callback to not return a value, resolving a TypeScript type error.
+                            ref={el => { if (el) el.indeterminate = isIndeterminate; }}
                         />
                         <label className="ml-3 text-sm font-medium text-gray-600">Select All</label>
                     </div>

@@ -211,7 +211,8 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
                 className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                 onChange={handleSelectAll}
                 checked={isAllSelected}
-                ref={el => el && (el.indeterminate = isIndeterminate)}
+                // FIX: Corrected the ref callback to not return a value, resolving a TypeScript type error.
+                ref={el => { if (el) el.indeterminate = isIndeterminate; }}
               />
               <span className="font-semibold text-slate-600 uppercase text-sm text-center">Status</span>
               <span className="font-semibold text-slate-600 uppercase text-sm">Quote #</span>
