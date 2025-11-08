@@ -400,21 +400,27 @@ const SetupPage: React.FC<SetupPageProps> = ({
             <div className="mt-8 pt-6 border-t">
                 <div className="mb-8">
                     <h2 className="text-xl font-bold text-gray-800 mb-4">Local Save Location</h2>
-                    { isFileSystemApiSupported ? (
-                        <div className="bg-slate-50 p-4 rounded-lg border">
-                            {directoryName ? (
-                                <div className="flex items-center justify-between gap-4">
-                                    <p className="text-sm text-slate-700">Current save folder: <span className="font-semibold text-indigo-700">{directoryName}</span></p>
-                                    <button onClick={handleClearSaveLocation} className="text-sm font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-50 flex-shrink-0">Clear</button>
-                                </div>
-                            ) : (
-                                <>
-                                    <p className="text-slate-600 mb-2">Set a default folder to save backups directly without a "Save As" prompt.</p>
-                                    <button onClick={handleSetSaveLocation} className="flex items-center justify-center gap-2 bg-white text-slate-700 font-semibold py-2 px-4 rounded-lg shadow-sm border hover:bg-slate-100">
-                                        <FolderIcon /> Set Save Location
+                     { isFileSystemApiSupported ? (
+                        <div className="bg-slate-50 p-4 rounded-lg border space-y-3">
+                            <p className="text-slate-600 text-sm">Set a default folder to save backups directly without a "Save As" prompt.</p>
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                <p className="text-sm text-slate-700">
+                                    Current save folder: 
+                                    {directoryName ? (
+                                        <span className="font-semibold text-indigo-700 ml-1 break-all">{directoryName}</span>
+                                    ) : (
+                                        <span className="text-slate-500 ml-1">Not set (saves to Downloads)</span>
+                                    )}
+                                </p>
+                                <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-center">
+                                    <button onClick={handleSetSaveLocation} className="flex items-center justify-center gap-2 bg-white text-slate-700 font-semibold py-2 px-4 rounded-lg shadow-sm border hover:bg-slate-100 text-sm">
+                                        <FolderIcon /> {directoryName ? 'Change' : 'Set Location'}
                                     </button>
-                                </>
-                            )}
+                                    {directoryName && (
+                                        <button onClick={handleClearSaveLocation} className="text-sm font-semibold text-red-600 py-2 px-3 rounded-lg hover:bg-red-50">Clear</button>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                      ) : (
                          <div className="bg-slate-50 p-4 rounded-lg border">
