@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Company, Details } from '../types';
-import { PlusIcon, DownloadIcon, UploadIcon, ChevronDownIcon } from './Icons';
+import { Company, Details, GDriveUser } from '../types';
+import { PlusIcon, DownloadIcon, UploadIcon, ChevronDownIcon, GoogleDriveIcon } from './Icons';
+import * as driveService from '../services/googleDriveService';
 
 interface SetupPageProps {
   companies: Company[];
@@ -54,7 +55,7 @@ const CompanyForm: React.FC<{
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-30 flex justify-center items-center p-4">
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
         <div className="bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <form onSubmit={handleSubmit}>
                 <div className="p-4 sm:p-8">
@@ -145,7 +146,7 @@ const CompanyForm: React.FC<{
                     </div>
                 </div>
                 
-                 <div className="mt-8 pt-6 border-t">
+                 <div className="mt-8 pt-6 border-t p-4 sm:p-8">
                     <h3 className="text-lg font-semibold text-gray-700 mb-4">Document Design</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
@@ -185,6 +186,14 @@ const SetupPage: React.FC<SetupPageProps> = ({
     const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    // Google Drive State
+    const [gdriveStatus, setGdriveStatus] = useState<'loading' | 'ready' | 'connected' | 'error' | 'connecting'>('loading');
+    const [gdriveUser, setGdriveUser] = useState<GDriveUser | null>(null);
+    const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
+    const [isLoadModalOpen, setIsLoadModalOpen] = useState(false);
+    const [isDriveActionLoading, setIsDriveActionLoading] = useState(false);
+
+
     useEffect(() => {
         const closeMenu = () => setIsExportMenuOpen(false);
         if (isExportMenuOpen) {
@@ -192,6 +201,44 @@ const SetupPage: React.FC<SetupPageProps> = ({
         }
         return () => window.removeEventListener('click', closeMenu);
     }, [isExportMenuOpen]);
+
+    useEffect(() => {
+      async function initializeGapi() {
+        try {
+          await driveService.initClient();
+          const user = driveService.getCurrentUser();
+          if (user) {
+            setGdriveUser(user);
+            setGdriveStatus('connected');
+          } else {
+            setGdriveStatus('ready');
+          }
+        } catch (error) {
+          console.error("Error initializing Google Drive service:", error);
+          setGdriveStatus('error');
+        }
+      }
+      initializeGapi();
+    }, []);
+
+    const handleConnectDrive = async () => {
+        setGdriveStatus('connecting');
+        try {
+            const user = await driveService.signIn();
+            setGdriveUser(user);
+            setGdriveStatus('connected');
+        } catch (error) {
+            console.error('Google Drive sign-in error:', error);
+            alert('Failed to connect to Google Drive. Please try again.');
+            setGdriveStatus('ready');
+        }
+    };
+    
+    const handleDisconnectDrive = () => {
+        driveService.signOut();
+        setGdriveUser(null);
+        setGdriveStatus('ready');
+    };
 
     const handleAddNew = () => {
         setEditingCompany({ ...emptyCompany });
@@ -228,7 +275,7 @@ const SetupPage: React.FC<SetupPageProps> = ({
         setEditingCompany(null);
     };
     
-    const handleExport = (dataType: string, data: any) => {
+    const handleSaveToLocal = (dataType: string, data: any) => {
         try {
             const dataIsPresent = data && (!Array.isArray(data) || data.length > 0) && (Object.keys(data).length > 0);
             if (!dataIsPresent) {
@@ -247,178 +294,271 @@ const SetupPage: React.FC<SetupPageProps> = ({
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
-            alert(`${dataType.charAt(0).toUpperCase() + dataType.slice(1)} data exported successfully!`);
         } catch (error) {
             console.error(`Failed to export ${dataType} data:`, error);
             alert(`An error occurred while exporting ${dataType} data.`);
         } finally {
             setIsExportMenuOpen(false);
+            setIsSaveModalOpen(false);
         }
     };
 
-    const exportSingleCategory = (key: string, name: string) => {
-        const item = localStorage.getItem(key);
-        handleExport(name, item ? JSON.parse(item) : []);
-    };
+    const prepareDataForSave = (category: string) => {
+        if (category === 'all') {
+            const dataToExport: { [key: string]: any } = {};
+            const keys = ['companies', 'clients', 'items', 'savedInvoices', 'savedQuotations'];
+            keys.forEach(key => {
+                const item = localStorage.getItem(key);
+                if (item) {
+                    dataToExport[key] = JSON.parse(item);
+                }
+            });
+            return { name: 'all', data: dataToExport };
+        } else {
+            const item = localStorage.getItem(category);
+            return { name: category, data: item ? JSON.parse(item) : [] };
+        }
+    }
 
-    const exportAllData = () => {
-        const dataToExport: { [key: string]: any } = {};
-        const keys = ['companies', 'clients', 'items', 'savedInvoices', 'savedQuotations'];
-        keys.forEach(key => {
-            const item = localStorage.getItem(key);
-            if (item) {
-                dataToExport[key] = JSON.parse(item);
+    const handleSaveFlow = async (location: 'local' | 'gdrive') => {
+        setIsSaveModalOpen(false);
+        const {name, data} = prepareDataForSave('all'); // For now, only support saving all data
+        if (location === 'local') {
+            handleSaveToLocal(name, data);
+        } else {
+            setIsDriveActionLoading(true);
+            try {
+                const date = new Date().toISOString().split('T')[0];
+                const fileName = `invquo-ai-backup-${name}-${date}.json`;
+                const jsonString = JSON.stringify(data, null, 2);
+                await driveService.uploadFile(fileName, jsonString);
+                alert('Successfully saved backup to Google Drive!');
+            } catch (error) {
+                console.error('Failed to save to Google Drive', error);
+                alert('An error occurred while saving to Google Drive. Please try again.');
+            } finally {
+                setIsDriveActionLoading(false);
             }
-        });
-        handleExport('all', dataToExport);
+        }
     };
 
-    const handleImportClick = () => {
+    const handleLoadFromLocalClick = () => {
+        setIsLoadModalOpen(false);
         fileInputRef.current?.click();
+    };
+
+    const handleLoadFromDriveClick = async () => {
+        setIsLoadModalOpen(false);
+        setIsDriveActionLoading(true);
+        try {
+            const fileContent = await driveService.showPicker();
+            processImportedData(fileContent);
+        } catch (error: any) {
+             if (error?.message !== 'Picker cancelled') {
+                console.error('Error loading from Google Drive:', error);
+                alert('An error occurred while loading from Google Drive. Please check console for details.');
+             }
+        } finally {
+            setIsDriveActionLoading(false);
+        }
+    };
+
+    const processImportedData = (jsonData: string) => {
+        if (!window.confirm('This will overwrite all existing data. This action cannot be undone. Are you sure you want to proceed?')) {
+            return;
+        }
+        try {
+            const data = JSON.parse(jsonData);
+            const requiredKeys = ['companies', 'clients', 'items', 'savedInvoices', 'savedQuotations'];
+            const importedKeys = Object.keys(data);
+            
+            const isFullBackup = requiredKeys.every(key => importedKeys.includes(key));
+            const isPartialBackup = requiredKeys.some(key => importedKeys.includes(key) && Array.isArray(data[key]));
+
+            if (!isFullBackup && !isPartialBackup) {
+                alert('Invalid backup file. The file does not appear to contain valid data.');
+                return;
+            }
+            
+            requiredKeys.forEach(key => {
+                if (data[key]) {
+                    localStorage.setItem(key, JSON.stringify(data[key]));
+                } else if (isFullBackup) {
+                    localStorage.removeItem(key);
+                }
+            });
+
+            alert('Data imported successfully! The application will now reload.');
+            window.location.reload();
+        } catch (error) {
+            console.error('Failed to process imported data:', error);
+            alert('An error occurred while importing data. The file might be corrupted or in the wrong format.');
+        } finally {
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
+        }
     };
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
-
-        if (!window.confirm('This will overwrite all existing data. This action cannot be undone. Are you sure you want to proceed?')) {
-            if (fileInputRef.current) {
-                fileInputRef.current.value = '';
-            }
-            return;
-        }
-
         const reader = new FileReader();
         reader.onload = (e) => {
-            try {
-                const text = e.target?.result as string;
-                const data = JSON.parse(text);
-                
-                const requiredKeys = ['companies', 'clients', 'items', 'savedInvoices', 'savedQuotations'];
-                const importedKeys = Object.keys(data);
-                
-                const isFullBackup = requiredKeys.every(key => importedKeys.includes(key));
-                const isPartialBackup = requiredKeys.some(key => importedKeys.includes(key) && Array.isArray(data[key]));
-
-                if (!isFullBackup && !isPartialBackup) {
-                    alert('Invalid backup file. The file does not appear to contain valid data.');
-                    return;
-                }
-                
-                requiredKeys.forEach(key => {
-                    if (data[key]) {
-                        localStorage.setItem(key, JSON.stringify(data[key]));
-                    } else if (isFullBackup) {
-                        localStorage.removeItem(key);
-                    }
-                });
-
-                alert('Data imported successfully! The application will now reload.');
-                window.location.reload();
-            } catch (error) {
-                console.error('Failed to import data:', error);
-                alert('An error occurred while importing data. The file might be corrupted or in the wrong format.');
-            } finally {
-                if (fileInputRef.current) {
-                    fileInputRef.current.value = '';
-                }
-            }
+            const text = e.target?.result as string;
+            processImportedData(text);
         };
         reader.readAsText(file);
     };
 
   return (
-    <main className="container mx-auto p-4 sm:p-6 lg:p-8">
-      <div className="max-w-4xl mx-auto bg-white p-4 sm:p-8 rounded-lg shadow-md">
-        <div className="flex justify-between items-center mb-6 border-b pb-4">
-            <h2 className="text-2xl font-bold text-gray-800">Company Profiles</h2>
-            <button onClick={handleAddNew} className="flex items-center gap-2 bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700">
-                <PlusIcon /> <span className="hidden sm:inline">Add New</span>
-            </button>
-        </div>
+    <>
+      <main className="container mx-auto p-4 sm:p-6 lg:p-8">
+        <div className="max-w-4xl mx-auto bg-white p-4 sm:p-8 rounded-lg shadow-md">
+            <div className="flex justify-between items-center mb-6 border-b pb-4">
+                <h2 className="text-2xl font-bold text-gray-800">Company Profiles</h2>
+                <button onClick={handleAddNew} className="flex items-center gap-2 bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700">
+                    <PlusIcon /> <span className="hidden sm:inline">Add New</span>
+                </button>
+            </div>
 
-        <div className="space-y-4">
-            {companies.map(company => (
-                 <div key={company.id} className="bg-slate-50 p-4 rounded-lg border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-2">
-                    <div className="flex items-center gap-4">
-                        {company.logo && <img src={company.logo} alt="logo" className="w-12 h-12 object-contain bg-white rounded-md p-1 border flex-shrink-0" />}
-                        <div>
-                            <p className="font-bold text-slate-800">{company.details.name}</p>
-                            <p className="text-sm text-slate-500 break-all">{company.details.email}</p>
-                        </div>
-                    </div>
-                    <div className="flex gap-2 items-center self-end sm:self-center flex-shrink-0">
-                        <div className="w-6 h-6 rounded-full border" style={{backgroundColor: company.accentColor}}></div>
-                        <span className="text-sm capitalize text-slate-600 font-medium">{company.template}</span>
-                        <div className="w-px h-5 bg-slate-200 mx-1"></div>
-                        <button onClick={() => handleEdit(company)} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-50">Edit</button>
-                        <button onClick={() => handleDelete(company.id)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-50">Delete</button>
-                    </div>
-                </div>
-            ))}
-        </div>
-        
-        <div className="mt-8 pt-6 border-t">
-          <div className="mb-8">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">Data Management</h2>
-            <p className="text-slate-600 mb-4">Save all your company profiles, clients, items, invoices, and quotations to a file on your computer for backup. You can restore from this file later.</p>
-            <div className="flex flex-col sm:flex-row gap-4">
-               <div className="relative inline-block text-left w-full sm:w-auto">
-                    <div>
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                setIsExportMenuOpen(prev => !prev);
-                            }}
-                            type="button"
-                            className="flex-1 w-full flex items-center justify-center gap-2 bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-700"
-                        >
-                            <DownloadIcon /> Export Data <ChevronDownIcon />
-                        </button>
-                    </div>
-                    {isExportMenuOpen && (
-                        <div className="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10" role="menu">
-                            <div className="py-1">
-                                <a href="#" onClick={(e) => { e.preventDefault(); exportAllData(); }} className="text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100" role="menuitem">Export All Data</a>
-                                <div className="border-t my-1"></div>
-                                <a href="#" onClick={(e) => { e.preventDefault(); exportSingleCategory('companies', 'companies'); }} className="text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100" role="menuitem">Export Companies</a>
-                                <a href="#" onClick={(e) => { e.preventDefault(); exportSingleCategory('clients', 'clients'); }} className="text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100" role="menuitem">Export Clients</a>
-                                <a href="#" onClick={(e) => { e.preventDefault(); exportSingleCategory('items', 'items'); }} className="text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100" role="menuitem">Export Items</a>
-                                <a href="#" onClick={(e) => { e.preventDefault(); exportSingleCategory('savedInvoices', 'invoices'); }} className="text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100" role="menuitem">Export Invoices</a>
-                                <a href="#" onClick={(e) => { e.preventDefault(); exportSingleCategory('savedQuotations', 'quotations'); }} className="text-gray-700 block px-4 py-2 text-sm hover:bg-gray-100" role="menuitem">Export Quotations</a>
+            <div className="space-y-4">
+                {companies.map(company => (
+                    <div key={company.id} className="bg-slate-50 p-4 rounded-lg border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-2">
+                        <div className="flex items-center gap-4">
+                            {company.logo && <img src={company.logo} alt="logo" className="w-12 h-12 object-contain bg-white rounded-md p-1 border flex-shrink-0" />}
+                            <div>
+                                <p className="font-bold text-slate-800">{company.details.name}</p>
+                                <p className="text-sm text-slate-500 break-all">{company.details.email}</p>
                             </div>
                         </div>
-                    )}
+                        <div className="flex gap-2 items-center self-end sm:self-center flex-shrink-0">
+                            <div className="w-6 h-6 rounded-full border" style={{backgroundColor: company.accentColor}}></div>
+                            <span className="text-sm capitalize text-slate-600 font-medium">{company.template}</span>
+                            <div className="w-px h-5 bg-slate-200 mx-1"></div>
+                            <button onClick={() => handleEdit(company)} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-50">Edit</button>
+                            <button onClick={() => handleDelete(company.id)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-50">Delete</button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+            
+            <div className="mt-8 pt-6 border-t">
+                {/* Google Drive Integration */}
+                <div className="mb-8">
+                    <h2 className="text-xl font-bold text-gray-800 mb-4">Google Drive Integration</h2>
+                    <div className="bg-slate-50 p-4 rounded-lg border">
+                        {gdriveStatus === 'loading' && <p className="text-slate-600">Initializing...</p>}
+                        {gdriveStatus === 'error' && <p className="text-red-600">Could not connect to Google services. Please check your network or browser settings.</p>}
+                        {gdriveStatus === 'ready' && (
+                            <button onClick={handleConnectDrive} className="flex items-center justify-center gap-2 bg-white text-slate-700 font-semibold py-2 px-4 rounded-lg shadow-sm border hover:bg-slate-100">
+                                <GoogleDriveIcon /> Connect to Google Drive
+                            </button>
+                        )}
+                        {gdriveStatus === 'connecting' && <p className="text-slate-600">Connecting to Google Drive...</p>}
+                        {gdriveStatus === 'connected' && gdriveUser && (
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <img src={gdriveUser.picture} alt="User" className="w-10 h-10 rounded-full"/>
+                                    <div>
+                                        <p className="font-semibold text-slate-800">{gdriveUser.name}</p>
+                                        <p className="text-sm text-slate-500">{gdriveUser.email}</p>
+                                    </div>
+                                </div>
+                                <button onClick={handleDisconnectDrive} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-50">Disconnect</button>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
-              <button onClick={handleImportClick} className="flex-1 flex items-center justify-center gap-2 bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-700">
-                <UploadIcon /> Import Data
-              </button>
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                accept=".json"
-                className="hidden"
-              />
+                <div className="mb-8">
+                    <h2 className="text-xl font-bold text-gray-800 mb-4">Data Management</h2>
+                    <p className="text-slate-600 mb-4">Save all your data to a file for backup. You can restore from this file on any device.</p>
+                    <div className="flex flex-col sm:flex-row gap-4">
+                        <button onClick={() => setIsSaveModalOpen(true)} className="flex-1 flex items-center justify-center gap-2 bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-700">
+                            <DownloadIcon /> Save Data Backup
+                        </button>
+                        <button onClick={() => setIsLoadModalOpen(true)} className="flex-1 flex items-center justify-center gap-2 bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-700">
+                            <UploadIcon /> Load Data Backup
+                        </button>
+                        <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" className="hidden"/>
+                    </div>
+                </div>
+                <div className="text-right">
+                    <button onClick={onDone} className="bg-slate-500 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-slate-600 transition-colors duration-200">
+                        Done
+                    </button>
+                </div>
             </div>
-          </div>
-          <div className="text-right">
-            <button onClick={onDone} className="bg-slate-500 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-slate-600 transition-colors duration-200">
-                Done
-            </button>
-          </div>
         </div>
-      </div>
 
-      {isFormOpen && editingCompany && (
-        <CompanyForm 
-            company={editingCompany}
-            onSave={handleFormSave}
-            onCancel={handleFormCancel}
-        />
-      )}
-    </main>
+        {isFormOpen && editingCompany && (
+            <CompanyForm 
+                company={editingCompany}
+                onSave={handleFormSave}
+                onCancel={handleFormCancel}
+            />
+        )}
+      </main>
+
+        {/* Save Modal */}
+        {isSaveModalOpen && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex justify-center items-center p-4">
+                <div className="bg-white rounded-lg shadow-2xl max-w-md w-full">
+                    <div className="p-6">
+                        <h3 className="text-lg font-bold text-gray-800 mb-4">Save Backup To...</h3>
+                        <div className="space-y-4">
+                           <button onClick={() => handleSaveFlow('local')} className="w-full flex items-center justify-center gap-2 bg-slate-600 text-white font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-slate-700">
+                                <DownloadIcon/> Local Computer
+                           </button>
+                           <button onClick={() => handleSaveFlow('gdrive')} disabled={gdriveStatus !== 'connected'} className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-blue-700 disabled:bg-slate-400 disabled:cursor-not-allowed">
+                                <GoogleDriveIcon/> Google Drive
+                           </button>
+                        </div>
+                    </div>
+                    <div className="bg-slate-50 p-4 flex justify-end gap-4 border-t">
+                        <button type="button" onClick={() => setIsSaveModalOpen(false)} className="bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* Load Modal */}
+        {isLoadModalOpen && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex justify-center items-center p-4">
+                <div className="bg-white rounded-lg shadow-2xl max-w-md w-full">
+                    <div className="p-6">
+                        <h3 className="text-lg font-bold text-gray-800 mb-4">Load Backup From...</h3>
+                        <p className="text-sm text-slate-500 mb-4">Warning: Loading a backup will overwrite all current data.</p>
+                        <div className="space-y-4">
+                           <button onClick={handleLoadFromLocalClick} className="w-full flex items-center justify-center gap-2 bg-slate-600 text-white font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-slate-700">
+                                <UploadIcon/> Local Computer
+                           </button>
+                           <button onClick={handleLoadFromDriveClick} disabled={gdriveStatus !== 'connected'} className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-blue-700 disabled:bg-slate-400 disabled:cursor-not-allowed">
+                                <GoogleDriveIcon/> Google Drive
+                           </button>
+                        </div>
+                    </div>
+                    <div className="bg-slate-50 p-4 flex justify-end gap-4 border-t">
+                        <button type="button" onClick={() => setIsLoadModalOpen(false)} className="bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        )}
+        
+        {/* Drive Action Loading Overlay */}
+        {isDriveActionLoading && (
+            <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4 text-white">
+                <div className="flex flex-col items-center gap-4">
+                    <svg className="animate-spin h-8 w-8" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <p className="text-lg font-semibold">Processing with Google Drive...</p>
+                </div>
+            </div>
+        )}
+    </>
   );
 };
 

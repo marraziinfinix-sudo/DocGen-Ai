@@ -1,6 +1,7 @@
 
 
 
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Item } from '../types';
 import { TrashIcon, PlusIcon } from './Icons';
@@ -209,14 +210,14 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
   const groupedItems = useMemo(() => {
     // FIX: Explicitly typed the `reduce` function's accumulator. This ensures TypeScript correctly infers the return type as `Record<string, Item[]>`,
     // which resolves an error where the `itemsInCategory` array in the component's render method was being typed as `unknown`.
-    return filteredItems.reduce((acc, item) => {
+    return filteredItems.reduce<Record<string, Item[]>>((acc, item) => {
       const category = item.category || 'Uncategorized';
       if (!acc[category]) {
         acc[category] = [];
       }
       acc[category].push(item);
       return acc;
-    }, {} as Record<string, Item[]>);
+    }, {});
   }, [filteredItems]);
 
 

@@ -118,3 +118,11 @@ export const ChevronDownIcon: React.FC = () => (
         <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
     </svg>
 );
+
+export const GoogleDriveIcon: React.FC = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M19.1 5.3H5.3L12.2 17.7L19.1 5.3Z" fill="#3777e3"></path>
+    <path d="M22.5 14.2L15.6 1.8H8.7L15.6 14.2H22.5Z" fill="#ffcf63"></path>
+    <path d="M4.9 14.8L8.3 8.8L1.5 8.8C1.1 9.5 0.9 10.3 0.9 11.2C0.9 12.1 1.1 12.9 1.5 13.6L4.9 14.8Z" fill="#11a861"></path>
+  </svg>
+);

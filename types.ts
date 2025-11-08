@@ -90,3 +90,9 @@ export interface SavedDocument {
   template: string;
   accentColor: string;
 }
+
+export interface GDriveUser {
+  name: string;
+  email: string;
+  picture: string;
+}
