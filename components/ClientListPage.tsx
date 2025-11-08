@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Client } from '../types';
 import { TrashIcon } from './Icons';
 
@@ -20,11 +20,23 @@ const ClientListPage: React.FC<ClientListPageProps> = ({ clients, setClients, on
   const [formState, setFormState] = useState(emptyFormState);
   const [isEditing, setIsEditing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [searchQuery, setSearchQuery] = useState('');
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormState(prev => ({ ...prev, [name]: value }));
   };
+
+  const filteredClients = useMemo(() => {
+    if (!searchQuery) {
+        return clients;
+    }
+    const lowercasedQuery = searchQuery.toLowerCase();
+    return clients.filter(client =>
+        client.name.toLowerCase().includes(lowercasedQuery) ||
+        client.email.toLowerCase().includes(lowercasedQuery)
+    );
+  }, [clients, searchQuery]);
 
   const handleSaveClient = () => {
     if (!formState.name) return;
@@ -69,7 +81,7 @@ const ClientListPage: React.FC<ClientListPageProps> = ({ clients, setClients, on
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
-      setSelectedIds(new Set(clients.map(c => c.id)));
+      setSelectedIds(new Set(filteredClients.map(c => c.id)));
     } else {
       setSelectedIds(new Set());
     }
@@ -83,8 +95,8 @@ const ClientListPage: React.FC<ClientListPageProps> = ({ clients, setClients, on
     }
   };
 
-  const isAllSelected = clients.length > 0 && selectedIds.size === clients.length;
-  const isIndeterminate = selectedIds.size > 0 && selectedIds.size < clients.length;
+  const isAllSelected = filteredClients.length > 0 && selectedIds.size === filteredClients.length;
+  const isIndeterminate = selectedIds.size > 0 && selectedIds.size < filteredClients.length;
 
   return (
     <main className="container mx-auto p-4 sm:p-6 lg:p-8">
@@ -121,42 +133,59 @@ const ClientListPage: React.FC<ClientListPageProps> = ({ clients, setClients, on
 
         <div>
             <h3 className="text-lg font-semibold text-gray-700 mb-4">Saved Clients</h3>
-             {clients.length > 0 && (
-                <div className="flex items-center p-2 rounded-t-lg bg-slate-50 border-b">
-                    <input 
-                        type="checkbox"
-                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                        onChange={handleSelectAll}
-                        checked={isAllSelected}
-                        ref={el => el && (el.indeterminate = isIndeterminate)}
-                    />
-                    <label className="ml-3 text-sm font-medium text-gray-600">Select All</label>
-                </div>
-            )}
-            <div className="space-y-3">
-                {clients.length > 0 ? clients.map(client => (
-                    <div key={client.id} className={`p-4 border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-2 ${selectedIds.has(client.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-white'}`}>
-                        <div className="flex items-start w-full sm:w-auto">
-                            <input
-                              type="checkbox"
-                              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mt-1"
-                              checked={selectedIds.has(client.id)}
-                              onChange={() => handleSelect(client.id)}
-                            />
-                            <div className="ml-4">
-                                <p className="font-bold text-slate-800">{client.name}</p>
-                                <p className="text-sm text-slate-500 break-words">{client.email} &bull; {client.phone}</p>
-                            </div>
-                        </div>
-                        <div className="flex gap-2 self-end sm:self-center flex-shrink-0">
-                            <button onClick={() => handleEditClient(client)} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-100">Edit</button>
-                            <button onClick={() => handleDeleteClient(client.id)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-100">Delete</button>
-                        </div>
-                    </div>
-                )) : (
-                    <p className="text-slate-500 text-center py-4 bg-slate-50 rounded-lg">No clients saved yet.</p>
-                )}
+            <div className="mb-4">
+                <input
+                    type="text"
+                    placeholder="Search clients by name or email..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    aria-label="Search clients"
+                />
             </div>
+             {clients.length > 0 && (
+                <>
+                    <div className="flex items-center p-2 rounded-t-lg bg-slate-50 border-b">
+                        <input 
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                            onChange={handleSelectAll}
+                            checked={isAllSelected}
+                            ref={el => el && (el.indeterminate = isIndeterminate)}
+                            aria-label="Select all clients"
+                        />
+                        <label className="ml-3 text-sm font-medium text-gray-600">Select All</label>
+                    </div>
+                    <div className="space-y-3">
+                        {filteredClients.length > 0 ? filteredClients.map(client => (
+                            <div key={client.id} className={`p-4 border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-2 ${selectedIds.has(client.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-white'}`}>
+                                <div className="flex items-start w-full sm:w-auto">
+                                    <input
+                                      type="checkbox"
+                                      className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mt-1"
+                                      checked={selectedIds.has(client.id)}
+                                      onChange={() => handleSelect(client.id)}
+                                      aria-labelledby={`client-name-${client.id}`}
+                                    />
+                                    <div className="ml-4">
+                                        <p id={`client-name-${client.id}`} className="font-bold text-slate-800">{client.name}</p>
+                                        <p className="text-sm text-slate-500 break-words">{client.email} &bull; {client.phone}</p>
+                                    </div>
+                                </div>
+                                <div className="flex gap-2 self-end sm:self-center flex-shrink-0">
+                                    <button onClick={() => handleEditClient(client)} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-100">Edit</button>
+                                    <button onClick={() => handleDeleteClient(client.id)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-100">Delete</button>
+                                </div>
+                            </div>
+                        )) : (
+                             <p className="text-slate-500 text-center py-4 bg-slate-50 rounded-lg">No clients match your search.</p>
+                        )}
+                    </div>
+                </>
+            )}
+            {clients.length === 0 && (
+                <p className="text-slate-500 text-center py-4 bg-slate-50 rounded-lg">No clients saved yet.</p>
+            )}
         </div>
       </div>
     </main>

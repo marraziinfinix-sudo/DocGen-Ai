@@ -587,6 +587,26 @@ const App: React.FC = () => {
       window.open(url, '_blank');
     }
   };
+
+  const handleSendQuotationReminder = (doc: SavedDocument, channel: 'email' | 'whatsapp') => {
+    const reminderMessage = `Dear ${doc.clientDetails.name},\n\nThis is a friendly reminder that quotation #${doc.documentNumber} for ${formatCurrency(doc.total)} is valid until ${new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}.\n\nPlease let us know if you have any questions or would like to proceed.\n\nBest regards,\n${doc.companyDetails.name}`;
+    
+    if (channel === 'email') {
+      const subject = `Reminder: Quotation #${doc.documentNumber} from ${doc.companyDetails.name}`;
+      window.location.href = `mailto:${doc.clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(reminderMessage)}`;
+    } else {
+      if (!doc.clientDetails.phone || doc.clientDetails.phone.trim() === '') {
+        alert(`Please add a phone number for '${doc.clientDetails.name}' to send a WhatsApp reminder.`);
+        return;
+      }
+      const phoneNumber = doc.clientDetails.phone.replace(/\D/g, '');
+
+      const whatsappMessage = `*Quotation Reminder*\n\nDear ${doc.clientDetails.name},\n\nThis is a friendly reminder that quotation #${doc.documentNumber} for *${formatCurrency(doc.total)}* is valid until *${new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}*.\n\nPlease let us know if you have any questions.\n\nBest regards,\n*${doc.companyDetails.name}*`;
+
+      const url = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(whatsappMessage)}`;
+      window.open(url, '_blank');
+    }
+  };
   
   const handleCreateInvoiceFromQuote = (quotation: SavedDocument) => {
     if (!window.confirm(`Create an invoice from quotation #${quotation.documentNumber}? This will be saved immediately.`)) {
@@ -998,7 +1018,7 @@ const App: React.FC = () => {
         {currentView === 'clients' && <ClientListPage clients={clients} setClients={setClients} onDone={() => setCurrentView('editor')} />}
         {currentView === 'items' && <ItemListPage items={items} setItems={setItems} formatCurrency={formatCurrency} onDone={() => setCurrentView('editor')} />}
         {currentView === 'invoices' && <DocumentListPage documents={savedInvoices} setDocuments={setSavedInvoices} formatCurrency={formatCurrency} handleSendReminder={handleSendReminder} handleLoadDocument={handleLoadDocument} />}
-        {currentView === 'quotations' && <QuotationListPage documents={savedQuotations} setDocuments={setSavedQuotations} formatCurrency={formatCurrency} handleCreateInvoiceFromQuote={handleCreateInvoiceFromQuote} handleLoadDocument={handleLoadDocument} />}
+        {currentView === 'quotations' && <QuotationListPage documents={savedQuotations} setDocuments={setSavedQuotations} formatCurrency={formatCurrency} handleCreateInvoiceFromQuote={handleCreateInvoiceFromQuote} handleLoadDocument={handleLoadDocument} handleSendQuotationReminder={handleSendQuotationReminder} />}
       </main>
     </div>
   );

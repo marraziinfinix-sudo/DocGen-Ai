@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { SavedDocument, QuotationStatus } from '../types';
-import { DocumentIcon, ViewIcon, TrashIcon, MoreVerticalIcon } from './Icons';
+import { DocumentIcon, ViewIcon, TrashIcon, MoreVerticalIcon, MailIcon, WhatsAppIcon } from './Icons';
 
 interface QuotationListPageProps {
   documents: SavedDocument[];
@@ -8,9 +9,10 @@ interface QuotationListPageProps {
   formatCurrency: (amount: number) => string;
   handleCreateInvoiceFromQuote: (quotation: SavedDocument) => void;
   handleLoadDocument: (doc: SavedDocument) => void;
+  handleSendQuotationReminder: (doc: SavedDocument, channel: 'email' | 'whatsapp') => void;
 }
 
-const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDocuments, formatCurrency, handleCreateInvoiceFromQuote, handleLoadDocument }) => {
+const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDocuments, formatCurrency, handleCreateInvoiceFromQuote, handleLoadDocument, handleSendQuotationReminder }) => {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [openDropdownId, setOpenDropdownId] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('All');
@@ -125,6 +127,17 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
                         <button onClick={() => { handleLoadDocument(doc); setOpenDropdownId(null); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">
                             <ViewIcon /> View Quotation
                         </button>
+                         {isActionable && (
+                            <>
+                                <div className="border-t my-1"></div>
+                                <button onClick={() => { handleSendQuotationReminder(doc, 'email'); setOpenDropdownId(null); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">
+                                    <MailIcon /> Send Email Reminder
+                                </button>
+                                <button onClick={() => { handleSendQuotationReminder(doc, 'whatsapp'); setOpenDropdownId(null); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">
+                                    <WhatsAppIcon /> Send WhatsApp Reminder
+                                </button>
+                            </>
+                         )}
                         <div className="border-t my-1"></div>
                         <button onClick={() => { handleDeleteDocument(doc.id); setOpenDropdownId(null); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50">
                             <TrashIcon /> Delete Quotation
