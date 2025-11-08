@@ -1,7 +1,5 @@
 
 
-
-
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus } from './types';
 import { generateDescription } from './services/geminiService';
@@ -303,7 +301,6 @@ const App: React.FC = () => {
   }, [items, itemSearchQuery]);
 
   const groupedFilteredItems = useMemo(() => {
-    // FIX: Correctly type the accumulator for the reduce function.
     return filteredSavedItems.reduce<Record<string, Item[]>>((acc, item) => {
       const category = item.category || 'Uncategorized';
       if (!acc[category]) {
@@ -751,7 +748,8 @@ const App: React.FC = () => {
               <div className="bg-white p-4 rounded-lg shadow-sm mb-4">
                   <label className="block text-sm font-medium text-slate-600 mb-1">Active Company Profile</label>
                   <select onChange={(e) => setActiveCompanyId(Number(e.target.value))} value={activeCompanyId} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-                    {companies.map(c => <option key={c.id} value={c.id}>{c.details.name}</option>)}
+                    {/* FIX: Add Array.isArray check before calling .map() to prevent potential runtime errors and satisfy TypeScript compiler. */}
+                    {Array.isArray(companies) && companies.map(c => <option key={c.id} value={c.id}>{c.details.name}</option>)}
                   </select>
               </div>
               {renderDetailsForm("From (Editable for this document)", companyDetails, handleDetailChange(setCompanyDetails))}

@@ -29,12 +29,10 @@ const HANDLE_KEY = 'saveDirectoryHandle';
 async function verifyPermission(handle: FileSystemDirectoryHandle) {
     const options = { mode: 'readwrite' as const };
     // Check if permission was already granted.
-    // FIX: Cast handle to `any` to access experimental File System Access API permission methods, which may not be in the default TS typings.
     if ((await (handle as any).queryPermission(options)) === 'granted') {
         return true;
     }
     // Request permission. If the user grants permission, return true.
-    // FIX: Cast handle to `any` to access experimental File System Access API permission methods, which may not be in the default TS typings.
     if ((await (handle as any).requestPermission(options)) === 'granted') {
         return true;
     }

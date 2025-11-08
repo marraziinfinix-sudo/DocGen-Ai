@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { SavedDocument, QuotationStatus } from '../types';
 import { DocumentIcon, ViewIcon, TrashIcon, MoreVerticalIcon, MailIcon, WhatsAppIcon } from './Icons';
@@ -210,9 +211,6 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
                 className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                 onChange={handleSelectAll}
                 checked={isAllSelected}
-                // FIX: The ref callback for an indeterminate checkbox should not return a value.
-                // The original implementation was an expression that implicitly returned a boolean,
-                // causing a type error. This is corrected by using a statement block.
                 ref={el => { if (el) { el.indeterminate = isIndeterminate; } }}
               />
               <span className="font-semibold text-slate-600 uppercase text-sm text-center">Status</span>

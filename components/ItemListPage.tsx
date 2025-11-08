@@ -1,7 +1,5 @@
 
 
-
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { Item } from '../types';
 import { TrashIcon, PlusIcon } from './Icons';
@@ -213,7 +211,6 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
   }, [items, searchQuery, categoryFilter]);
 
   const groupedItems = useMemo(() => {
-    // FIX: Correctly type the accumulator for the reduce function.
     return filteredItems.reduce<Record<string, Item[]>>((acc, item) => {
       const category = item.category || 'Uncategorized';
       if (!acc[category]) {
@@ -388,7 +385,8 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
                     onChange={e => setCategoryFilter(e.target.value)}
                     className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 >
-                    {categoryFilterOptions.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                    {/* FIX: Add Array.isArray check before calling .map() to prevent potential runtime errors and satisfy TypeScript compiler. */}
+                    {Array.isArray(categoryFilterOptions) && categoryFilterOptions.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                 </select>
             </div>
             {items.length === 0 ? (
