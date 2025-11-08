@@ -1,6 +1,7 @@
 
 
 
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus } from './types';
 import { generateDescription } from './services/geminiService';
@@ -280,7 +281,8 @@ const App: React.FC = () => {
   }, [items, itemSearchQuery]);
 
   const groupedFilteredItems = useMemo(() => {
-    // FIX: Explicitly typed the `reduce` function's return type. This corrects a TypeScript type inference issue where the item array was being typed as `unknown`.
+    // FIX: Explicitly typed the `reduce` function's accumulator. This ensures TypeScript correctly infers the return type as `Record<string, Item[]>`,
+    // which resolves an error where the `items` array in the component's render method was being typed as `unknown`.
     return filteredSavedItems.reduce<Record<string, Item[]>>((acc, item) => {
       const category = item.category || 'Uncategorized';
       if (!acc[category]) {

@@ -111,6 +111,49 @@ const CategoryManager: React.FC<{
     );
 };
 
+const BulkEditModal: React.FC<{
+    itemCount: number;
+    categories: string[];
+    onSave: (category: string) => void;
+    onCancel: () => void;
+}> = ({ itemCount, categories, onSave, onCancel }) => {
+    const [targetCategory, setTargetCategory] = useState('');
+
+    const handleSave = () => {
+        onSave(targetCategory.trim());
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex justify-center items-center p-4">
+            <div className="bg-white rounded-lg shadow-2xl max-w-md w-full">
+                <div className="p-6">
+                    <h3 className="text-lg font-bold text-gray-800 mb-4">Assign Category to {itemCount} items</h3>
+                    <p className="text-sm text-gray-600 mb-4">Select an existing category from the list or type a new one to create it.</p>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-600 mb-1">Category</label>
+                        <input
+                            type="text"
+                            list="category-list-bulk"
+                            placeholder="Select or type category"
+                            value={targetCategory}
+                            onChange={e => setTargetCategory(e.target.value)}
+                            className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                            autoFocus
+                        />
+                        <datalist id="category-list-bulk">
+                            {categories.map(cat => <option key={cat} value={cat} />)}
+                        </datalist>
+                    </div>
+                </div>
+                <div className="bg-slate-50 p-4 flex justify-end gap-4 border-t">
+                    <button type="button" onClick={onCancel} className="bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300">Cancel</button>
+                    <button type="button" onClick={handleSave} className="bg-indigo-600 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-indigo-700">Apply</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 
 const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurrency, onDone }) => {
   const [formState, setFormState] = useState(emptyFormState);
@@ -118,6 +161,7 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
+  const [isBulkEditModalOpen, setIsBulkEditModalOpen] = useState(false);
   
   const [categories, setCategories] = useState<string[]>(() => {
     try {
@@ -162,7 +206,8 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
   }, [items, searchQuery, categoryFilter]);
 
   const groupedItems = useMemo(() => {
-    // FIX: Explicitly typed the `reduce` function's return type. This corrects a TypeScript type inference issue where the item array was being typed as `unknown`.
+    // FIX: Explicitly typed the `reduce` function's accumulator. This ensures TypeScript correctly infers the return type as `Record<string, Item[]>`,
+    // which resolves an error where the `itemsInCategory` array in the component's render method was being typed as `unknown`.
     return filteredItems.reduce<Record<string, Item[]>>((acc, item) => {
       const category = item.category || 'Uncategorized';
       if (!acc[category]) {
@@ -236,6 +281,19 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
       setSelectedIds(new Set());
     }
   };
+  
+  const handleBulkAssignCategory = (newCategory: string) => {
+      setItems(prevItems => prevItems.map(item =>
+          selectedIds.has(item.id) ? { ...item, category: newCategory } : item
+      ));
+
+      if (newCategory && !categories.includes(newCategory)) {
+          setCategories(prev => [...prev, newCategory].sort());
+      }
+
+      setSelectedIds(new Set());
+      setIsBulkEditModalOpen(false);
+  };
 
   const isAllSelected = filteredItems.length > 0 && selectedIds.size === filteredItems.length;
   const isIndeterminate = selectedIds.size > 0 && selectedIds.size < filteredItems.length;
@@ -248,10 +306,16 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
         <div className="flex justify-between items-center mb-6 border-b pb-4">
           <h2 className="text-2xl font-bold text-gray-800">Manage Items</h2>
           {selectedIds.size > 0 && (
-              <button onClick={handleDeleteSelected} className="bg-red-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-red-700 flex items-center gap-2 transition-all duration-200">
-                  <TrashIcon />
-                  Delete ({selectedIds.size})
-              </button>
+            <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-slate-600">{selectedIds.size} selected</span>
+                <button onClick={() => setIsBulkEditModalOpen(true)} className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-blue-700 transition-colors">
+                    Assign Category
+                </button>
+                <button onClick={handleDeleteSelected} className="bg-red-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-red-700 flex items-center gap-2 transition-all duration-200">
+                    <TrashIcon />
+                    Delete
+                </button>
+            </div>
           )}
         </div>
         
@@ -362,6 +426,14 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
             )}
         </div>
       </div>
+       {isBulkEditModalOpen && (
+            <BulkEditModal
+                itemCount={selectedIds.size}
+                categories={categories}
+                onSave={handleBulkAssignCategory}
+                onCancel={() => setIsBulkEditModalOpen(false)}
+            />
+        )}
     </main>
   );
 };
