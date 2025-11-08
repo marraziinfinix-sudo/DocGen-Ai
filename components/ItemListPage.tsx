@@ -1,8 +1,8 @@
 
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Item } from '../types';
-import { TrashIcon } from './Icons';
+import { TrashIcon, PlusIcon } from './Icons';
 
 interface ItemListPageProps {
   items: Item[];
@@ -18,31 +18,152 @@ const emptyFormState: Omit<Item, 'id' | 'price'> & { id: number | null; price: s
   category: '',
 };
 
+
+const CategoryManager: React.FC<{
+    categories: string[],
+    setCategories: React.Dispatch<React.SetStateAction<string[]>>,
+    items: Item[],
+    setItems: React.Dispatch<React.SetStateAction<Item[]>>
+}> = ({ categories, setCategories, items, setItems }) => {
+    const [newCategory, setNewCategory] = useState('');
+    const [editingCategory, setEditingCategory] = useState<{ oldName: string; newName: string } | null>(null);
+
+    const handleAddCategory = (e: React.FormEvent) => {
+        e.preventDefault();
+        const trimmed = newCategory.trim();
+        if (trimmed && !categories.includes(trimmed)) {
+            setCategories(prev => [...prev, trimmed].sort());
+            setNewCategory('');
+        }
+    };
+
+    const handleUpdateCategory = (oldName: string) => {
+        if (!editingCategory || !editingCategory.newName.trim() || editingCategory.newName === oldName) {
+            setEditingCategory(null);
+            return;
+        }
+
+        const newName = editingCategory.newName.trim();
+        
+        if (categories.includes(newName)) {
+            alert(`Category "${newName}" already exists.`);
+            return;
+        }
+        
+        // Update category in the categories list
+        setCategories(prev => prev.map(c => c === oldName ? newName : c).sort());
+        
+        // Update items with the old category
+        setItems(prevItems => prevItems.map(item => item.category === oldName ? { ...item, category: newName } : item));
+
+        setEditingCategory(null);
+    };
+
+    const handleDeleteCategory = (categoryToDelete: string) => {
+        if (window.confirm(`Are you sure you want to delete the "${categoryToDelete}" category? Items in this category will become uncategorized.`)) {
+            // Remove category from list
+            setCategories(prev => prev.filter(c => c !== categoryToDelete));
+            
+            // Un-categorize items
+            setItems(prevItems => prevItems.map(item => item.category === categoryToDelete ? { ...item, category: '' } : item));
+        }
+    };
+
+    return (
+        <div className="bg-slate-50 p-6 rounded-lg mb-8 border border-slate-200">
+            <h3 className="text-lg font-semibold text-gray-700 mb-4">Manage Categories</h3>
+            <form onSubmit={handleAddCategory} className="flex gap-2 mb-4">
+                <input
+                    type="text"
+                    value={newCategory}
+                    onChange={e => setNewCategory(e.target.value)}
+                    placeholder="Add new category"
+                    className="flex-grow p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                />
+                <button type="submit" className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 flex items-center gap-2">
+                    <PlusIcon /> Add
+                </button>
+            </form>
+            <div className="space-y-2">
+                {categories.length > 0 ? categories.map(cat => (
+                    <div key={cat} className="flex justify-between items-center bg-white p-2 rounded border">
+                        {editingCategory?.oldName === cat ? (
+                            <input
+                                type="text"
+                                value={editingCategory.newName}
+                                onChange={e => setEditingCategory({ ...editingCategory, newName: e.target.value })}
+                                onBlur={() => handleUpdateCategory(cat)}
+                                onKeyDown={e => e.key === 'Enter' && handleUpdateCategory(cat)}
+                                autoFocus
+                                className="p-1 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-1 focus:ring-indigo-500"
+                            />
+                        ) : (
+                            <span className="text-slate-700">{cat}</span>
+                        )}
+                        <div className="flex gap-2">
+                            <button onClick={() => setEditingCategory({ oldName: cat, newName: cat })} className="font-semibold text-indigo-600 text-sm py-1 px-2 rounded-lg hover:bg-indigo-50">Edit</button>
+                            <button onClick={() => handleDeleteCategory(cat)} className="font-semibold text-red-600 text-sm py-1 px-2 rounded-lg hover:bg-red-50">Delete</button>
+                        </div>
+                    </div>
+                )) : <p className="text-slate-500 text-center text-sm py-2">No categories created yet.</p>}
+            </div>
+        </div>
+    );
+};
+
+
 const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurrency, onDone }) => {
   const [formState, setFormState] = useState(emptyFormState);
   const [isEditing, setIsEditing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
+  
+  const [categories, setCategories] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('itemCategories');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error('Failed to load categories from localStorage', e);
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    // One-time migration for users who have categories on items but not the new managed list
+    if (localStorage.getItem('itemCategories') === null) {
+        const initialCategories = Array.from(new Set(items.map(i => i.category).filter(Boolean))) as string[];
+        if (initialCategories.length > 0) {
+            setCategories(initialCategories.sort());
+        }
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('itemCategories', JSON.stringify(categories));
+    } catch (e) {
+      console.error('Failed to save categories to localStorage', e);
+    }
+  }, [categories]);
+
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormState(prev => ({ ...prev, [name]: value }));
   };
 
-  const categories = useMemo(() => ['All', ...Array.from(new Set(items.map(i => i.category).filter(Boolean))) as string[]], [items]);
-
   const filteredItems = useMemo(() => {
     return items.filter(item => {
         const matchesSearch = searchQuery ? item.description.toLowerCase().includes(searchQuery.toLowerCase()) : true;
-        const matchesCategory = categoryFilter !== 'All' ? (item.category === categoryFilter || (categoryFilter === 'Uncategorized' && !item.category)) : true;
+        const matchesCategory = categoryFilter !== 'All' ? ((item.category || 'Uncategorized') === categoryFilter) : true;
         return matchesSearch && matchesCategory;
     });
   }, [items, searchQuery, categoryFilter]);
 
   const groupedItems = useMemo(() => {
-    // FIX: Explicitly typed the accumulator in the `reduce` function. This corrects a TypeScript type inference issue where the item array was being typed as `unknown`.
-    return filteredItems.reduce((acc: Record<string, Item[]>, item) => {
+    // FIX: Explicitly typed the `reduce` function's return type. This corrects a TypeScript type inference issue where the item array was being typed as `unknown`.
+    return filteredItems.reduce<Record<string, Item[]>>((acc, item) => {
       const category = item.category || 'Uncategorized';
       if (!acc[category]) {
         acc[category] = [];
@@ -56,11 +177,16 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
   const handleSaveItem = () => {
     const price = parseFloat(formState.price);
     if (!formState.description || isNaN(price)) return;
+    
+    const newCategory = formState.category.trim();
+    if (newCategory && !categories.includes(newCategory)) {
+        setCategories(prev => [...prev, newCategory].sort());
+    }
 
     if (isEditing && formState.id) {
-      setItems(prev => prev.map(i => i.id === formState.id ? { ...formState, id: i.id, price, category: formState.category.trim() } : i));
+      setItems(prev => prev.map(i => i.id === formState.id ? { ...formState, id: i.id, price, category: newCategory } : i));
     } else {
-      setItems(prev => [{ id: Date.now(), description: formState.description, price, category: formState.category.trim() }, ...prev]);
+      setItems(prev => [{ id: Date.now(), description: formState.description.trim(), price, category: newCategory }, ...prev]);
     }
     setFormState(emptyFormState);
     setIsEditing(false);
@@ -113,6 +239,8 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
 
   const isAllSelected = filteredItems.length > 0 && selectedIds.size === filteredItems.length;
   const isIndeterminate = selectedIds.size > 0 && selectedIds.size < filteredItems.length;
+  
+  const categoryFilterOptions = useMemo(() => ['All', ...categories, 'Uncategorized'], [categories]);
 
   return (
     <main className="container mx-auto p-4 sm:p-6 lg:p-8">
@@ -126,13 +254,33 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
               </button>
           )}
         </div>
+        
+        <CategoryManager
+            categories={categories}
+            setCategories={setCategories}
+            items={items}
+            setItems={setItems}
+        />
 
         <div className="bg-slate-50 p-6 rounded-lg mb-8 border border-slate-200">
             <h3 className="text-lg font-semibold text-gray-700 mb-4">{isEditing ? 'Edit Item' : 'Add New Item'}</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <textarea name="description" placeholder="Item Description" value={formState.description} onChange={handleInputChange} rows={3} className="md:col-span-2 w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"/>
                 <input type="number" name="price" placeholder="Price" value={formState.price} onChange={handleInputChange} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"/>
-                <input type="text" name="category" placeholder="Category (optional)" value={formState.category} onChange={handleInputChange} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"/>
+                <div>
+                  <input
+                    type="text"
+                    name="category"
+                    list="category-list"
+                    placeholder="Category (optional)"
+                    value={formState.category}
+                    onChange={handleInputChange}
+                    className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                  <datalist id="category-list">
+                    {categories.map(cat => <option key={cat} value={cat} />)}
+                  </datalist>
+                </div>
             </div>
             <div className="mt-4 flex gap-4">
                 <button onClick={handleSaveItem} className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700">
@@ -162,9 +310,7 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
                     onChange={e => setCategoryFilter(e.target.value)}
                     className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 >
-                    <option value="All">All Categories</option>
-                    {categories.slice(1).map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                    <option value="Uncategorized">Uncategorized</option>
+                    {categoryFilterOptions.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                 </select>
             </div>
             {items.length === 0 ? (
@@ -183,7 +329,7 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
                     </div>
                     <div className="space-y-4">
                         {Object.keys(groupedItems).length > 0 ? (
-                          Object.entries(groupedItems).map(([category, itemsInCategory]) => (
+                          Object.entries(groupedItems).sort(([a], [b]) => a.localeCompare(b)).map(([category, itemsInCategory]) => (
                             <div key={category}>
                               <h4 className="font-bold text-sm uppercase text-slate-500 bg-slate-100 p-2 rounded-t-md mt-4">{category}</h4>
                               {itemsInCategory.map(item => (
