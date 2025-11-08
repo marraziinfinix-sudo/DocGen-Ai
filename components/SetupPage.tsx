@@ -483,7 +483,7 @@ const SetupPage: React.FC<SetupPageProps> = ({
                                         <span className="text-slate-500 ml-1">Not set (saves to Downloads)</span>
                                     )}
                                 </p>
-                                <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-center">
+                                <div className="w-full sm:w-auto flex items-center justify-end gap-2 flex-shrink-0">
                                     <button onClick={handleSetSaveLocation} className="flex items-center justify-center gap-2 bg-white text-slate-700 font-semibold py-2 px-4 rounded-lg shadow-sm border hover:bg-slate-100 text-sm">
                                         <FolderIcon /> {directoryName ? 'Change' : 'Set Location'}
                                     </button>

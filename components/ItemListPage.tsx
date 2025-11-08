@@ -1,6 +1,7 @@
 
 
 
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Item } from '../types';
 import { TrashIcon, PlusIcon } from './Icons';
@@ -212,18 +213,15 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
   }, [items, searchQuery, categoryFilter]);
 
   const groupedItems = useMemo(() => {
-    // FIX: Property 'map' does not exist on type 'unknown'.
-    // The type of the accumulator in Array.prototype.reduce was not correctly inferred.
-    // By casting the initial value `{} as Record<string, Item[]>`, we explicitly set the accumulator's type,
-    // which ensures that the values in the resulting object are correctly typed as `Item[]`.
-    return filteredItems.reduce((acc, item) => {
+    // FIX: Correctly type the accumulator for the reduce function.
+    return filteredItems.reduce<Record<string, Item[]>>((acc, item) => {
       const category = item.category || 'Uncategorized';
       if (!acc[category]) {
         acc[category] = [];
       }
       acc[category].push(item);
       return acc;
-    }, {} as Record<string, Item[]>);
+    }, {});
   }, [filteredItems]);
 
 
