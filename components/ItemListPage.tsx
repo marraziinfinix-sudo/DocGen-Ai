@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Item } from '../types';
 import { TrashIcon, PlusIcon } from './Icons';
@@ -164,20 +165,17 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
   
   const [categories, setCategories] = useState<string[]>(() => {
     try {
-      // FIX: Safely parse 'itemCategories' from localStorage. The previous implementation could cause runtime errors if the stored value was not an array.
       const saved = localStorage.getItem('itemCategories');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          // FIX: Cast parsed data to string[] to resolve type error on .map().
           return parsed as string[];
         }
       }
-      return [];
     } catch (e) {
       console.error('Failed to load categories from localStorage', e);
-      return [];
     }
+    return [];
   });
 
   useEffect(() => {

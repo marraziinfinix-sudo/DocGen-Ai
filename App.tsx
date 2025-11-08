@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus } from './types';
 import { generateDescription } from './services/geminiService';
@@ -21,10 +22,11 @@ const App: React.FC = () => {
   const [companies, setCompanies] = useState<Company[]>(() => {
     try {
       const saved = localStorage.getItem('companies');
-      const parsed = saved ? JSON.parse(saved) : null;
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        // FIX: Cast parsed data to Company[] to resolve type error on .map()
-        return parsed as Company[];
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed as Company[];
+        }
       }
     } catch (e) {
       console.error('Failed to load companies from localStorage', e);
@@ -73,38 +75,32 @@ const App: React.FC = () => {
   
   const [clients, setClients] = useState<Client[]>(() => {
     try {
-      // FIX: Safely parse 'clients' from localStorage. The previous implementation could cause runtime errors if the stored value was not an array.
       const saved = localStorage.getItem('clients');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          // FIX: Cast parsed data to Client[] to ensure type safety.
           return parsed as Client[];
         }
       }
-      return [];
     } catch (e) {
       console.error('Failed to load clients from localStorage', e);
-      return [];
     }
+    return [];
   });
 
    const [items, setItems] = useState<Item[]>(() => {
     try {
-      // FIX: Safely parse 'items' from localStorage.
       const saved = localStorage.getItem('items');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          // FIX: Cast parsed data to Item[] to ensure type safety.
           return parsed as Item[];
         }
       }
-      return [];
     } catch (e) {
       console.error('Failed to load items from localStorage', e);
-      return [];
     }
+    return [];
   });
 
   const [documentNumber, setDocumentNumber] = useState('001');
@@ -125,38 +121,32 @@ const App: React.FC = () => {
 
   const [savedInvoices, setSavedInvoices] = useState<SavedDocument[]>(() => {
     try {
-      // FIX: Safely parse 'savedInvoices' from localStorage.
       const saved = localStorage.getItem('savedInvoices');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          // FIX: Cast parsed data to SavedDocument[] to ensure type safety.
           return parsed as SavedDocument[];
         }
       }
-      return [];
     } catch (e) {
       console.error('Failed to load savedInvoices from localStorage', e);
-      return [];
     }
+    return [];
   });
 
   const [savedQuotations, setSavedQuotations] = useState<SavedDocument[]>(() => {
     try {
-      // FIX: Safely parse 'savedQuotations' from localStorage.
       const saved = localStorage.getItem('savedQuotations');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          // FIX: Cast parsed data to SavedDocument[] to ensure type safety.
           return parsed as SavedDocument[];
         }
       }
-      return [];
     } catch (e) {
       console.error('Failed to load savedQuotations from localStorage', e);
-      return [];
     }
+    return [];
   });
 
   const [itemSearchQuery, setItemSearchQuery] = useState('');
@@ -311,6 +301,12 @@ const App: React.FC = () => {
   }, [items, itemSearchQuery]);
 
   const groupedFilteredItems = useMemo(() => {
+    // FIX: Property 'map' does not exist on type 'unknown'.
+// The error is likely caused by 'filteredSavedItems.reduce' if 'filteredSavedItems' is not an array.
+// Added a check to ensure 'filteredSavedItems' is an array before calling 'reduce'.
+if (!Array.isArray(filteredSavedItems)) {
+    return {};
+}
     return filteredSavedItems.reduce<Record<string, Item[]>>((acc, item) => {
       const category = item.category || 'Uncategorized';
       if (!acc[category]) {
