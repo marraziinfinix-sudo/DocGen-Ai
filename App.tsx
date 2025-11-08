@@ -1,5 +1,9 @@
 
 
+
+
+
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus } from './types';
 import { generateDescription } from './services/geminiService';
@@ -22,11 +26,9 @@ const App: React.FC = () => {
   const [companies, setCompanies] = useState<Company[]>(() => {
     try {
       const saved = localStorage.getItem('companies');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed as Company[];
-        }
+      const parsed = saved ? JSON.parse(saved) : null;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
       }
     } catch (e) {
       console.error('Failed to load companies from localStorage', e);
@@ -76,31 +78,21 @@ const App: React.FC = () => {
   const [clients, setClients] = useState<Client[]>(() => {
     try {
       const saved = localStorage.getItem('clients');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return parsed as Client[];
-        }
-      }
+      return saved ? JSON.parse(saved) : [];
     } catch (e) {
       console.error('Failed to load clients from localStorage', e);
+      return [];
     }
-    return [];
   });
 
    const [items, setItems] = useState<Item[]>(() => {
     try {
       const saved = localStorage.getItem('items');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return parsed as Item[];
-        }
-      }
+      return saved ? JSON.parse(saved) : [];
     } catch (e) {
       console.error('Failed to load items from localStorage', e);
+      return [];
     }
-    return [];
   });
 
   const [documentNumber, setDocumentNumber] = useState('001');
@@ -122,31 +114,21 @@ const App: React.FC = () => {
   const [savedInvoices, setSavedInvoices] = useState<SavedDocument[]>(() => {
     try {
       const saved = localStorage.getItem('savedInvoices');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return parsed as SavedDocument[];
-        }
-      }
+      return saved ? JSON.parse(saved) : [];
     } catch (e) {
       console.error('Failed to load savedInvoices from localStorage', e);
+      return [];
     }
-    return [];
   });
 
   const [savedQuotations, setSavedQuotations] = useState<SavedDocument[]>(() => {
     try {
       const saved = localStorage.getItem('savedQuotations');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return parsed as SavedDocument[];
-        }
-      }
+      return saved ? JSON.parse(saved) : [];
     } catch (e) {
       console.error('Failed to load savedQuotations from localStorage', e);
+      return [];
     }
-    return [];
   });
 
   const [itemSearchQuery, setItemSearchQuery] = useState('');
@@ -300,15 +282,16 @@ const App: React.FC = () => {
     );
   }, [items, itemSearchQuery]);
 
+  // FIX: Explicitly typed the `reduce` function's accumulator to resolve an 'unknown' type error on the `items` variable when rendering.
   const groupedFilteredItems = useMemo(() => {
-    return filteredSavedItems.reduce<Record<string, Item[]>>((acc, item) => {
+    return filteredSavedItems.reduce((acc, item) => {
       const category = item.category || 'Uncategorized';
       if (!acc[category]) {
         acc[category] = [];
       }
       acc[category].push(item);
       return acc;
-    }, {});
+    }, {} as Record<string, Item[]>);
   }, [filteredSavedItems]);
 
   const handleAddFromSearch = (item: Item) => {
@@ -748,8 +731,7 @@ const App: React.FC = () => {
               <div className="bg-white p-4 rounded-lg shadow-sm mb-4">
                   <label className="block text-sm font-medium text-slate-600 mb-1">Active Company Profile</label>
                   <select onChange={(e) => setActiveCompanyId(Number(e.target.value))} value={activeCompanyId} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-                    {/* Fix: Added Array.isArray check to ensure 'companies' is an array before mapping. This prevents a runtime error if localStorage data is malformed and satisfies the TypeScript compiler. */}
-                    {Array.isArray(companies) && companies.map(c => <option key={c.id} value={c.id}>{c.details.name}</option>)}
+                    {companies.map(c => <option key={c.id} value={c.id}>{c.details.name}</option>)}
                   </select>
               </div>
               {renderDetailsForm("From (Editable for this document)", companyDetails, handleDetailChange(setCompanyDetails))}

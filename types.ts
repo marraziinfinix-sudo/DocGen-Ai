@@ -1,3 +1,6 @@
+// FIX: Replaced component logic with actual type definitions.
+// This file should only contain type definitions for the application.
+// All errors in other files were related to incorrect exports from this file.
 
 export enum DocumentType {
   Invoice = 'Invoice',

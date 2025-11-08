@@ -166,16 +166,11 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
   const [categories, setCategories] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('itemCategories');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return parsed as string[];
-        }
-      }
+      return saved ? JSON.parse(saved) : [];
     } catch (e) {
       console.error('Failed to load categories from localStorage', e);
+      return [];
     }
-    return [];
   });
 
   useEffect(() => {
@@ -210,15 +205,16 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
     });
   }, [items, searchQuery, categoryFilter]);
 
+  // FIX: Explicitly typed the `reduce` function's accumulator to resolve an 'unknown' type error on the `itemsInCategory` variable when rendering.
   const groupedItems = useMemo(() => {
-    return filteredItems.reduce<Record<string, Item[]>>((acc, item) => {
+    return filteredItems.reduce((acc, item) => {
       const category = item.category || 'Uncategorized';
       if (!acc[category]) {
         acc[category] = [];
       }
       acc[category].push(item);
       return acc;
-    }, {});
+    }, {} as Record<string, Item[]>);
   }, [filteredItems]);
 
 
@@ -226,23 +222,15 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
     const price = parseFloat(formState.price);
     if (!formState.description || isNaN(price)) return;
     
-    const trimmedDescription = formState.description.trim();
     const newCategory = formState.category.trim();
-
     if (newCategory && !categories.includes(newCategory)) {
         setCategories(prev => [...prev, newCategory].sort());
     }
 
     if (isEditing && formState.id) {
-      const updatedItem: Item = {
-        id: formState.id,
-        description: trimmedDescription,
-        price: price,
-        category: newCategory,
-      };
-      setItems(prev => prev.map(i => (i.id === updatedItem.id ? updatedItem : i)));
+      setItems(prev => prev.map(i => i.id === formState.id ? { ...formState, id: i.id, price, category: newCategory } : i));
     } else {
-      setItems(prev => [{ id: Date.now(), description: trimmedDescription, price, category: newCategory }, ...prev]);
+      setItems(prev => [{ id: Date.now(), description: formState.description.trim(), price, category: newCategory }, ...prev]);
     }
     setFormState(emptyFormState);
     setIsEditing(false);
@@ -385,8 +373,7 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
                     onChange={e => setCategoryFilter(e.target.value)}
                     className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 >
-                    {/* Fix: Added Array.isArray check to ensure 'categoryFilterOptions' is an array before mapping. This prevents a runtime error and satisfies the TypeScript compiler. */}
-                    {Array.isArray(categoryFilterOptions) && categoryFilterOptions.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                    {categoryFilterOptions.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                 </select>
             </div>
             {items.length === 0 ? (
@@ -399,7 +386,7 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
                             className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                             onChange={handleSelectAll}
                             checked={isAllSelected}
-                            ref={el => { if (el) { el.indeterminate = isIndeterminate; } }}
+                            ref={el => el && (el.indeterminate = isIndeterminate)}
                         />
                         <label className="ml-3 text-sm font-medium text-gray-600">Select All</label>
                     </div>
