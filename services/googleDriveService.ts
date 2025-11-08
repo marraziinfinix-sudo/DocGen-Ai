@@ -1,185 +1,160 @@
 import { GDriveUser } from '../types';
 
-// These are loaded from the script tags in index.html
-declare var gapi: any;
-declare var google: any;
+declare const google: any;
+declare const gapi: any;
 
-// As per guidelines, API_KEY is assumed to be in the environment.
-const API_KEY = process.env.API_KEY!;
-// The Google Client ID is also required for OAuth and the Picker API.
-// It is assumed to be available in the environment.
-const CLIENT_ID = process.env.GOOGLE_CLIENT_ID!;
+const CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const API_KEY = process.env.API_KEY;
+const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
+const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 
-const DISCOVERY_DOCS = [
-    "https://www.googleapis.com/discovery/v1/apis/drive/v3/rest",
-    "https://www.googleapis.com/discovery/v1/apis/oauth2/v2/rest"
-];
-const SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile';
-
-let tokenClient: any;
+let tokenClient: any = null;
 let gapiInited = false;
 let gisInited = false;
-let currentUser: GDriveUser | null = null;
+let pickerInited = false;
 
-const gapiLoadPromise = new Promise<void>((resolve) => {
-    // gapi.load is a one-time operation.
-    gapi.load('client:picker', resolve);
-});
-
-const gisLoadPromise = new Promise<void>((resolve, reject) => {
-    // This can be a race condition, so we poll for the google object.
-    const interval = setInterval(() => {
-        // FIX: Use the globally declared `google` object instead of `window.google`
-        // to resolve TypeScript errors and maintain consistency with the rest of the file.
-        if (google && google.accounts) {
-            clearInterval(interval);
-            resolve();
-        }
-    }, 100);
-    // Timeout after 5s
-    setTimeout(() => {
-        clearInterval(interval);
-        reject(new Error("Google Identity Services failed to load."));
-    }, 5000);
-});
-
-export async function initClient(): Promise<void> {
-    await Promise.all([gapiLoadPromise, gisLoadPromise]);
-
-    await new Promise<void>((resolve, reject) => {
+export const initClient = (callback: (user: GDriveUser | null) => void) => {
+    // Load GAPI client
+    gapi.load('client:picker', () => {
         gapi.client.init({
             apiKey: API_KEY,
-            discoveryDocs: DISCOVERY_DOCS,
+            discoveryDocs: [DISCOVERY_DOC],
         }).then(() => {
             gapiInited = true;
-            resolve();
-        }).catch(reject);
+            if (gisInited) {
+                // Check for existing session
+                const token = gapi.client.getToken();
+                if (token) {
+                    fetchUserProfile(callback);
+                } else {
+                    callback(null);
+                }
+            }
+        });
+        pickerInited = true;
     });
 
+    // Load GIS client
     tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: CLIENT_ID,
         scope: SCOPES,
-        callback: '', // The callback is handled by the promise in signIn
+        callback: (tokenResponse: any) => {
+            if (tokenResponse && tokenResponse.access_token) {
+                fetchUserProfile(callback);
+            } else {
+                console.error('No access token received');
+                callback(null);
+            }
+        },
     });
     gisInited = true;
-}
+};
 
-async function getUserProfile(): Promise<GDriveUser | null> {
+const fetchUserProfile = async (callback: (user: GDriveUser | null) => void) => {
     try {
-        const response = await gapi.client.oauth2.userinfo.get();
-        if (response && response.result) {
-            currentUser = {
-                name: response.result.name,
-                email: response.result.email,
-                picture: response.result.picture,
+        const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+            headers: { Authorization: `Bearer ${gapi.client.getToken().access_token}` },
+        });
+        if (res.ok) {
+            const profile = await res.json();
+            const user: GDriveUser = {
+                name: profile.name,
+                email: profile.email,
+                picture: profile.picture,
             };
-            return currentUser;
-        }
-        return null;
-    } catch (error) {
-        console.error("Failed to get user profile:", error);
-        return null;
-    }
-}
-
-export function getCurrentUser(): GDriveUser | null {
-    return currentUser;
-}
-
-export function signIn(): Promise<GDriveUser> {
-    return new Promise((resolve, reject) => {
-        const callback = async (resp: any) => {
-            if (resp.error !== undefined) {
-                return reject(resp);
-            }
-            // Now that we have the token, get user profile
-            const user = await getUserProfile();
-            if (user) {
-                resolve(user);
-            } else {
-                reject(new Error("Could not retrieve user profile."));
-            }
-        };
-        tokenClient.callback = callback;
-
-        if (gapi.client.getToken() === null) {
-            tokenClient.requestAccessToken({ prompt: 'consent' });
+            localStorage.setItem('gdriveUser', JSON.stringify(user));
+            callback(user);
         } else {
-            tokenClient.requestAccessToken({ prompt: '' });
+            // Token might be expired, sign out
+            signOut(callback);
         }
-    });
-}
+    } catch (error) {
+        console.error('Error fetching user profile:', error);
+        callback(null);
+    }
+};
 
-export function signOut(): void {
+export const signIn = (callback: (user: GDriveUser | null) => void) => {
+    if (gapi.client.getToken() === null) {
+        tokenClient.requestAccessToken({ prompt: 'consent' });
+    } else {
+        fetchUserProfile(callback);
+    }
+};
+
+export const signOut = (callback: (user: null) => void) => {
     const token = gapi.client.getToken();
     if (token !== null) {
-        google.accounts.oauth2.revoke(token.access_token, () => {});
-        gapi.client.setToken(null);
-        currentUser = null;
+        google.accounts.oauth2.revoke(token.access_token, () => {
+            gapi.client.setToken(null);
+            localStorage.removeItem('gdriveUser');
+            callback(null);
+        });
     }
-}
+};
 
-export function uploadFile(fileName: string, fileContent: string): Promise<any> {
-    const metadata = {
-        name: fileName,
-        mimeType: 'application/json',
-    };
+export const uploadFile = async (fileName: string, data: any): Promise<boolean> => {
+    try {
+        const fileContent = JSON.stringify(data, null, 2);
+        const file = new Blob([fileContent], { type: 'application/json' });
 
-    const boundary = '-------314159265358979323846';
-    const delimiter = "\r\n--" + boundary + "\r\n";
-    const close_delim = "\r\n--" + boundary + "--";
+        const metadata = {
+            name: fileName,
+            mimeType: 'application/json',
+            parents: ['appDataFolder']
+        };
 
-    let multipartRequestBody =
-        delimiter +
-        'Content-Type: application/json\r\n\r\n' +
-        JSON.stringify(metadata) +
-        delimiter +
-        'Content-Type: application/json\r\n\r\n' +
-        fileContent +
-        close_delim;
-    
-    return gapi.client.request({
-        path: '/upload/drive/v3/files',
-        method: 'POST',
-        params: { uploadType: 'multipart' },
-        headers: {
-            'Content-Type': 'multipart/related; boundary="' + boundary + '"'
-        },
-        body: multipartRequestBody
-    });
-}
+        const form = new FormData();
+        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+        form.append('file', file);
 
-export function showPicker(): Promise<string> {
-    return new Promise((resolve, reject) => {
-        const token = gapi.client.getToken();
-        if (!token) {
-            return reject(new Error("User not authenticated"));
+        const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${gapi.client.getToken().access_token}` },
+            body: form,
+        });
+
+        return res.ok;
+    } catch (error) {
+        console.error('Error uploading file:', error);
+        return false;
+    }
+};
+
+export const showPicker = (): Promise<string | null> => {
+    return new Promise((resolve) => {
+        if (!pickerInited) {
+            console.error("Picker API not ready");
+            resolve(null);
+            return;
         }
 
         const view = new google.picker.View(google.picker.ViewId.DOCS);
-        view.setMimeTypes("application/json");
+        view.setMimeTypes('application/json');
 
         const picker = new google.picker.PickerBuilder()
             .enableFeature(google.picker.Feature.NAV_HIDDEN)
-            .setAppId(CLIENT_ID.split('-')[0]) // The App ID is the first part of the Client ID
-            .setOAuthToken(token.access_token)
+            .setAppId(CLIENT_ID?.split('-')[0] || '')
+            .setOAuthToken(gapi.client.getToken().access_token)
             .addView(view)
             .setDeveloperKey(API_KEY)
             .setCallback((data: any) => {
-                if (data[google.picker.Action.PICKED]) {
-                    const fileId = data[google.picker.Response.DOCUMENTS][0][google.picker.Document.ID];
-                    // Use Drive API to fetch the file content
+                if (data.action === google.picker.Action.PICKED) {
+                    const fileId = data.docs[0].id;
                     gapi.client.drive.files.get({
                         fileId: fileId,
                         alt: 'media'
                     }).then((res: any) => {
                         resolve(res.body);
-                    }).catch(reject);
+                    }).catch((err: any) => {
+                        console.error('Error fetching file content:', err);
+                        resolve(null);
+                    });
                 } else if (data.action === google.picker.Action.CANCEL) {
-                    reject(new Error('Picker cancelled'));
+                    resolve(null);
                 }
             })
             .build();
         picker.setVisible(true);
     });
-}
+};
