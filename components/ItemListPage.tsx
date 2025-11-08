@@ -126,7 +126,8 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
                         className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                         onChange={handleSelectAll}
                         checked={isAllSelected}
-                        ref={el => el && (el.indeterminate = isIndeterminate)}
+                        // FIX: The ref callback for setting the indeterminate property on a checkbox should not return a value.
+                        ref={el => { if (el) { el.indeterminate = isIndeterminate; } }}
                     />
                     <label className="ml-3 text-sm font-medium text-gray-600">Select All</label>
                 </div>
