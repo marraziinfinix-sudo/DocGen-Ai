@@ -205,7 +205,7 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
     });
   }, [items, searchQuery, categoryFilter]);
 
-  // FIX: Explicitly typing the accumulator of the reduce function with `reduce<Record<string, Item[]>>` ensures that TypeScript correctly infers the type of `acc` within the callback, and consequently the type of `groupedItems`. This resolves the issue where `itemsInCategory` was inferred as `unknown` during rendering.
+  // FIX: Explicitly typing the accumulator of the reduce function with `reduce<Record<string, Item[]>>` ensures that TypeScript correctly infers the type of `groupedItems`. This resolves the issue where `itemsInCategory` was inferred as `unknown` during rendering.
   const groupedItems = useMemo(() => {
     return filteredItems.reduce<Record<string, Item[]>>((acc, item) => {
       const category = item.category || 'Uncategorized';
