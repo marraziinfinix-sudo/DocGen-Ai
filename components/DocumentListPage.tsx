@@ -11,79 +11,12 @@ interface DocumentListPageProps {
   handleLoadDocument: (doc: SavedDocument) => void;
 }
 
-interface StatCardProps {
-  title: string;
-  amount: number;
-  count: number;
-  formatCurrency: (amount: number) => string;
-  color: 'green' | 'blue' | 'yellow' | 'red';
-}
-
-const StatCard: React.FC<StatCardProps> = ({ title, amount, count, formatCurrency, color }) => {
-    const colors = {
-        green: 'bg-green-50 border-green-200 text-green-800',
-        blue: 'bg-blue-50 border-blue-200 text-blue-800',
-        yellow: 'bg-yellow-50 border-yellow-200 text-yellow-800',
-        red: 'bg-red-50 border-red-200 text-red-800'
-    };
-    const titleColor = {
-        green: 'text-green-700',
-        blue: 'text-blue-700',
-        yellow: 'text-yellow-700',
-        red: 'text-red-700'
-    };
-    return (
-        <div className={`p-4 rounded-lg border ${colors[color]}`}>
-            <p className={`text-sm font-medium ${titleColor[color]}`}>{title}</p>
-            <p className="text-2xl font-bold">{formatCurrency(amount)}</p>
-            <p className="text-xs opacity-70">{count} invoice{count !== 1 ? 's' : ''}</p>
-        </div>
-    );
-};
-
 const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocuments, formatCurrency, handleSendReminder, handleLoadDocument }) => {
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<SavedDocument | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [openDropdownId, setOpenDropdownId] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState('All');
-
-  const stats = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const totals = {
-      paid: { amount: 0, count: 0 },
-      partiallyPaid: { amount: 0, count: 0 },
-      pending: { amount: 0, count: 0 },
-      overdue: { amount: 0, count: 0 },
-    };
-
-    documents.forEach(doc => {
-      const dueDate = new Date(doc.dueDate + 'T00:00:00');
-      const isOverdue = doc.status !== InvoiceStatus.Paid && dueDate < today;
-      const amountPaid = doc.payments?.reduce((sum, p) => sum + p.amount, 0) || 0;
-      const balanceDue = doc.total - amountPaid;
-
-      if (isOverdue) {
-        totals.overdue.amount += balanceDue > 0 ? balanceDue : 0;
-        totals.overdue.count++;
-      } else {
-        if (doc.status === InvoiceStatus.Paid) {
-          totals.paid.amount += doc.total;
-          totals.paid.count++;
-        } else if (doc.status === InvoiceStatus.PartiallyPaid) {
-          totals.partiallyPaid.amount += balanceDue > 0 ? balanceDue : 0;
-          totals.partiallyPaid.count++;
-        } else if (doc.status === InvoiceStatus.Pending) {
-          totals.pending.amount += doc.total;
-          totals.pending.count++;
-        }
-      }
-    });
-
-    return totals;
-  }, [documents]);
 
   const getDisplayStatusText = (doc: SavedDocument): string => {
     const today = new Date();
@@ -277,13 +210,6 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
             )}
           </div>
           
-          <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard title="Total Paid" amount={stats.paid.amount} count={stats.paid.count} formatCurrency={formatCurrency} color="green" />
-            <StatCard title="Outstanding (Partially Paid)" amount={stats.partiallyPaid.amount} count={stats.partiallyPaid.count} formatCurrency={formatCurrency} color="blue" />
-            <StatCard title="Total Pending" amount={stats.pending.amount} count={stats.pending.count} formatCurrency={formatCurrency} color="yellow" />
-            <StatCard title="Outstanding (Overdue)" amount={stats.overdue.amount} count={stats.overdue.count} formatCurrency={formatCurrency} color="red" />
-          </div>
-
           <div className="mb-4">
             {/* Mobile Filter: Dropdown */}
             <div className="sm:hidden">
@@ -332,8 +258,8 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
                   className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                   onChange={handleSelectAll}
                   checked={isAllSelected}
-                  // FIX: The ref callback for setting the indeterminate property on a checkbox should not return a value.
-                  ref={el => { if (el) { el.indeterminate = isIndeterminate; } }}
+                  // FIX: Corrected the ref callback to not return a value, resolving a TypeScript type error.
+                  ref={el => { if (el) el.indeterminate = isIndeterminate; }}
                 />
                 <span className="font-semibold text-slate-600 uppercase text-sm text-center">Status</span>
                 <span className="font-semibold text-slate-600 uppercase text-sm">Invoice #</span>

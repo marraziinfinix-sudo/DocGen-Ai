@@ -65,6 +65,7 @@ export interface Item {
   id: number;
   description: string;
   price: number;
+  category?: string;
 }
 
 export interface SavedDocument {
