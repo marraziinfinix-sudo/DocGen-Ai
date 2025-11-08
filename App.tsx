@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus } from './types';
 import { generateDescription } from './services/geminiService';
@@ -302,19 +303,17 @@ const App: React.FC = () => {
 
   const groupedFilteredItems = useMemo(() => {
     // FIX: Property 'map' does not exist on type 'unknown'.
-// The error is likely caused by 'filteredSavedItems.reduce' if 'filteredSavedItems' is not an array.
-// Added a check to ensure 'filteredSavedItems' is an array before calling 'reduce'.
-if (!Array.isArray(filteredSavedItems)) {
-    return {};
-}
-    return filteredSavedItems.reduce<Record<string, Item[]>>((acc, item) => {
+    // The type of the accumulator in Array.prototype.reduce was not correctly inferred.
+    // By casting the initial value `{} as Record<string, Item[]>`, we explicitly set the accumulator's type,
+    // which ensures that the values in the resulting object are correctly typed as `Item[]`.
+    return filteredSavedItems.reduce((acc, item) => {
       const category = item.category || 'Uncategorized';
       if (!acc[category]) {
         acc[category] = [];
       }
       acc[category].push(item);
       return acc;
-    }, {});
+    }, {} as Record<string, Item[]>);
   }, [filteredSavedItems]);
 
   const handleAddFromSearch = (item: Item) => {

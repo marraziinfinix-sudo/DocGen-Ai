@@ -210,6 +210,7 @@ const SetupPage: React.FC<SetupPageProps> = ({
     const [directoryName, setDirectoryName] = useState<string | null>(null);
 
     const isFileSystemApiSupported = 'showDirectoryPicker' in window;
+    const isInIframe = window.self !== window.top;
 
     useEffect(() => {
         const closeMenu = () => setIsExportMenuOpen(false);
@@ -220,7 +221,7 @@ const SetupPage: React.FC<SetupPageProps> = ({
     }, [isExportMenuOpen]);
 
     useEffect(() => {
-        if (!isFileSystemApiSupported) return;
+        if (!isFileSystemApiSupported || isInIframe) return;
 
         const loadHandle = async () => {
             const dbRequest = indexedDB.open(DB_NAME, 1);
@@ -248,7 +249,7 @@ const SetupPage: React.FC<SetupPageProps> = ({
             };
         };
         loadHandle();
-    }, [isFileSystemApiSupported]);
+    }, [isFileSystemApiSupported, isInIframe]);
 
     const handleAddNew = () => {
         setEditingCompany({ ...emptyCompany });
@@ -470,7 +471,7 @@ const SetupPage: React.FC<SetupPageProps> = ({
             <div className="mt-8 pt-6 border-t">
                 <div className="mb-8">
                     <h2 className="text-xl font-bold text-gray-800 mb-4">Local Save Location</h2>
-                     { isFileSystemApiSupported ? (
+                     { isFileSystemApiSupported && !isInIframe ? (
                         <div className="bg-slate-50 p-4 rounded-lg border space-y-3">
                             <p className="text-slate-600 text-sm">Set a default folder to save backups directly without a "Save As" prompt.</p>
                             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -493,9 +494,13 @@ const SetupPage: React.FC<SetupPageProps> = ({
                             </div>
                         </div>
                      ) : (
-                         <div className="bg-slate-50 p-4 rounded-lg border">
-                            <p className="text-slate-600 text-sm">Your browser doesn't support setting a default save location. Backups will be saved to your Downloads folder.</p>
-                         </div>
+                        <div className="bg-slate-50 p-4 rounded-lg border">
+                            <p className="text-slate-600 text-sm">
+                                {isInIframe
+                                    ? "Setting a default save location is disabled in this embedded view due to browser security policies. Backups will be saved to your Downloads folder."
+                                    : "Your browser doesn't support setting a default save location. Backups will be saved to your Downloads folder."}
+                            </p>
+                        </div>
                      )}
                 </div>
 
