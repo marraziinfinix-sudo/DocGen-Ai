@@ -126,7 +126,8 @@ const App: React.FC = () => {
     }
   });
 
-  const [selectedSavedItemId, setSelectedSavedItemId] = useState<string>('');
+  const [itemSearchQuery, setItemSearchQuery] = useState('');
+  const [isItemSearchOpen, setIsItemSearchOpen] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [loadedDocumentInfo, setLoadedDocumentInfo] = useState<{ id: number; status: InvoiceStatus | QuotationStatus | null; docType: DocumentType } | null>(null);
   const [isCreatingNew, setIsCreatingNew] = useState(true);
@@ -269,13 +270,17 @@ const App: React.FC = () => {
     ]);
   }, []);
 
-  const handleAddSelectedSavedItem = () => {
-    if (!selectedSavedItemId) return;
-    const selectedItem = items.find(item => item.id === parseInt(selectedSavedItemId, 10));
-    if (selectedItem) {
-        addLineItemFromSaved(selectedItem);
-        setSelectedSavedItemId(''); // Reset dropdown
-    }
+  const filteredSavedItems = useMemo(() => {
+    if (!itemSearchQuery) return [];
+    return items.filter(item =>
+      item.description.toLowerCase().includes(itemSearchQuery.toLowerCase())
+    );
+  }, [items, itemSearchQuery]);
+
+  const handleAddFromSearch = (item: Item) => {
+    addLineItemFromSaved(item);
+    setItemSearchQuery('');
+    setIsItemSearchOpen(false);
   };
 
   const removeLineItem = useCallback((id: number) => {
@@ -318,7 +323,7 @@ const App: React.FC = () => {
     setSelectedClientId('');
     setClientDetails({ name: '', address: '', email: '', phone: '' });
     setLineItems([]);
-    setSelectedSavedItemId('');
+    setItemSearchQuery('');
     setPayments([]);
     setStatus(documentType === DocumentType.Invoice ? InvoiceStatus.Pending : null);
     
@@ -828,25 +833,41 @@ const App: React.FC = () => {
           <button onClick={addLineItem} className="mt-4 flex items-center gap-2 text-indigo-600 font-semibold py-2 px-4 rounded-lg hover:bg-indigo-50 transition-colors">
             <PlusIcon/> Add Item
           </button>
-           <div className="mt-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
-              <label htmlFor="saved-item-select" className="block text-sm font-medium text-slate-600 mb-2">Add from Saved Items</label>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <select 
-                  id="saved-item-select"
-                  value={selectedSavedItemId}
-                  onChange={e => setSelectedSavedItemId(e.target.value)}
-                  className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                >
-                  <option value="" disabled>-- Select an item --</option>
-                  {items.map(item => <option key={item.id} value={item.id}>{item.description} ({formatCurrency(item.price)})</option>)}
-                </select>
-                <button 
-                  onClick={handleAddSelectedSavedItem} 
-                  disabled={!selectedSavedItemId}
-                  className="bg-indigo-100 text-indigo-700 font-semibold py-2 px-4 rounded-lg hover:bg-indigo-200 transition-colors disabled:bg-slate-100 disabled:text-slate-400"
-                >
-                  Add Item
-                </button>
+          <div className="mt-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+              <label htmlFor="saved-item-search" className="block text-sm font-medium text-slate-600 mb-2">Add from Saved Items</label>
+              <div className="relative">
+                <input
+                    id="saved-item-search"
+                    type="text"
+                    value={itemSearchQuery}
+                    onChange={e => {
+                        setItemSearchQuery(e.target.value);
+                        if (!isItemSearchOpen) setIsItemSearchOpen(true);
+                    }}
+                    onFocus={() => setIsItemSearchOpen(true)}
+                    onBlur={() => setTimeout(() => setIsItemSearchOpen(false), 200)} // Delay to allow click
+                    placeholder="Type to search for an item..."
+                    autoComplete="off"
+                    className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                />
+                {isItemSearchOpen && itemSearchQuery.length > 0 && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-slate-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                        {filteredSavedItems.length > 0 ? (
+                            filteredSavedItems.map(item => (
+                                <div
+                                    key={item.id}
+                                    onMouseDown={() => handleAddFromSearch(item)} // Use onMouseDown to trigger before onBlur
+                                    className="p-3 hover:bg-indigo-50 cursor-pointer border-b last:border-b-0"
+                                >
+                                    <p className="font-semibold text-slate-800">{item.description}</p>
+                                    <p className="text-sm text-slate-500">{formatCurrency(item.price)}</p>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="p-3 text-slate-500 text-center">No items found.</div>
+                        )}
+                    </div>
+                )}
               </div>
             </div>
         </div>

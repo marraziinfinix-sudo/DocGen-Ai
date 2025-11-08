@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+
+import React, { useState, useMemo } from 'react';
 import { Item } from '../types';
 import { TrashIcon } from './Icons';
 
@@ -19,11 +20,23 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
   const [formState, setFormState] = useState(emptyFormState);
   const [isEditing, setIsEditing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [searchQuery, setSearchQuery] = useState('');
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormState(prev => ({ ...prev, [name]: value }));
   };
+
+  const filteredItems = useMemo(() => {
+    if (!searchQuery) {
+        return items;
+    }
+    const lowercasedQuery = searchQuery.toLowerCase();
+    return items.filter(item =>
+        item.description.toLowerCase().includes(lowercasedQuery)
+    );
+  }, [items, searchQuery]);
+
 
   const handleSaveItem = () => {
     const price = parseFloat(formState.price);
@@ -69,7 +82,7 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
-      setSelectedIds(new Set(items.map(i => i.id)));
+      setSelectedIds(new Set(filteredItems.map(i => i.id)));
     } else {
       setSelectedIds(new Set());
     }
@@ -83,8 +96,8 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
     }
   };
 
-  const isAllSelected = items.length > 0 && selectedIds.size === items.length;
-  const isIndeterminate = selectedIds.size > 0 && selectedIds.size < items.length;
+  const isAllSelected = filteredItems.length > 0 && selectedIds.size === filteredItems.length;
+  const isIndeterminate = selectedIds.size > 0 && selectedIds.size < filteredItems.length;
 
   return (
     <main className="container mx-auto p-4 sm:p-6 lg:p-8">
@@ -119,42 +132,56 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
 
         <div>
             <h3 className="text-lg font-semibold text-gray-700 mb-4">Saved Items</h3>
-             {items.length > 0 && (
-                <div className="flex items-center p-2 rounded-t-lg bg-slate-50 border-b">
-                    <input 
-                        type="checkbox"
-                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                        onChange={handleSelectAll}
-                        checked={isAllSelected}
-                        ref={el => el && (el.indeterminate = isIndeterminate)}
-                    />
-                    <label className="ml-3 text-sm font-medium text-gray-600">Select All</label>
-                </div>
-            )}
-            <div className="space-y-3">
-                {items.length > 0 ? items.map(item => (
-                    <div key={item.id} className={`p-4 border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-2 ${selectedIds.has(item.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-white'}`}>
-                        <div className="flex items-start w-full sm:w-auto">
-                            <input
-                              type="checkbox"
-                              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mt-1"
-                              checked={selectedIds.has(item.id)}
-                              onChange={() => handleSelect(item.id)}
-                            />
-                            <div className="ml-4">
-                                <p className="font-bold text-slate-800">{item.description}</p>
-                                <p className="text-sm text-slate-500">{formatCurrency(item.price)}</p>
-                            </div>
-                        </div>
-                        <div className="flex gap-2 self-end sm:self-center flex-shrink-0">
-                            <button onClick={() => handleEditItem(item)} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-100">Edit</button>
-                            <button onClick={() => handleDeleteItem(item.id)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-100">Delete</button>
-                        </div>
-                    </div>
-                )) : (
-                    <p className="text-slate-500 text-center py-4 bg-slate-50 rounded-lg">No items saved yet.</p>
-                )}
+            <div className="mb-4">
+                <input
+                    type="text"
+                    placeholder="Search items by description..."
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    aria-label="Search items"
+                />
             </div>
+            {items.length === 0 ? (
+                <p className="text-slate-500 text-center py-4 bg-slate-50 rounded-lg">No items saved yet.</p>
+            ) : (
+                <>
+                    <div className="flex items-center p-2 rounded-t-lg bg-slate-50 border-b">
+                        <input 
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                            onChange={handleSelectAll}
+                            checked={isAllSelected}
+                            ref={el => el && (el.indeterminate = isIndeterminate)}
+                        />
+                        <label className="ml-3 text-sm font-medium text-gray-600">Select All</label>
+                    </div>
+                    <div className="space-y-3">
+                        {filteredItems.length > 0 ? filteredItems.map(item => (
+                            <div key={item.id} className={`p-4 border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-2 ${selectedIds.has(item.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-white'}`}>
+                                <div className="flex items-start w-full sm:w-auto">
+                                    <input
+                                      type="checkbox"
+                                      className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mt-1"
+                                      checked={selectedIds.has(item.id)}
+                                      onChange={() => handleSelect(item.id)}
+                                    />
+                                    <div className="ml-4">
+                                        <p className="font-bold text-slate-800">{item.description}</p>
+                                        <p className="text-sm text-slate-500">{formatCurrency(item.price)}</p>
+                                    </div>
+                                </div>
+                                <div className="flex gap-2 self-end sm:self-center flex-shrink-0">
+                                    <button onClick={() => handleEditItem(item)} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-100">Edit</button>
+                                    <button onClick={() => handleDeleteItem(item.id)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-100">Delete</button>
+                                </div>
+                            </div>
+                        )) : (
+                            <p className="text-slate-500 text-center py-4 bg-slate-50 rounded-lg">No items match your search.</p>
+                        )}
+                    </div>
+                </>
+            )}
         </div>
       </div>
     </main>
