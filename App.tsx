@@ -718,7 +718,10 @@ const App: React.FC = () => {
                         {/* Status text */}
                         <div className="flex items-center gap-2 min-w-0">
                             <span className="text-sm font-medium text-slate-600 truncate">
-                              {isCreatingNew ? 'Creating New Document' : `Editing ${loadedDocumentInfo?.docType} #${documentNumber}`}
+                              {isCreatingNew ? 'Creating New Document' : `Editing ${loadedDocumentInfo?.docType}`}
+                              <span className="hidden sm:inline">
+                                {!isCreatingNew && ` #${documentNumber}`}
+                              </span>
                             </span>
                         </div>
                         {/* Action buttons */}
@@ -731,6 +734,14 @@ const App: React.FC = () => {
                             </button>
                         </div>
                     </div>
+                     {/* Document Number on Mobile */}
+                    {!isCreatingNew && (
+                      <div className="sm:hidden pb-2">
+                        <span className="text-xs text-slate-500 truncate">
+                          #{documentNumber}
+                        </span>
+                      </div>
+                    )}
                 </div>
             </div>
             <main className="container mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8 p-4 sm:p-6 lg:p-8">
