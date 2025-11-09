@@ -414,7 +414,7 @@ const App: React.FC = () => {
 
   const handleSaveDocument = () => {
     if (!clientDetails.name || lineItems.length === 0) {
-      alert('Please fill in client details and add at least one line item.');
+      alert('Please fill in client details and add at least one item.');
       return;
     }
     
@@ -824,7 +824,7 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="bg-white p-6 rounded-lg shadow-md">
-                  <h2 className="text-xl font-bold text-gray-800 mb-4">Line Items</h2>
+                  <h2 className="text-xl font-bold text-gray-800 mb-4">Items</h2>
                   
                   <div className="bg-slate-50 p-4 rounded-lg border space-y-4 mb-6">
                     <h3 className="text-lg font-semibold text-gray-700">Add an Item</h3>
