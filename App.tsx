@@ -15,6 +15,72 @@ import SaveClientModal from './components/SaveClientModal';
 declare const jspdf: any;
 declare const html2canvas: any;
 
+// --- Update Client Modal Component ---
+interface UpdateClientModalProps {
+  isOpen: boolean;
+  clientInfo: { original: Client; updated: Details };
+  onConfirm: () => void;
+  onDecline: () => void;
+  onCancel: () => void;
+}
+
+const DetailChange: React.FC<{ label: string; original: string; updated: string }> = ({ label, original, updated }) => {
+    if (original === updated) return null;
+    return (
+        <div>
+            <p className="font-semibold text-slate-700">{label}</p>
+            <p className="text-sm text-slate-500">From: <span className="line-through">{original || 'N/A'}</span></p>
+            <p className="text-sm text-green-700">To: <span className="font-medium">{updated || 'N/A'}</span></p>
+        </div>
+    );
+};
+
+const UpdateClientModal: React.FC<UpdateClientModalProps> = ({ isOpen, clientInfo, onConfirm, onDecline, onCancel }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4" onClick={onCancel}>
+      <div className="bg-white rounded-lg shadow-2xl max-w-lg w-full" onClick={e => e.stopPropagation()}>
+        <div className="p-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-4">Update Client Details?</h2>
+          <p className="text-gray-600 mb-4">
+            You've changed some details for <span className="font-bold">{clientInfo.original.name}</span>. Do you want to update this client's record in your saved client list?
+          </p>
+          <div className="bg-slate-50 border rounded-md p-4 space-y-3 max-h-48 overflow-y-auto">
+            <DetailChange label="Address" original={clientInfo.original.address} updated={clientInfo.updated.address} />
+            <DetailChange label="Email" original={clientInfo.original.email} updated={clientInfo.updated.email} />
+            <DetailChange label="Phone" original={clientInfo.original.phone} updated={clientInfo.updated.phone} />
+          </div>
+        </div>
+        <div className="bg-slate-50 p-4 flex flex-col sm:flex-row justify-end gap-3 border-t">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="w-full sm:w-auto bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onDecline}
+            className="w-full sm:w-auto bg-white text-slate-700 font-semibold py-2 px-4 rounded-lg shadow-sm border hover:bg-slate-100"
+          >
+            No, Just Update Document
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="w-full sm:w-auto bg-indigo-600 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-indigo-700"
+          >
+            Yes, Update Client List
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<'editor' | 'setup' | 'clients' | 'items' | 'invoices' | 'quotations'>('editor');
   
@@ -165,6 +231,8 @@ const App: React.FC = () => {
   const [newLineItem, setNewLineItem] = useState<Omit<LineItem, 'id'>>({ description: '', quantity: 1, price: 0 });
   const [isItemDropdownOpen, setIsItemDropdownOpen] = useState(false);
   const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
+  const [isUpdateClientModalOpen, setIsUpdateClientModalOpen] = useState(false);
+  const [clientUpdateInfo, setClientUpdateInfo] = useState<{ original: Client; updated: Details } | null>(null);
 
   // --- Sync active company changes to form ---
   useEffect(() => {
@@ -357,14 +425,16 @@ const App: React.FC = () => {
         return;
     }
 
-    const allDocs = [...savedInvoices, ...savedQuotations];
-    const isDuplicate = allDocs.some(
-        doc => doc.documentNumber.trim().toLowerCase() === trimmedDocNum.toLowerCase() && doc.id !== loadedDocumentInfo?.id
-    );
+    if (isCreatingNew) {
+        const allDocs = [...savedInvoices, ...savedQuotations];
+        const isDuplicate = allDocs.some(
+            doc => doc.documentNumber.trim().toLowerCase() === trimmedDocNum.toLowerCase() && doc.id !== loadedDocumentInfo?.id
+        );
 
-    if (isDuplicate) {
-        alert(`A document (invoice or quotation) with number "${trimmedDocNum}" already exists. Please use a unique number.`);
-        return;
+        if (isDuplicate) {
+            alert(`A document (invoice or quotation) with number "${trimmedDocNum}" already exists. Please use a unique number.`);
+            return;
+        }
     }
 
     const docToSave: SavedDocument = {
@@ -377,14 +447,54 @@ const App: React.FC = () => {
       payments: documentType === DocumentType.Invoice ? payments : [],
     };
     
+    if (!isCreatingNew) { // If editing, check if client details were modified
+        const originalClient = clients.find(c => c.name.trim().toLowerCase() === clientDetails.name.trim().toLowerCase());
+        if (originalClient) {
+            const detailsHaveChanged = originalClient.address !== clientDetails.address ||
+                                     originalClient.email !== clientDetails.email ||
+                                     originalClient.phone !== clientDetails.phone;
+            if (detailsHaveChanged) {
+                setClientUpdateInfo({ original: originalClient, updated: clientDetails });
+                setPendingDoc(docToSave);
+                setIsUpdateClientModalOpen(true);
+                return; // Stop and wait for user confirmation
+            }
+        }
+    }
+
     const isExistingClient = clients.some(c => c.name.trim().toLowerCase() === clientDetails.name.trim().toLowerCase());
-    if (clientDetails.name.trim() && !isExistingClient) {
+    if (isCreatingNew && clientDetails.name.trim() && !isExistingClient) { // Only prompt for new client when creating new doc
         setPotentialNewClient(clientDetails);
         setPendingDoc(docToSave);
         setIsSaveClientModalOpen(true);
     } else {
         checkNewItemsAndSave(docToSave);
     }
+  };
+
+  const handleConfirmUpdateClient = () => {
+    if (clientUpdateInfo) {
+      setClients(prev => prev.map(c => 
+        c.id === clientUpdateInfo.original.id 
+          ? { ...c, address: clientUpdateInfo.updated.address, email: clientUpdateInfo.updated.email, phone: clientUpdateInfo.updated.phone } 
+          : c
+      ));
+    }
+    setIsUpdateClientModalOpen(false);
+    setClientUpdateInfo(null);
+    if (pendingDoc) checkNewItemsAndSave(pendingDoc);
+  };
+
+  const handleDeclineUpdateClient = () => {
+    setIsUpdateClientModalOpen(false);
+    setClientUpdateInfo(null);
+    if (pendingDoc) checkNewItemsAndSave(pendingDoc);
+  };
+
+  const handleCancelUpdateClient = () => {
+    setIsUpdateClientModalOpen(false);
+    setClientUpdateInfo(null);
+    setPendingDoc(null);
   };
 
   const handleConfirmSaveNewClient = () => {
@@ -495,7 +605,7 @@ const App: React.FC = () => {
     setDocumentNumber(newInvoiceNumber);
     
     setLoadedDocumentInfo({id: Date.now(), status: InvoiceStatus.Pending, docType: DocumentType.Invoice});
-    setIsCreatingNew(false); // It's a new invoice, but we are loading data, so fields shouldn't auto-clear. Let's treat it as an edit session of a new doc.
+    setIsCreatingNew(true); // Treat as a new document to get a new number, but based on old data.
     setCurrentView('editor');
   };
   
@@ -637,10 +747,11 @@ const App: React.FC = () => {
                             onFocus={() => setIsClientDropdownOpen(true)}
                             onBlur={() => setTimeout(() => setIsClientDropdownOpen(false), 200)}
                             placeholder="Search name, email, or phone..."
-                            className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                            className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed"
                             autoComplete="off"
+                            disabled={!isCreatingNew}
                         />
-                        {isClientDropdownOpen && (
+                        {isClientDropdownOpen && isCreatingNew && (
                             <div className="absolute z-20 w-full bg-white border border-slate-300 rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto">
                             {filteredSavedClients.length > 0 ? (
                                 filteredSavedClients.map(client => (
@@ -682,7 +793,14 @@ const App: React.FC = () => {
                   <div className="grid grid-cols-2 gap-4">
                       <div>
                           <label className="block text-sm font-medium text-gray-600 mb-1">{documentType} Number</label>
-                          <input type="text" value={documentNumber} onChange={e => setDocumentNumber(e.target.value)} placeholder="Auto-generated from client details" className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                          <input 
+                            type="text" 
+                            value={documentNumber} 
+                            onChange={e => setDocumentNumber(e.target.value)} 
+                            placeholder={isCreatingNew ? "Auto-generated from client" : ""}
+                            className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed"
+                            disabled={!isCreatingNew}
+                          />
                       </div>
                        <div>
                           <label className="block text-sm font-medium text-gray-600 mb-1">Issue Date</label>
@@ -942,6 +1060,15 @@ const App: React.FC = () => {
                 onConfirm={handleConfirmSaveNewClient}
                 onDecline={handleDeclineSaveNewClient}
                 onCancel={handleCancelSaveNewClient}
+            />
+        )}
+        {isUpdateClientModalOpen && clientUpdateInfo && (
+            <UpdateClientModal
+                isOpen={isUpdateClientModalOpen}
+                clientInfo={clientUpdateInfo}
+                onConfirm={handleConfirmUpdateClient}
+                onDecline={handleDeclineUpdateClient}
+                onCancel={handleCancelUpdateClient}
             />
         )}
     </div>
