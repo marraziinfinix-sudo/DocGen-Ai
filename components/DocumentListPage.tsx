@@ -17,6 +17,7 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [openDropdownId, setOpenDropdownId] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState('All');
+  const [clientFilter, setClientFilter] = useState('All');
 
   const getDisplayStatusText = (doc: SavedDocument): string => {
     const today = new Date();
@@ -32,14 +33,22 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
         default: return 'Pending';
     }
   };
+  
+  const uniqueClients = useMemo(() => {
+    if (!Array.isArray(documents)) return [];
+    const clientNames = documents.map(doc => doc.clientDetails.name);
+    return ['All', ...Array.from(new Set(clientNames)).sort()];
+  }, [documents]);
 
   const filteredDocuments = useMemo(() => {
     if (!Array.isArray(documents)) return [];
-    if (statusFilter === 'All') {
-        return documents;
-    }
-    return documents.filter(doc => getDisplayStatusText(doc) === statusFilter);
-  }, [documents, statusFilter]);
+    return documents.filter(doc => {
+        const status = getDisplayStatusText(doc);
+        const matchesStatus = statusFilter === 'All' || status === statusFilter;
+        const matchesClient = clientFilter === 'All' || doc.clientDetails.name === clientFilter;
+        return matchesStatus && matchesClient;
+    });
+  }, [documents, statusFilter, clientFilter]);
   
   const summary = useMemo(() => {
     const initialSummary = {
@@ -275,42 +284,58 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
             </div>
           </div>
           
-          <div className="mb-4">
-            {/* Mobile Filter: Dropdown */}
-            <div className="sm:hidden">
-              <label htmlFor="status-filter" className="block text-sm font-medium text-slate-600 mb-1">
-                Filter by status:
-              </label>
-              <select
-                id="status-filter"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              >
-                {filterOptions.map(option => (
-                  <option key={option} value={option}>{option}</option>
-                ))}
-              </select>
-            </div>
+          <div className="flex flex-col sm:flex-row gap-4 mb-4">
+            <div className="flex-grow">
+                {/* Mobile Filter: Dropdown */}
+                <div className="sm:hidden">
+                <label htmlFor="status-filter" className="block text-sm font-medium text-slate-600 mb-1">
+                    Filter by status:
+                </label>
+                <select
+                    id="status-filter"
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                >
+                    {filterOptions.map(option => (
+                    <option key={option} value={option}>{option}</option>
+                    ))}
+                </select>
+                </div>
 
-            {/* Desktop Filter: Buttons */}
-            <div className="hidden sm:flex flex-wrap items-center gap-2">
-              <span className="text-sm font-medium text-slate-600">Filter by status:</span>
-              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
-                  {filterOptions.map(option => (
-                      <button
-                          key={option}
-                          onClick={() => setStatusFilter(option)}
-                          className={`px-3 py-1 text-sm font-semibold rounded-md transition-colors ${
-                              statusFilter === option
-                                  ? 'bg-white text-indigo-700 shadow'
-                                  : 'text-slate-600 hover:bg-slate-200'
-                          }`}
-                      >
-                          {option}
-                      </button>
-                  ))}
-              </div>
+                {/* Desktop Filter: Buttons */}
+                <div className="hidden sm:flex flex-wrap items-center gap-2">
+                <span className="text-sm font-medium text-slate-600">Filter by status:</span>
+                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
+                    {filterOptions.map(option => (
+                        <button
+                            key={option}
+                            onClick={() => setStatusFilter(option)}
+                            className={`px-3 py-1 text-sm font-semibold rounded-md transition-colors ${
+                                statusFilter === option
+                                    ? 'bg-white text-indigo-700 shadow'
+                                    : 'text-slate-600 hover:bg-slate-200'
+                            }`}
+                        >
+                            {option}
+                        </button>
+                    ))}
+                </div>
+                </div>
+            </div>
+            <div className="flex-shrink-0">
+                <label htmlFor="client-filter" className="block text-sm font-medium text-slate-600 mb-1 sm:hidden">Filter by client:</label>
+                <select
+                    id="client-filter"
+                    value={clientFilter}
+                    onChange={(e) => setClientFilter(e.target.value)}
+                    className="w-full sm:w-auto p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                    aria-label="Filter by client"
+                >
+                    {uniqueClients.map(clientName => (
+                        <option key={clientName} value={clientName}>{clientName === 'All' ? 'All Clients' : clientName}</option>
+                    ))}
+                </select>
             </div>
           </div>
 
@@ -407,7 +432,7 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
                             <div className="text-center">
                                 <span className={`text-xs font-bold py-1 px-3 rounded-full capitalize ${displayStatus.color}`}>{displayStatus.text}</span>
                             </div>
-                            <span className="font-medium text-slate-800 truncate">{doc.documentNumber}</span>
+                            <span className="font-medium text-slate-800 truncate" title={doc.documentNumber}>{doc.documentNumber}</span>
                             <span className="text-slate-700 truncate">{doc.clientDetails.name}</span>
                             <span className="text-slate-500 text-sm">{new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}</span>
                             <span className="font-medium text-red-600 text-right">{formatCurrency(balanceDue)}</span>
