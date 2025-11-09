@@ -185,6 +185,7 @@ const App: React.FC = () => {
   // States for the new item form
   const [newLineItem, setNewLineItem] = useState<Omit<LineItem, 'id'>>({ description: '', quantity: 1, price: 0 });
   const [isItemDropdownOpen, setIsItemDropdownOpen] = useState(false);
+  const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
 
 
   // --- LocalStorage Persistence ---
@@ -276,20 +277,24 @@ const App: React.FC = () => {
     }
   };
 
-  const handleClientSelect = (clientId: string) => {
-    const selected = clients.find(c => c.id === parseInt(clientId, 10));
-    if (selected) {
-      setClientDetails({
-        name: selected.name,
-        address: selected.address,
-        email: selected.email,
-        phone: selected.phone
-      });
-      setSelectedClientId(clientId);
-    } else {
-      setClientDetails({ name: '', address: '', email: '', phone: '' });
-      setSelectedClientId('');
+  const handleClientDetailChange = (field: keyof Details, value: string) => {
+    setClientDetails(prev => ({ ...prev, [field]: value }));
+    if (field === 'name') {
+        setIsClientDropdownOpen(true);
+        // If user starts typing a new name, they are no longer on a selected client
+        setSelectedClientId(''); 
     }
+  };
+
+  const handleSavedClientSelected = (client: Client) => {
+    setClientDetails({
+      name: client.name,
+      address: client.address,
+      email: client.email,
+      phone: client.phone
+    });
+    setSelectedClientId(String(client.id));
+    setIsClientDropdownOpen(false);
   };
 
   const handleDueDateChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -348,6 +353,22 @@ const App: React.FC = () => {
         item.description.toLowerCase().includes(searchTerm)
     );
   }, [items, newLineItem.description, isItemDropdownOpen]);
+
+  const filteredSavedClients = useMemo(() => {
+    if (!isClientDropdownOpen || !Array.isArray(clients)) return [];
+    const searchTerm = clientDetails.name.trim().toLowerCase();
+    
+    if (!searchTerm) {
+        return clients;
+    }
+    
+    return clients.filter(client => 
+        client.name.toLowerCase().includes(searchTerm) ||
+        (client.email && client.email.toLowerCase().includes(searchTerm)) ||
+        (client.phone && client.phone.includes(searchTerm))
+    );
+  }, [clients, clientDetails.name, isClientDropdownOpen]);
+
 
   const saveDocument = (docToSave: SavedDocument) => {
     if (docToSave.documentType === DocumentType.Invoice) {
@@ -677,29 +698,51 @@ const App: React.FC = () => {
                 <div className="bg-white p-6 rounded-lg shadow-md">
                   <h2 className="text-xl font-bold text-gray-800 mb-4">Client Information</h2>
                   <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-600 mb-1">Select Existing Client</label>
-                      <select value={selectedClientId} onChange={e => handleClientSelect(e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500">
-                        <option value="">-- New Client --</option>
-                        {/* FIX: Ensure `clients` is an array before attempting to map over it to prevent runtime errors. */}
-                        {Array.isArray(clients) && clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-600 mb-1">Client Name</label>
-                      <input type="text" value={clientDetails.name} onChange={e => handleDetailChange(setClientDetails, 'name', e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                    <div className="relative">
+                        <label className="block text-sm font-medium text-gray-600 mb-1">Client Name</label>
+                        <input 
+                            type="text" 
+                            value={clientDetails.name} 
+                            onChange={e => handleClientDetailChange('name', e.target.value)} 
+                            onFocus={() => setIsClientDropdownOpen(true)}
+                            onBlur={() => setTimeout(() => setIsClientDropdownOpen(false), 200)}
+                            placeholder="Search or add new client..."
+                            className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                            autoComplete="off"
+                        />
+                        {isClientDropdownOpen && (
+                            <div className="absolute z-20 w-full bg-white border border-slate-300 rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto">
+                            {filteredSavedClients.length > 0 ? (
+                                filteredSavedClients.map(client => (
+                                <button
+                                    key={client.id}
+                                    type="button"
+                                    onClick={() => handleSavedClientSelected(client)}
+                                    className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                                >
+                                    <p className="font-semibold">{client.name}</p>
+                                    <p className="text-xs text-slate-500">{client.email}</p>
+                                </button>
+                                ))
+                            ) : (
+                                <div className="px-4 py-2 text-sm text-slate-500">
+                                    {Array.isArray(clients) && clients.length > 0 ? "No clients match your search." : "No saved clients. Add some on the 'Clients' page!"}
+                                </div>
+                            )}
+                            </div>
+                        )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-600 mb-1">Client Address</label>
-                      <input type="text" value={clientDetails.address} onChange={e => handleDetailChange(setClientDetails, 'address', e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                      <input type="text" value={clientDetails.address} onChange={e => handleClientDetailChange('address', e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
                     </div>
                      <div>
                       <label className="block text-sm font-medium text-gray-600 mb-1">Client Email</label>
-                      <input type="email" value={clientDetails.email} onChange={e => handleDetailChange(setClientDetails, 'email', e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                      <input type="email" value={clientDetails.email} onChange={e => handleClientDetailChange('email', e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-600 mb-1">Client Phone</label>
-                      <input type="tel" value={clientDetails.phone} onChange={e => handleDetailChange(setClientDetails, 'phone', e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                      <input type="tel" value={clientDetails.phone} onChange={e => handleClientDetailChange('phone', e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
                     </div>
                   </div>
                 </div>
