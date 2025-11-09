@@ -238,6 +238,10 @@ const App: React.FC = () => {
     }
   };
 
+  const handleClearClientDetails = () => {
+    setClientDetails({ name: '', address: '', email: '', phone: '' });
+  };
+
   const handleClientDetailChange = (field: keyof Details, value: string) => {
     setClientDetails(prev => ({ ...prev, [field]: value }));
     if (field === 'name') {
@@ -613,7 +617,16 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="bg-white p-6 rounded-lg shadow-md">
-                  <h2 className="text-xl font-bold text-gray-800 mb-4">Client Information</h2>
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-xl font-bold text-gray-800">Client Information</h2>
+                    <button 
+                        onClick={handleClearClientDetails} 
+                        type="button"
+                        className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
+                    >
+                        Clear Fields
+                    </button>
+                  </div>
                   <div className="space-y-4">
                     <div className="relative">
                         <label className="block text-sm font-medium text-gray-600 mb-1">Client Name</label>
