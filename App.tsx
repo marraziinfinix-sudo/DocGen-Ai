@@ -1,5 +1,4 @@
 
-
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus } from './types';
 import { generateDescription } from './services/geminiService';
@@ -185,7 +184,7 @@ const App: React.FC = () => {
 
   // States for the new item form
   const [newLineItem, setNewLineItem] = useState<Omit<LineItem, 'id'>>({ description: '', quantity: 1, price: 0 });
-  const [selectedSavedItemId, setSelectedSavedItemId] = useState<string>('');
+  const [isItemDropdownOpen, setIsItemDropdownOpen] = useState(false);
 
 
   // --- LocalStorage Persistence ---
@@ -259,7 +258,6 @@ const App: React.FC = () => {
     setLineItems(prev => [...prev, { id: Date.now(), ...newLineItem }]);
     // Reset form for next item
     setNewLineItem({ description: '', quantity: 1, price: 0 });
-    setSelectedSavedItemId('');
   };
 
   const handleDeleteLineItem = (id: number) => {
@@ -322,45 +320,34 @@ const App: React.FC = () => {
     setDueDate(newDueDate.toISOString().split('T')[0]);
   };
   
-  const handleNewItemSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const itemId = e.target.value;
-    setSelectedSavedItemId(itemId);
-
-    if (itemId) {
-      const selectedItem = items.find(i => i.id === parseInt(itemId, 10));
-      if (selectedItem) {
-        setNewLineItem({
-          description: selectedItem.description,
-          price: selectedItem.price,
-          quantity: 1,
-        });
-      }
-    } else {
-      // "-- New Item --" selected
-      setNewLineItem({ description: '', quantity: 1, price: 0 });
-    }
-  };
-  
   const handleNewLineItemChange = (field: keyof Omit<LineItem, 'id'>, value: string | number) => {
     setNewLineItem(prev => ({ ...prev, [field]: value }));
-    // If user starts typing, we assume it's a new custom item, so deselect from dropdown
-    if (selectedSavedItemId) {
-        setSelectedSavedItemId('');
+    if (field === 'description') {
+      setIsItemDropdownOpen(true);
     }
   };
   
-  const groupedItemsForSelect = useMemo(() => {
-    if (!Array.isArray(items)) return {};
-    const sortedItems = [...items].sort((a, b) => a.description.localeCompare(b.description));
-    return sortedItems.reduce<Record<string, Item[]>>((acc, item) => {
-      const category = item.category || 'Uncategorized';
-      if (!acc[category]) {
-        acc[category] = [];
-      }
-      acc[category].push(item);
-      return acc;
-    }, {});
-  }, [items]);
+  const handleSavedItemSelected = (item: Item) => {
+    setNewLineItem({
+      description: item.description,
+      price: item.price,
+      quantity: 1,
+    });
+    setIsItemDropdownOpen(false);
+  };
+  
+  const filteredSavedItems = useMemo(() => {
+    if (!isItemDropdownOpen || !Array.isArray(items)) return [];
+    const searchTerm = newLineItem.description.trim().toLowerCase();
+    
+    if (!searchTerm) {
+        return items;
+    }
+    
+    return items.filter(item => 
+        item.description.toLowerCase().includes(searchTerm)
+    );
+  }, [items, newLineItem.description, isItemDropdownOpen]);
 
   const saveDocument = (docToSave: SavedDocument) => {
     if (docToSave.documentType === DocumentType.Invoice) {
@@ -750,56 +737,56 @@ const App: React.FC = () => {
                   
                   {/* New Item Form */}
                   <div className="bg-slate-50 p-4 rounded-lg border space-y-4 mb-6">
-                      <h3 className="text-lg font-semibold text-gray-700">Add an Item</h3>
-                      <div>
-                          <label className="block text-sm font-medium text-gray-600 mb-1">Select Saved Item</label>
-                          <select
-                              value={selectedSavedItemId}
-                              onChange={handleNewItemSelect}
-                              className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
-                          >
-                              <option value="">-- New Item --</option>
-                              {Object.keys(groupedItemsForSelect).length > 0 ? (
-                                  Object.entries(groupedItemsForSelect).map(([category, itemsInCategory]) => (
-                                      <optgroup key={category} label={category}>
-                                          {itemsInCategory.map(item => (
-                                              <option key={item.id} value={item.id}>
-                                                  {item.description} ({formatCurrency(item.price)})
-                                              </option>
-                                          ))}
-                                      </optgroup>
-                                  ))
-                              ) : (
-                                  <option disabled>No saved items to select</option>
-                              )}
-                          </select>
-                      </div>
+                    <h3 className="text-lg font-semibold text-gray-700">Add an Item</h3>
+                    
+                    <div className="relative">
+                      <label className="block text-sm font-medium text-gray-600 mb-1">Description</label>
+                      <textarea
+                        rows={2}
+                        placeholder="Start typing to search or add a new item..."
+                        value={newLineItem.description}
+                        onChange={e => handleNewLineItemChange('description', e.target.value)}
+                        onFocus={() => setIsItemDropdownOpen(true)}
+                        onBlur={() => setTimeout(() => setIsItemDropdownOpen(false), 200)}
+                        className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 resize-none"
+                      />
+                      {isItemDropdownOpen && (
+                        <div className="absolute z-20 w-full bg-white border border-slate-300 rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto">
+                          {filteredSavedItems.length > 0 ? (
+                            filteredSavedItems.map(item => (
+                              <button
+                                key={item.id}
+                                type="button"
+                                onClick={() => handleSavedItemSelected(item)}
+                                className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                              >
+                                <p className="font-semibold">{item.description}</p>
+                                <p className="text-xs text-slate-500">{formatCurrency(item.price)}</p>
+                              </button>
+                            ))
+                          ) : (
+                            <div className="px-4 py-2 text-sm text-slate-500">
+                                {Array.isArray(items) && items.length > 0 ? "No items match your search." : "No saved items. Add some on the 'Items' page!"}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
 
-                      <div>
-                          <label className="block text-sm font-medium text-gray-600 mb-1">Description</label>
-                          <textarea
-                              rows={2}
-                              placeholder="Enter item description"
-                              value={newLineItem.description}
-                              onChange={e => handleNewLineItemChange('description', e.target.value)}
-                              className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 resize-none"
-                          />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                          <div>
-                              <label className="block text-sm font-medium text-gray-600 mb-1">Quantity</label>
-                              <input type="number" value={newLineItem.quantity} onChange={e => handleNewLineItemChange('quantity', parseFloat(e.target.value) || 0)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
-                          </div>
-                          <div>
-                              <label className="block text-sm font-medium text-gray-600 mb-1">Price</label>
-                              <input type="number" step="0.01" value={newLineItem.price} onChange={e => handleNewLineItemChange('price', parseFloat(e.target.value) || 0)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
-                          </div>
-                      </div>
-                      
-                      <button onClick={handleAddLineItem} className="w-full flex items-center justify-center gap-2 bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700">
-                          <PlusIcon /> Add Item to Document
-                      </button>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-600 mb-1">Quantity</label>
+                            <input type="number" value={newLineItem.quantity} onChange={e => handleNewLineItemChange('quantity', parseFloat(e.target.value) || 1)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-600 mb-1">Price</label>
+                            <input type="number" step="0.01" value={newLineItem.price} onChange={e => handleNewLineItemChange('price', parseFloat(e.target.value) || 0)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                        </div>
+                    </div>
+                    
+                    <button onClick={handleAddLineItem} className="w-full flex items-center justify-center gap-2 bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700">
+                        <PlusIcon /> Add Item to Document
+                    </button>
                   </div>
 
                   <div className="space-y-4">

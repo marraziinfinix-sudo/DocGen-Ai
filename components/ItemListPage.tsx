@@ -413,7 +413,8 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
                           Object.entries(groupedItems).sort(([a], [b]) => a.localeCompare(b)).map(([category, itemsInCategory]) => (
                             <div key={category}>
                               <h4 className="font-bold text-sm uppercase text-slate-500 bg-slate-100 p-2 rounded-t-md mt-4">{category}</h4>
-                              {itemsInCategory.map(item => (
+                              {/* FIX: Add an Array.isArray check before mapping over itemsInCategory to prevent runtime errors if the value is not an array. */}
+                              {Array.isArray(itemsInCategory) && itemsInCategory.map(item => (
                                 <div key={item.id} className={`p-4 border-x border-b flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-2 ${selectedIds.has(item.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-white'}`}>
                                     <div className="flex items-start w-full sm:w-auto">
                                         <input
