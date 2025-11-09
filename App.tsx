@@ -1027,40 +1027,42 @@ const App: React.FC = () => {
                             <span className="font-medium text-gray-700">Make this a recurring invoice</span>
                         </label>
                         {recurrence && (
-                            <div className="pl-6 space-y-4 pt-2">
-                                <div className="grid grid-cols-2 gap-4">
+                            <div className="pl-6 pt-4">
+                                <div className="bg-slate-50 p-4 rounded-lg border space-y-4">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-600 mb-1">Repeat Every</label>
+                                            <input 
+                                                type="number" 
+                                                min="1"
+                                                value={recurrence.interval}
+                                                onChange={e => setRecurrence(r => r ? {...r, interval: parseInt(e.target.value, 10) || 1} : null)}
+                                                className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-600 mb-1">Frequency</label>
+                                            <select 
+                                                value={recurrence.frequency}
+                                                onChange={e => setRecurrence(r => r ? {...r, frequency: e.target.value as Recurrence['frequency']} : null)}
+                                                className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                                            >
+                                                <option value="daily">Day(s)</option>
+                                                <option value="weekly">Week(s)</option>
+                                                <option value="monthly">Month(s)</option>
+                                                <option value="yearly">Year(s)</option>
+                                            </select>
+                                        </div>
+                                    </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-600 mb-1">Repeat Every</label>
+                                        <label className="block text-sm font-medium text-gray-600 mb-1">End Date (Optional)</label>
                                         <input 
-                                            type="number" 
-                                            min="1"
-                                            value={recurrence.interval}
-                                            onChange={e => setRecurrence(r => r ? {...r, interval: parseInt(e.target.value, 10) || 1} : null)}
+                                            type="date" 
+                                            value={recurrence.endDate || ''}
+                                            onChange={e => setRecurrence(r => r ? {...r, endDate: e.target.value || null} : null)}
                                             className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
                                         />
                                     </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-600 mb-1">Frequency</label>
-                                        <select 
-                                            value={recurrence.frequency}
-                                            onChange={e => setRecurrence(r => r ? {...r, frequency: e.target.value as Recurrence['frequency']} : null)}
-                                            className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
-                                        >
-                                            <option value="daily">Day(s)</option>
-                                            <option value="weekly">Week(s)</option>
-                                            <option value="monthly">Month(s)</option>
-                                            <option value="yearly">Year(s)</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-600 mb-1">End Date (Optional)</label>
-                                    <input 
-                                        type="date" 
-                                        value={recurrence.endDate || ''}
-                                        onChange={e => setRecurrence(r => r ? {...r, endDate: e.target.value || null} : null)}
-                                        className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
-                                    />
                                 </div>
                             </div>
                         )}
