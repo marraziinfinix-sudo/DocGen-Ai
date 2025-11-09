@@ -363,7 +363,7 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
                       <div key={doc.id} className={`p-4 rounded-lg border lg:p-0 lg:shadow-none lg:rounded-none lg:border-b ${selectedIds.has(doc.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-white'}`}>
                         {/* Mobile Card View */}
                         <div className="lg:hidden space-y-3">
-                          <div className="flex justify-between items-start">
+                          <div className="flex justify-between items-center">
                               <div className="flex items-start">
                                 <input
                                   type="checkbox"
