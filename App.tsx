@@ -10,6 +10,7 @@ import ItemListPage from './components/ItemListPage';
 import DocumentListPage from './components/DocumentListPage';
 import QuotationListPage from './components/QuotationListPage';
 import SaveItemsModal from './components/SaveItemsModal';
+import SaveClientModal from './components/SaveClientModal';
 
 declare const jspdf: any;
 declare const html2canvas: any;
@@ -181,6 +182,10 @@ const App: React.FC = () => {
   const [isSaveItemsModalOpen, setIsSaveItemsModalOpen] = useState(false);
   const [potentialNewItems, setPotentialNewItems] = useState<LineItem[]>([]);
   const [pendingDoc, setPendingDoc] = useState<SavedDocument | null>(null);
+
+  // States for the "Save New Client" modal
+  const [isSaveClientModalOpen, setIsSaveClientModalOpen] = useState(false);
+  const [potentialNewClient, setPotentialNewClient] = useState<Details | null>(null);
 
   // States for the new item form
   const [newLineItem, setNewLineItem] = useState<Omit<LineItem, 'id'>>({ description: '', quantity: 1, price: 0 });
@@ -395,6 +400,23 @@ const App: React.FC = () => {
     setLoadedDocumentInfo({id: docToSave.id, status: docToSave.status || docToSave.quotationStatus || null, docType: docToSave.documentType});
   };
 
+  const checkNewItemsAndSave = (docToSave: SavedDocument) => {
+    const savedItemDescriptions = new Set(items.map(i => i.description.trim().toLowerCase()));
+    const newItemsInDoc = docToSave.lineItems.filter(li =>
+        li.description.trim() !== '' &&
+        !savedItemDescriptions.has(li.description.trim().toLowerCase())
+    );
+
+    if (newItemsInDoc.length > 0) {
+        setPotentialNewItems(newItemsInDoc);
+        setPendingDoc(docToSave);
+        setIsSaveItemsModalOpen(true);
+    } else {
+        saveDocument(docToSave);
+        setPendingDoc(null);
+    }
+  };
+
   const handleSaveDocument = () => {
     if (!clientDetails.name || lineItems.length === 0) {
       alert('Please fill in client details and add at least one line item.');
@@ -423,20 +445,45 @@ const App: React.FC = () => {
       accentColor: accentColor,
     };
     
-    const savedItemDescriptions = new Set(items.map(i => i.description.trim().toLowerCase()));
-    const newItemsInDoc = lineItems.filter(li => 
-        li.description.trim() !== '' && 
-        !savedItemDescriptions.has(li.description.trim().toLowerCase())
-    );
+    const clientNameLower = clientDetails.name.trim().toLowerCase();
+    const isExistingClient = clients.some(c => c.name.trim().toLowerCase() === clientNameLower);
 
-    if (newItemsInDoc.length > 0) {
-        setPotentialNewItems(newItemsInDoc);
+    if (clientDetails.name.trim() && !isExistingClient) {
+        setPotentialNewClient(clientDetails);
         setPendingDoc(docToSave);
-        setIsSaveItemsModalOpen(true);
+        setIsSaveClientModalOpen(true);
     } else {
-        saveDocument(docToSave);
+        checkNewItemsAndSave(docToSave);
     }
   };
+
+  // Handlers for "Save New Client" Modal
+  const handleConfirmSaveNewClient = () => {
+    if (potentialNewClient) {
+        const newClient: Client = { id: Date.now(), ...potentialNewClient };
+        setClients(prev => [newClient, ...prev]);
+    }
+    setIsSaveClientModalOpen(false);
+    setPotentialNewClient(null);
+    if (pendingDoc) {
+        checkNewItemsAndSave(pendingDoc);
+    }
+  };
+
+  const handleDeclineSaveNewClient = () => {
+    setIsSaveClientModalOpen(false);
+    setPotentialNewClient(null);
+    if (pendingDoc) {
+        checkNewItemsAndSave(pendingDoc);
+    }
+  };
+  
+  const handleCancelSaveNewClient = () => {
+    setIsSaveClientModalOpen(false);
+    setPotentialNewClient(null);
+    setPendingDoc(null);
+  };
+
 
   const handleConfirmSaveNewItems = () => {
     if (potentialNewItems.length > 0) {
@@ -1016,6 +1063,15 @@ const App: React.FC = () => {
                 onConfirm={handleConfirmSaveNewItems}
                 onDecline={handleDeclineSaveNewItems}
                 onCancel={handleCancelSaveNewItems}
+            />
+        )}
+        {isSaveClientModalOpen && potentialNewClient && (
+            <SaveClientModal
+                isOpen={isSaveClientModalOpen}
+                newClient={potentialNewClient}
+                onConfirm={handleConfirmSaveNewClient}
+                onDecline={handleDeclineSaveNewClient}
+                onCancel={handleCancelSaveNewClient}
             />
         )}
     </div>
