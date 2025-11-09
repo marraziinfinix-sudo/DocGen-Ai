@@ -80,8 +80,25 @@ const UpdateClientModal: React.FC<UpdateClientModalProps> = ({ isOpen, clientInf
   );
 };
 
+const useWindowWidth = () => {
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowWidth(window.innerWidth);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  return windowWidth;
+};
+
 
 const App: React.FC = () => {
+  const windowWidth = useWindowWidth();
+  const isMobile = windowWidth < 640;
   const [currentView, setCurrentView] = useState<'editor' | 'setup' | 'clients' | 'items' | 'invoices' | 'quotations'>('editor');
   
   // --- Data States (loaded from localStorage) ---
@@ -710,6 +727,8 @@ const App: React.FC = () => {
         return <QuotationListPage documents={savedQuotations} setDocuments={setSavedQuotations} formatCurrency={formatCurrency} handleCreateInvoiceFromQuote={handleCreateInvoiceFromQuote} handleLoadDocument={handleLoadDocument} handleSendQuotationReminder={handleSendQuotationReminder} />;
       case 'editor':
       default:
+        const inputType = isMobile ? 'text' : 'number';
+        const inputMode = isMobile ? 'decimal' : undefined;
         return (
           <>
             <div className="sticky top-[52px] bg-gray-100/80 backdrop-blur-sm z-10 border-b">
@@ -908,11 +927,22 @@ const App: React.FC = () => {
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-600 mb-1">Quantity</label>
-                            <input type="number" value={newLineItem.quantity} onChange={e => handleNewLineItemChange('quantity', parseFloat(e.target.value) || 1)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                            <input 
+                                type={inputType}
+                                inputMode={inputMode}
+                                value={newLineItem.quantity} 
+                                onChange={e => handleNewLineItemChange('quantity', parseFloat(e.target.value) || 1)} 
+                                className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-600 mb-1">Price</label>
-                            <input type="number" step="0.01" value={newLineItem.price} onChange={e => handleNewLineItemChange('price', parseFloat(e.target.value) || 0)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                            <input 
+                                type={inputType}
+                                inputMode={inputMode}
+                                step={inputType === 'number' ? "0.01" : undefined}
+                                value={newLineItem.price} 
+                                onChange={e => handleNewLineItemChange('price', parseFloat(e.target.value) || 0)} 
+                                className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
                         </div>
                     </div>
                     
@@ -945,11 +975,22 @@ const App: React.FC = () => {
                           </div>
                           <div className="col-span-6 sm:col-span-5">
                               <label className="block text-sm font-medium text-gray-600 mb-1">Quantity</label>
-                              <input type="number" value={item.quantity} onChange={e => handleLineItemChange(item.id, 'quantity', parseFloat(e.target.value) || 0)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                              <input 
+                                  type={inputType}
+                                  inputMode={inputMode}
+                                  value={item.quantity} 
+                                  onChange={e => handleLineItemChange(item.id, 'quantity', parseFloat(e.target.value) || 0)} 
+                                  className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
                           </div>
                           <div className="col-span-6 sm:col-span-5">
                               <label className="block text-sm font-medium text-gray-600 mb-1">Price</label>
-                              <input type="number" value={item.price} onChange={e => handleLineItemChange(item.id, 'price', parseFloat(e.target.value) || 0)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                              <input 
+                                  type={inputType}
+                                  inputMode={inputMode}
+                                  step={inputType === 'number' ? "0.01" : undefined}
+                                  value={item.price} 
+                                  onChange={e => handleLineItemChange(item.id, 'price', parseFloat(e.target.value) || 0)} 
+                                  className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
                           </div>
                            <div className="col-span-12 sm:col-span-2 flex items-end">
                               <button onClick={() => handleDeleteLineItem(item.id)} className="w-full p-2 bg-red-100 text-red-600 rounded-md hover:bg-red-200 flex justify-center items-center">
