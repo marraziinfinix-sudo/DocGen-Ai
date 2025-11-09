@@ -531,6 +531,7 @@ const App: React.FC = () => {
     setIsSaveItemsModalOpen(false);
     setPotentialNewItems([]);
     setPendingDoc(null);
+    setCurrentView('items');
   };
 
   const handleDeclineSaveNewItems = () => {
