@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { SavedDocument, InvoiceStatus, Payment } from '../types';
 import { MailIcon, WhatsAppIcon, CashIcon, ViewIcon, TrashIcon, MoreVerticalIcon } from './Icons';
@@ -334,6 +333,21 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
                 <span className="font-semibold text-slate-600 uppercase text-sm text-right">Total</span>
                 <span className="font-semibold text-slate-600 uppercase text-sm text-right">Actions</span>
             </div>
+            
+            {/* Header for small screens */}
+            {documents.length > 0 && (
+                <div className="lg:hidden flex items-center p-2 rounded-t-lg bg-slate-50 border-b">
+                    <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        onChange={handleSelectAll}
+                        checked={isAllSelected}
+                        ref={el => { if (el) { el.indeterminate = isIndeterminate; } }}
+                        aria-label="Select all invoices"
+                    />
+                    <label className="ml-3 text-sm font-medium text-gray-600">Select All</label>
+                </div>
+            )}
 
             {documents.length > 0 ? (
                 filteredDocuments.length > 0 ? (
