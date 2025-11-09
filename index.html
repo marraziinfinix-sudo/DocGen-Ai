@@ -28,14 +28,16 @@
           display: none;
         }
       }
-      /* Restore number input spinners hidden by Tailwind CSS */
-      input[type="number"] {
-        -moz-appearance: auto;
-      }
-      input[type="number"]::-webkit-inner-spin-button,
-      input[type="number"]::-webkit-outer-spin-button {
-        -webkit-appearance: auto;
-        margin: 0;
+      /* Hide number input spinners on mobile (default), but show on desktop (sm and up) */
+      @media (min-width: 640px) {
+        input[type="number"] {
+          -moz-appearance: auto;
+        }
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+          -webkit-appearance: auto;
+          margin: 0;
+        }
       }
     </style>
   <script type="importmap">
