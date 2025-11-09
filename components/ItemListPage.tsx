@@ -206,6 +206,7 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
   };
 
   const filteredItems = useMemo(() => {
+    // FIX: Ensure `items` is an array before filtering to prevent runtime errors.
     if (!Array.isArray(items)) return [];
     return items.filter(item => {
         const matchesSearch = searchQuery ? item.description.toLowerCase().includes(searchQuery.toLowerCase()) : true;

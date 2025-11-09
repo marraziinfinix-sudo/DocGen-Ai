@@ -616,7 +616,7 @@ const App: React.FC = () => {
                       <label className="block text-sm font-medium text-gray-600 mb-1">Select Existing Client</label>
                       <select value={selectedClientId} onChange={e => handleClientSelect(e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500">
                         <option value="">-- New Client --</option>
-                        {/* FIX: Added an Array.isArray check for `clients` before accessing its `map` property to prevent potential runtime errors if `clients` is not an array. */}
+                        {/* FIX: Ensure `clients` is an array before attempting to map over it to prevent runtime errors. */}
                         {Array.isArray(clients) && clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
                       </select>
                     </div>
@@ -670,7 +670,7 @@ const App: React.FC = () => {
                 <div className="bg-white p-6 rounded-lg shadow-md">
                   <div className="flex justify-between items-center mb-4">
                     <h2 className="text-xl font-bold text-gray-800">Line Items</h2>
-                    <div className="relative">
+                    <div className="relative" onClick={(e) => e.stopPropagation()}>
                       <input 
                           type="text"
                           placeholder="Search for an item..."
