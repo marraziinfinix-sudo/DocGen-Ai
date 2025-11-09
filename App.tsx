@@ -681,7 +681,7 @@ const App: React.FC = () => {
                       />
                       {isItemSearchOpen && (
                           <div className="absolute z-10 top-full mt-1 w-full max-h-60 overflow-y-auto bg-white border rounded-md shadow-lg">
-                              {itemSearchQuery && Object.keys(groupedFilteredItems).length > 0 ? (
+                              {Object.keys(groupedFilteredItems).length > 0 ? (
                                   Object.entries(groupedFilteredItems).map(([category, itemsInCategory]) => (
                                       <div key={category}>
                                           <h3 className="text-xs font-bold uppercase text-slate-500 bg-slate-100 p-2 sticky top-0">{category}</h3>
@@ -694,7 +694,9 @@ const App: React.FC = () => {
                                       </div>
                                   ))
                               ) : (
-                                  <div className="p-2 text-slate-500 text-center text-sm">Type to search items.</div>
+                                  <div className="p-2 text-slate-500 text-center text-sm">
+                                    {items.length > 0 ? "No items match your search." : "No saved items. Go to the Items page to add some."}
+                                  </div>
                               )}
                           </div>
                       )}

@@ -392,7 +392,7 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
                     {categoryFilterOptions.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                 </select>
             </div>
-            {/* FIX: Added an Array.isArray check for `items` before accessing its `length` property to prevent potential runtime errors if `items` is not an array. This also provides a type guard for the code inside the ternary, resolving the static analysis error. */}
+            {/* FIX: Added an Array.isArray check for `items` before accessing its `length` property to prevent potential runtime errors if `items` is not an array. */}
             {(!Array.isArray(items) || items.length === 0) ? (
                 <p className="text-slate-500 text-center py-4 bg-slate-50 rounded-lg">No items saved yet.</p>
             ) : (
