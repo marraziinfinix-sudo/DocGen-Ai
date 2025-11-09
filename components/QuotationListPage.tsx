@@ -33,6 +33,7 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
   };
 
   const filteredDocuments = useMemo(() => {
+    if (!Array.isArray(documents)) return [];
     if (statusFilter === 'All') {
         return documents;
     }
@@ -212,8 +213,7 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
                 className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                 onChange={handleSelectAll}
                 checked={isAllSelected}
-                // FIX: Corrected the ref callback to not return a value, resolving a TypeScript type error.
-                ref={el => { if (el) el.indeterminate = isIndeterminate; }}
+                ref={el => { if (el) { el.indeterminate = isIndeterminate; } }}
               />
               <span className="font-semibold text-slate-600 uppercase text-sm text-center">Status</span>
               <span className="font-semibold text-slate-600 uppercase text-sm">Quote #</span>
