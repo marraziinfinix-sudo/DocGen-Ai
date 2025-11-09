@@ -245,7 +245,7 @@ const App: React.FC = () => {
   const [pendingDoc, setPendingDoc] = useState<SavedDocument | null>(null);
   const [isSaveClientModalOpen, setIsSaveClientModalOpen] = useState(false);
   const [potentialNewClient, setPotentialNewClient] = useState<Details | null>(null);
-  const [newLineItem, setNewLineItem] = useState<Omit<LineItem, 'id'>>({ description: '', quantity: 1, price: 0 });
+  const [newLineItem, setNewLineItem] = useState<Omit<LineItem, 'id'>>({ description: '', quantity: isMobile ? 0 : 1, price: 0 });
   const [isItemDropdownOpen, setIsItemDropdownOpen] = useState(false);
   const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
   const [isUpdateClientModalOpen, setIsUpdateClientModalOpen] = useState(false);
@@ -304,7 +304,7 @@ const App: React.FC = () => {
         return;
     }
     setLineItems(prev => [...prev, { id: Date.now(), ...newLineItem }]);
-    setNewLineItem({ description: '', quantity: 1, price: 0 });
+    setNewLineItem({ description: '', quantity: isMobile ? 0 : 1, price: 0 });
   };
 
   const handleDeleteLineItem = (id: number) => {
@@ -328,7 +328,7 @@ const App: React.FC = () => {
   };
 
   const handleClearNewLineItem = () => {
-    setNewLineItem({ description: '', quantity: 1, price: 0 });
+    setNewLineItem({ description: '', quantity: isMobile ? 0 : 1, price: 0 });
   };
 
   const handleClientDetailChange = (field: keyof Details, value: string) => {
@@ -373,7 +373,7 @@ const App: React.FC = () => {
   };
   
   const handleSavedItemSelected = (item: Item) => {
-    setNewLineItem({ description: item.description, price: item.price, quantity: 1 });
+    setNewLineItem({ description: item.description, price: item.price, quantity: isMobile ? 0 : 1 });
     setIsItemDropdownOpen(false);
   };
 
@@ -931,7 +931,7 @@ const App: React.FC = () => {
                                 type={inputType}
                                 inputMode={inputMode}
                                 value={newLineItem.quantity} 
-                                onChange={e => handleNewLineItemChange('quantity', parseFloat(e.target.value) || 1)} 
+                                onChange={e => handleNewLineItemChange('quantity', parseFloat(e.target.value) || 0)} 
                                 className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
                         </div>
                         <div>
