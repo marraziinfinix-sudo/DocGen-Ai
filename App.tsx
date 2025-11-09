@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus } from './types';
 import { generateDescription } from './services/geminiService';
@@ -605,6 +606,10 @@ const App: React.FC = () => {
                      <div>
                       <label className="block text-sm font-medium text-gray-600 mb-1">Client Email</label>
                       <input type="email" value={clientDetails.email} onChange={e => handleDetailChange(setClientDetails, 'email', e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600 mb-1">Client Phone</label>
+                      <input type="tel" value={clientDetails.phone} onChange={e => handleDetailChange(setClientDetails, 'phone', e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
                     </div>
                   </div>
                 </div>
