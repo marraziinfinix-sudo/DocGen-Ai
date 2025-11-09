@@ -87,14 +87,47 @@ const App: React.FC = () => {
     } catch (e) { console.error(e); return []; }
   });
   
-  const getNextDocumentNumber = useCallback((invoices: SavedDocument[], quotations: SavedDocument[]): string => {
-    const allDocs = [...invoices, ...quotations];
-    if (!Array.isArray(allDocs) || allDocs.length === 0) {
-        return '001';
-    }
-    const numbers = allDocs.map(doc => parseInt(doc.documentNumber, 10)).filter(n => !isNaN(n));
-    const lastNum = numbers.length > 0 ? Math.max(...numbers) : 0;
-    return String(lastNum + 1).padStart(3, '0');
+  const generateDocumentNumber = useCallback((
+    client: Details, 
+    docType: DocumentType, 
+    invoices: SavedDocument[], 
+    quotations: SavedDocument[]
+  ): string => {
+      const clientNameTrimmed = client.name.trim();
+
+      if (!clientNameTrimmed) {
+          return '';
+      }
+
+      const clientNamePart = clientNameTrimmed.toLowerCase().replace(/\s+/g, '_');
+      const phonePart = client.phone ? client.phone.slice(-4) : '0000';
+      const docTypePart = docType === DocumentType.Quotation ? 'QUO' : 'INV';
+      
+      const prefix = `${clientNamePart}_${phonePart}_${docTypePart}_`;
+
+      const relevantDocs = docType === DocumentType.Quotation ? quotations : invoices;
+      
+      const clientDocs = relevantDocs.filter(
+          doc => doc.clientDetails.name.trim().toLowerCase() === clientNameTrimmed.toLowerCase()
+      );
+      
+      const numbers = clientDocs
+          .map(doc => {
+              const parts = doc.documentNumber.split('_');
+              const numStr = parts[parts.length - 1];
+              const typeInNum = parts[parts.length - 2];
+              if (typeInNum === docTypePart) {
+                  const num = parseInt(numStr, 10);
+                  return isNaN(num) ? 0 : num;
+              }
+              return 0;
+          })
+          .filter(n => n > 0);
+
+      const lastNum = numbers.length > 0 ? Math.max(...numbers) : 0;
+      const newNum = String(lastNum + 1).padStart(3, '0');
+
+      return `${prefix}${newNum}`;
   }, []);
 
   // --- Document Form States ---
@@ -110,24 +143,7 @@ const App: React.FC = () => {
   const [template, setTemplate] = useState(activeCompany.template);
   const [accentColor, setAccentColor] = useState(activeCompany.accentColor);
   const [clientDetails, setClientDetails] = useState<Details>({ name: '', address: '', email: '', phone: '' });
-  const [documentNumber, setDocumentNumber] = useState(() => {
-    try {
-        const savedInv = localStorage.getItem('savedInvoices');
-        const invoices: SavedDocument[] = savedInv && Array.isArray(JSON.parse(savedInv)) ? JSON.parse(savedInv) : [];
-        const savedQuo = localStorage.getItem('savedQuotations');
-        const quotations: SavedDocument[] = savedQuo && Array.isArray(JSON.parse(savedQuo)) ? JSON.parse(savedQuo) : [];
-        
-        const allDocs = [...invoices, ...quotations];
-        if (allDocs.length === 0) return '001';
-        
-        const numbers = allDocs.map(doc => parseInt(doc.documentNumber, 10)).filter(n => !isNaN(n));
-        const lastNum = numbers.length > 0 ? Math.max(...numbers) : 0;
-        return String(lastNum + 1).padStart(3, '0');
-    } catch (e) {
-        console.error("Failed to calculate initial document number", e);
-        return '001';
-    }
-  });
+  const [documentNumber, setDocumentNumber] = useState('');
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0]);
   const [dueDate, setDueDate] = useState(() => {
     const date = new Date();
@@ -171,6 +187,12 @@ const App: React.FC = () => {
         console.error('Failed to save active company ID to localStorage', e);
     }
   }, [activeCompanyId]);
+
+  useEffect(() => {
+    if (isCreatingNew) {
+      setDocumentNumber(generateDocumentNumber(clientDetails, documentType, savedInvoices, savedQuotations));
+    }
+  }, [isCreatingNew, clientDetails, documentType, savedInvoices, savedQuotations, generateDocumentNumber]);
 
 
   // --- LocalStorage Persistence ---
@@ -265,9 +287,6 @@ const App: React.FC = () => {
   const handleDocumentTypeChange = (newType: DocumentType) => {
     if (newType === documentType) return;
     setDocumentType(newType);
-    if (isCreatingNew) {
-      setDocumentNumber(getNextDocumentNumber(savedInvoices, savedQuotations));
-    }
   };
   
   const filteredSavedItems = useMemo(() => {
@@ -329,6 +348,11 @@ const App: React.FC = () => {
     
     // Check for duplicate document number across both invoices and quotations
     const trimmedDocNum = documentNumber.trim();
+    if (!trimmedDocNum) {
+        alert('Document number cannot be empty. Please ensure client details are filled to generate a number.');
+        return;
+    }
+
     const allDocs = [...savedInvoices, ...savedQuotations];
     const isDuplicate = allDocs.some(
         doc => doc.documentNumber.trim().toLowerCase() === trimmedDocNum.toLowerCase() && doc.id !== loadedDocumentInfo?.id
@@ -413,7 +437,6 @@ const App: React.FC = () => {
     setLineItems([]);
     setPayments([]);
     setStatus(null);
-    setDocumentNumber(getNextDocumentNumber(savedInvoices, savedQuotations));
     const today = new Date().toISOString().split('T')[0];
     setIssueDate(today);
     const newDueDate = new Date();
@@ -462,9 +485,13 @@ const App: React.FC = () => {
     setDocumentType(DocumentType.Invoice);
     setStatus(InvoiceStatus.Pending);
     setSavedQuotations(prev => prev.map(q => q.id === quotation.id ? {...q, quotationStatus: QuotationStatus.Agreed} : q));
-    setDocumentNumber(getNextDocumentNumber(savedInvoices, savedQuotations));
+    
+    // Generate new invoice number based on client, even for converted quote
+    const newInvoiceNumber = generateDocumentNumber(quotation.clientDetails, DocumentType.Invoice, savedInvoices, savedQuotations);
+    setDocumentNumber(newInvoiceNumber);
+    
     setLoadedDocumentInfo({id: Date.now(), status: InvoiceStatus.Pending, docType: DocumentType.Invoice});
-    setIsCreatingNew(false);
+    setIsCreatingNew(false); // It's a new invoice, but we are loading data, so fields shouldn't auto-clear. Let's treat it as an edit session of a new doc.
     setCurrentView('editor');
   };
   
@@ -642,7 +669,7 @@ const App: React.FC = () => {
                   <div className="grid grid-cols-2 gap-4">
                       <div>
                           <label className="block text-sm font-medium text-gray-600 mb-1">{documentType} Number</label>
-                          <input type="text" value={documentNumber} onChange={e => setDocumentNumber(e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                          <input type="text" value={documentNumber} onChange={e => setDocumentNumber(e.target.value)} placeholder="Auto-generated from client details" className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
                       </div>
                        <div>
                           <label className="block text-sm font-medium text-gray-600 mb-1">Issue Date</label>
