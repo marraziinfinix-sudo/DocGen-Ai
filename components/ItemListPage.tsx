@@ -1,5 +1,4 @@
 
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { Item } from '../types';
 import { TrashIcon, PlusIcon } from './Icons';
@@ -118,6 +117,15 @@ const BulkEditModal: React.FC<{
     onCancel: () => void;
 }> = ({ itemCount, categories, onSave, onCancel }) => {
     const [targetCategory, setTargetCategory] = useState('');
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+    const filteredCategories = useMemo(() => {
+        if (!categories) return [];
+        const searchTerm = targetCategory.trim().toLowerCase();
+        if (!searchTerm) return categories;
+        return categories.filter(cat => cat.toLowerCase().includes(searchTerm));
+    }, [categories, targetCategory]);
+
 
     const handleSave = () => {
         onSave(targetCategory.trim());
@@ -129,20 +137,42 @@ const BulkEditModal: React.FC<{
                 <div className="p-6">
                     <h3 className="text-lg font-bold text-gray-800 mb-4">Assign Category to {itemCount} items</h3>
                     <p className="text-sm text-gray-600 mb-4">Select an existing category from the list or type a new one to create it.</p>
-                    <div>
+                    <div className="relative">
                         <label className="block text-sm font-medium text-gray-600 mb-1">Category</label>
                         <input
                             type="text"
-                            list="category-list-bulk"
                             placeholder="Select or type category"
                             value={targetCategory}
                             onChange={e => setTargetCategory(e.target.value)}
+                            onFocus={() => setIsDropdownOpen(true)}
+                            onBlur={() => setTimeout(() => setIsDropdownOpen(false), 200)}
                             className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
                             autoFocus
+                            autoComplete="off"
                         />
-                        <datalist id="category-list-bulk">
-                            {categories.map(cat => <option key={cat} value={cat} />)}
-                        </datalist>
+                        {isDropdownOpen && (
+                             <div className="absolute z-50 w-full bg-white border border-slate-300 rounded-md shadow-lg mt-1 max-h-40 overflow-y-auto">
+                               {filteredCategories.length > 0 ? (
+                                 filteredCategories.map(cat => (
+                                   <button
+                                     key={cat}
+                                     type="button"
+                                     onClick={() => {
+                                         setTargetCategory(cat);
+                                         setIsDropdownOpen(false);
+                                     }}
+                                     className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                                   >
+                                     {cat}
+                                   </button>
+                                 ))
+                               ) : (
+                                 <div className="px-4 py-2 text-sm text-slate-500">
+                                   {targetCategory.trim() ? `Create new category: "${targetCategory.trim()}"` : (categories.length > 0 ? "No match found." : "No categories yet.")}
+                                 </div>
+                               )}
+                             </div>
+                        )}
                     </div>
                 </div>
                 <div className="bg-slate-50 p-4 flex justify-end gap-4 border-t">
@@ -162,6 +192,7 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [isBulkEditModalOpen, setIsBulkEditModalOpen] = useState(false);
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
   
   const [categories, setCategories] = useState<string[]>(() => {
     try {
@@ -214,6 +245,13 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
         return matchesSearch && matchesCategory;
     });
   }, [items, searchQuery, categoryFilter]);
+  
+  const filteredCategories = useMemo(() => {
+    if (!isCategoryDropdownOpen) return [];
+    const searchTerm = formState.category.trim().toLowerCase();
+    if (!searchTerm) return categories;
+    return categories.filter(cat => cat.toLowerCase().includes(searchTerm));
+  }, [categories, formState.category, isCategoryDropdownOpen]);
 
   const groupedItems = useMemo(() => {
     return filteredItems.reduce<Record<string, Item[]>>((acc, item) => {
@@ -345,21 +383,50 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
         <div className="bg-slate-50 p-6 rounded-lg mb-8 border border-slate-200">
             <h3 className="text-lg font-semibold text-gray-700 mb-4">{isEditing ? 'Edit Item' : 'Add New Item'}</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <textarea name="description" placeholder="Item Description" value={formState.description} onChange={handleInputChange} rows={3} className="md:col-span-2 w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"/>
-                <input type="number" name="price" placeholder="Price" value={formState.price} onChange={handleInputChange} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"/>
+                <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-600 mb-1">Description</label>
+                    <textarea name="description" placeholder="Item Description" value={formState.description} onChange={handleInputChange} rows={3} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"/>
+                </div>
                 <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">Price</label>
+                    <input type="number" name="price" placeholder="Price" value={formState.price} onChange={handleInputChange} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"/>
+                </div>
+                <div className="relative">
+                  <label className="block text-sm font-medium text-gray-600 mb-1">Category</label>
                   <input
                     type="text"
                     name="category"
-                    list="category-list"
-                    placeholder="Category (optional)"
+                    placeholder="Select or type a category"
                     value={formState.category}
                     onChange={handleInputChange}
-                    className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    onFocus={() => setIsCategoryDropdownOpen(true)}
+                    onBlur={() => setTimeout(() => setIsCategoryDropdownOpen(false), 200)}
+                    className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                    autoComplete="off"
                   />
-                  <datalist id="category-list">
-                    {categories.map(cat => <option key={cat} value={cat} />)}
-                  </datalist>
+                  {isCategoryDropdownOpen && (
+                    <div className="absolute z-20 w-full bg-white border border-slate-300 rounded-md shadow-lg mt-1 max-h-40 overflow-y-auto">
+                      {filteredCategories.length > 0 ? (
+                        filteredCategories.map(cat => (
+                          <button
+                            key={cat}
+                            type="button"
+                            onClick={() => {
+                                setFormState(prev => ({ ...prev, category: cat }));
+                                setIsCategoryDropdownOpen(false);
+                            }}
+                            className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                          >
+                            {cat}
+                          </button>
+                        ))
+                      ) : (
+                        <div className="px-4 py-2 text-sm text-slate-500">
+                           {formState.category.trim() ? `Create new category: "${formState.category.trim()}"` : (categories.length > 0 ? "No match found." : "No categories yet.")}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
             </div>
             <div className="mt-4 flex gap-4">
