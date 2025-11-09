@@ -388,12 +388,12 @@ const SetupPage: React.FC<SetupPageProps> = ({
             <div className="mt-8 pt-6 border-t">
                 <div className="mb-8">
                     <h2 className="text-xl font-bold text-gray-800 mb-4">Data Management</h2>
-                    <p className="text-slate-600 mb-4">Save your data to a file for backup, or restore from a previously saved file.</p>
+                    <p className="text-slate-600 mb-4">Backup all your application data to a file on your computer, or restore it from a previously saved backup file.</p>
                     <div className="flex flex-col sm:flex-row gap-4">
                         <div className="relative inline-block text-left flex-1">
                           <button onClick={(e) => { e.stopPropagation(); setIsExportMenuOpen(prev => !prev); }} className="w-full flex items-center justify-center gap-2 bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-700">
                             <DownloadIcon />
-                            <span>Export Data</span>
+                            <span>Export to Computer</span>
                             <ChevronDownIcon />
                           </button>
                           {isExportMenuOpen && (
@@ -412,7 +412,7 @@ const SetupPage: React.FC<SetupPageProps> = ({
                         </div>
 
                         <button onClick={() => fileInputRef.current?.click()} className="flex-1 flex items-center justify-center gap-2 bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-700">
-                            <UploadIcon /> Import Data
+                            <UploadIcon /> Import from Computer
                         </button>
                         <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" className="hidden"/>
                     </div>
