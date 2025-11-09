@@ -319,7 +319,7 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
   return (
     <main className="container mx-auto p-4 sm:p-6 lg:p-8">
       <div className="max-w-4xl mx-auto bg-white p-4 sm:p-8 rounded-lg shadow-md">
-        <div className="flex justify-between items-center mb-6 border-b pb-4">
+        <div className="flex flex-wrap justify-between items-center gap-4 mb-6 border-b pb-4">
           <h2 className="text-2xl font-bold text-gray-800">Manage Items</h2>
           {selectedIds.size > 0 && (
             <div className="flex items-center gap-2">
@@ -415,8 +415,8 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
                               <h4 className="font-bold text-sm uppercase text-slate-500 bg-slate-100 p-2 rounded-t-md mt-4">{category}</h4>
                               {/* FIX: Add an Array.isArray check before mapping over itemsInCategory to prevent runtime errors if the value is not an array. */}
                               {Array.isArray(itemsInCategory) && itemsInCategory.map(item => (
-                                <div key={item.id} className={`p-4 border-x border-b flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-2 ${selectedIds.has(item.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-white'}`}>
-                                    <div className="flex items-start w-full sm:w-auto">
+                                <div key={item.id} className={`p-4 border-x border-b flex flex-wrap justify-between items-center gap-x-4 gap-y-2 ${selectedIds.has(item.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-white'}`}>
+                                    <div className="flex items-start">
                                         <input
                                           type="checkbox"
                                           className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mt-1"
@@ -428,7 +428,7 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
                                             <p className="text-sm text-slate-500">{formatCurrency(item.price)}</p>
                                         </div>
                                     </div>
-                                    <div className="flex gap-2 self-end sm:self-center flex-shrink-0">
+                                    <div className="flex gap-2 flex-shrink-0 ml-auto sm:ml-0">
                                         <button onClick={() => handleEditItem(item)} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-100">Edit</button>
                                         <button onClick={() => handleDeleteItem(item.id)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-100">Delete</button>
                                     </div>
