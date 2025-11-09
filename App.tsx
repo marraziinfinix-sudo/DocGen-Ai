@@ -174,8 +174,6 @@ const App: React.FC = () => {
     return [];
   });
 
-  const [itemSearchQuery, setItemSearchQuery] = useState('');
-  const [isItemSearchOpen, setIsItemSearchOpen] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [loadedDocumentInfo, setLoadedDocumentInfo] = useState<{ id: number; status: InvoiceStatus | QuotationStatus | null; docType: DocumentType } | null>(null);
   const [isCreatingNew, setIsCreatingNew] = useState(true);
@@ -184,6 +182,10 @@ const App: React.FC = () => {
   const [isSaveItemsModalOpen, setIsSaveItemsModalOpen] = useState(false);
   const [potentialNewItems, setPotentialNewItems] = useState<LineItem[]>([]);
   const [pendingDoc, setPendingDoc] = useState<SavedDocument | null>(null);
+
+  // States for the new item form
+  const [newLineItem, setNewLineItem] = useState<Omit<LineItem, 'id'>>({ description: '', quantity: 1, price: 0 });
+  const [selectedSavedItemId, setSelectedSavedItemId] = useState<string>('');
 
 
   // --- LocalStorage Persistence ---
@@ -250,7 +252,14 @@ const App: React.FC = () => {
   };
 
   const handleAddLineItem = () => {
-    setLineItems(prev => [...prev, { id: Date.now(), description: '', quantity: 1, price: 0 }]);
+    if (!newLineItem.description.trim() || newLineItem.price < 0 || newLineItem.quantity <= 0) {
+        alert('Please provide a valid description, quantity, and price for the item.');
+        return;
+    }
+    setLineItems(prev => [...prev, { id: Date.now(), ...newLineItem }]);
+    // Reset form for next item
+    setNewLineItem({ description: '', quantity: 1, price: 0 });
+    setSelectedSavedItemId('');
   };
 
   const handleDeleteLineItem = (id: number) => {
@@ -313,24 +322,37 @@ const App: React.FC = () => {
     setDueDate(newDueDate.toISOString().split('T')[0]);
   };
   
-  const handleItemSelect = (item: Item) => {
-    setLineItems(prev => [
-        ...prev, 
-        { 
-            id: Date.now(), 
-            description: item.description, 
-            quantity: 1, 
-            price: item.price
-        }
-    ]);
-    setItemSearchQuery('');
-    setIsItemSearchOpen(false);
+  const handleNewItemSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const itemId = e.target.value;
+    setSelectedSavedItemId(itemId);
+
+    if (itemId) {
+      const selectedItem = items.find(i => i.id === parseInt(itemId, 10));
+      if (selectedItem) {
+        setNewLineItem({
+          description: selectedItem.description,
+          price: selectedItem.price,
+          quantity: 1,
+        });
+      }
+    } else {
+      // "-- New Item --" selected
+      setNewLineItem({ description: '', quantity: 1, price: 0 });
+    }
   };
   
-  const groupedFilteredItems = useMemo(() => {
+  const handleNewLineItemChange = (field: keyof Omit<LineItem, 'id'>, value: string | number) => {
+    setNewLineItem(prev => ({ ...prev, [field]: value }));
+    // If user starts typing, we assume it's a new custom item, so deselect from dropdown
+    if (selectedSavedItemId) {
+        setSelectedSavedItemId('');
+    }
+  };
+  
+  const groupedItemsForSelect = useMemo(() => {
     if (!Array.isArray(items)) return {};
-    const filtered = items.filter(item => item.description.toLowerCase().includes(itemSearchQuery.toLowerCase()));
-    return filtered.reduce<Record<string, Item[]>>((acc, item) => {
+    const sortedItems = [...items].sort((a, b) => a.description.localeCompare(b.description));
+    return sortedItems.reduce<Record<string, Item[]>>((acc, item) => {
       const category = item.category || 'Uncategorized';
       if (!acc[category]) {
         acc[category] = [];
@@ -338,7 +360,7 @@ const App: React.FC = () => {
       acc[category].push(item);
       return acc;
     }, {});
-  }, [items, itemSearchQuery]);
+  }, [items]);
 
   const saveDocument = (docToSave: SavedDocument) => {
     if (docToSave.documentType === DocumentType.Invoice) {
@@ -724,43 +746,64 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="bg-white p-6 rounded-lg shadow-md">
-                  <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-bold text-gray-800">Line Items</h2>
-                    <div className="relative" onClick={(e) => e.stopPropagation()}>
-                      <input 
-                          type="text"
-                          placeholder="Search for an item..."
-                          value={itemSearchQuery}
-                          onChange={e => { setItemSearchQuery(e.target.value); setIsItemSearchOpen(true); }}
-                          onFocus={() => setIsItemSearchOpen(true)}
-                          className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
-                      />
-                      {isItemSearchOpen && (
-                          <div className="absolute z-10 top-full mt-1 w-full max-h-60 overflow-y-auto bg-white border rounded-md shadow-lg">
-                              {Object.keys(groupedFilteredItems).length > 0 ? (
-                                  Object.entries(groupedFilteredItems).map(([category, itemsInCategory]) => (
-                                      <div key={category}>
-                                          <h3 className="text-xs font-bold uppercase text-slate-500 bg-slate-100 p-2 sticky top-0">{category}</h3>
+                  <h2 className="text-xl font-bold text-gray-800 mb-4">Line Items</h2>
+                  
+                  {/* New Item Form */}
+                  <div className="bg-slate-50 p-4 rounded-lg border space-y-4 mb-6">
+                      <h3 className="text-lg font-semibold text-gray-700">Add an Item</h3>
+                      <div>
+                          <label className="block text-sm font-medium text-gray-600 mb-1">Select Saved Item</label>
+                          <select
+                              value={selectedSavedItemId}
+                              onChange={handleNewItemSelect}
+                              className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                          >
+                              <option value="">-- New Item --</option>
+                              {Object.keys(groupedItemsForSelect).length > 0 ? (
+                                  Object.entries(groupedItemsForSelect).map(([category, itemsInCategory]) => (
+                                      <optgroup key={category} label={category}>
                                           {itemsInCategory.map(item => (
-                                              <div key={item.id} onClick={() => handleItemSelect(item)} className="p-2 hover:bg-indigo-50 cursor-pointer flex justify-between items-center">
-                                                  <span>{item.description}</span>
-                                                  <span className="text-sm text-slate-500">{formatCurrency(item.price)}</span>
-                                              </div>
+                                              <option key={item.id} value={item.id}>
+                                                  {item.description} ({formatCurrency(item.price)})
+                                              </option>
                                           ))}
-                                      </div>
+                                      </optgroup>
                                   ))
                               ) : (
-                                  <div className="p-2 text-slate-500 text-center text-sm">
-                                    {items.length > 0 ? "No items match your search." : "No saved items. Go to the Items page to add some."}
-                                  </div>
+                                  <option disabled>No saved items to select</option>
                               )}
+                          </select>
+                      </div>
+
+                      <div>
+                          <label className="block text-sm font-medium text-gray-600 mb-1">Description</label>
+                          <textarea
+                              rows={2}
+                              placeholder="Enter item description"
+                              value={newLineItem.description}
+                              onChange={e => handleNewLineItemChange('description', e.target.value)}
+                              className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 resize-none"
+                          />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                          <div>
+                              <label className="block text-sm font-medium text-gray-600 mb-1">Quantity</label>
+                              <input type="number" value={newLineItem.quantity} onChange={e => handleNewLineItemChange('quantity', parseFloat(e.target.value) || 0)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
                           </div>
-                      )}
-                    </div>
+                          <div>
+                              <label className="block text-sm font-medium text-gray-600 mb-1">Price</label>
+                              <input type="number" step="0.01" value={newLineItem.price} onChange={e => handleNewLineItemChange('price', parseFloat(e.target.value) || 0)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                          </div>
+                      </div>
+                      
+                      <button onClick={handleAddLineItem} className="w-full flex items-center justify-center gap-2 bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700">
+                          <PlusIcon /> Add Item to Document
+                      </button>
                   </div>
-                  
+
                   <div className="space-y-4">
-                    {lineItems.map((item, index) => (
+                    {lineItems.map((item) => (
                       <div key={item.id} className="grid grid-cols-12 gap-2 p-3 bg-slate-50 rounded-lg border">
                           <div className="col-span-12">
                               <label className="block text-sm font-medium text-gray-600 mb-1">Description</label>
@@ -797,10 +840,6 @@ const App: React.FC = () => {
                       </div>
                     ))}
                   </div>
-
-                  <button onClick={handleAddLineItem} className="mt-4 flex items-center gap-2 bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700">
-                      <PlusIcon /> Add Item
-                  </button>
                 </div>
 
                 <div className="bg-white p-6 rounded-lg shadow-md">
@@ -882,7 +921,7 @@ const App: React.FC = () => {
 
 
   return (
-    <div className="min-h-screen bg-gray-100" onClick={() => { setIsItemSearchOpen(false); }}>
+    <div className="min-h-screen bg-gray-100">
       <header className="bg-white shadow-md sticky top-0 z-20 h-[52px] flex items-center">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center">
