@@ -594,23 +594,41 @@ const App: React.FC = () => {
   };
 
   const handleCreateInvoiceFromQuote = (quotation: SavedDocument) => {
-    handleLoadDocument({
-      ...quotation,
-      documentType: DocumentType.Invoice,
-      status: InvoiceStatus.Pending,
-      quotationStatus: QuotationStatus.Agreed,
-    });
-    setDocumentType(DocumentType.Invoice);
-    setStatus(InvoiceStatus.Pending);
-    setSavedQuotations(prev => prev.map(q => q.id === quotation.id ? {...q, quotationStatus: QuotationStatus.Agreed} : q));
-    
-    // Generate new invoice number based on client, even for converted quote
+    // Generate new invoice number
     const newInvoiceNumber = generateDocumentNumber(quotation.clientDetails, DocumentType.Invoice, savedInvoices, savedQuotations);
-    setDocumentNumber(newInvoiceNumber);
-    
-    setLoadedDocumentInfo({id: Date.now(), status: InvoiceStatus.Pending, docType: DocumentType.Invoice});
-    setIsCreatingNew(true); // Treat as a new document to get a new number, but based on old data.
-    setCurrentView('editor');
+
+    // Set new issue and due dates for the invoice
+    const today = new Date().toISOString().split('T')[0];
+    const newDueDate = new Date();
+    // Assuming a default of 15 days for new invoices
+    newDueDate.setDate(newDueDate.getDate() + 15);
+
+    // Create the new invoice object from the quotation
+    const newInvoice: SavedDocument = {
+      ...quotation,
+      id: Date.now(),
+      documentType: DocumentType.Invoice,
+      documentNumber: newInvoiceNumber,
+      status: InvoiceStatus.Pending,
+      quotationStatus: null, // Invoices don't have quotation status
+      payments: [],
+      issueDate: today,
+      dueDate: newDueDate.toISOString().split('T')[0],
+    };
+
+    // Save the new invoice
+    setSavedInvoices(prev => [newInvoice, ...prev]);
+
+    // Update the original quotation's status to 'Agreed'
+    setSavedQuotations(prev => 
+      prev.map(q => 
+        q.id === quotation.id 
+          ? { ...q, quotationStatus: QuotationStatus.Agreed } 
+          : q
+      )
+    );
+
+    alert(`Invoice #${newInvoiceNumber} has been created successfully.`);
   };
   
   const handlePrint = () => window.print();
