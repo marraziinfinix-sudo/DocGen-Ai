@@ -388,12 +388,12 @@ const SetupPage: React.FC<SetupPageProps> = ({
             <div className="mt-8 pt-6 border-t">
                 <div className="mb-8">
                     <h2 className="text-xl font-bold text-gray-800 mb-4">Data Management</h2>
-                    <p className="text-slate-600 mb-4">Backup all your application data to a file on your computer, or restore it from a previously saved backup file.</p>
+                    <p className="text-slate-600 mb-4">Backup your application data to a file on your computer, or restore from a previously saved backup. This gives you full control over where your data is stored.</p>
                     <div className="flex flex-col sm:flex-row gap-4">
                         <div className="relative inline-block text-left flex-1">
                           <button onClick={(e) => { e.stopPropagation(); setIsExportMenuOpen(prev => !prev); }} className="w-full flex items-center justify-center gap-2 bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-700">
                             <DownloadIcon />
-                            <span>Export to Computer</span>
+                            <span>Save Backup to Computer...</span>
                             <ChevronDownIcon />
                           </button>
                           {isExportMenuOpen && (
@@ -412,10 +412,13 @@ const SetupPage: React.FC<SetupPageProps> = ({
                         </div>
 
                         <button onClick={() => fileInputRef.current?.click()} className="flex-1 flex items-center justify-center gap-2 bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-700">
-                            <UploadIcon /> Import from Computer
+                            <UploadIcon /> Load Backup from Computer...
                         </button>
                         <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" className="hidden"/>
                     </div>
+                    <p className="text-xs text-slate-500 mt-3 text-center sm:text-left">
+                        Your browser will open a dialog for you to choose a file location. All data is stored locally in your browser, not on any server.
+                    </p>
                 </div>
                 <div className="text-right">
                     <button onClick={onDone} className="bg-slate-500 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-slate-600 transition-colors duration-200">
