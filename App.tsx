@@ -943,15 +943,15 @@ const App: React.FC = () => {
                                   </button>
                               </div>
                           </div>
-                          <div className="col-span-5">
+                          <div className="col-span-6 sm:col-span-5">
                               <label className="block text-sm font-medium text-gray-600 mb-1">Quantity</label>
                               <input type="number" value={item.quantity} onChange={e => handleLineItemChange(item.id, 'quantity', parseFloat(e.target.value) || 0)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
                           </div>
-                          <div className="col-span-5">
+                          <div className="col-span-6 sm:col-span-5">
                               <label className="block text-sm font-medium text-gray-600 mb-1">Price</label>
                               <input type="number" value={item.price} onChange={e => handleLineItemChange(item.id, 'price', parseFloat(e.target.value) || 0)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
                           </div>
-                           <div className="col-span-2 flex items-end">
+                           <div className="col-span-12 sm:col-span-2 flex items-end">
                               <button onClick={() => handleDeleteLineItem(item.id)} className="w-full p-2 bg-red-100 text-red-600 rounded-md hover:bg-red-200 flex justify-center items-center">
                                   <TrashIcon />
                               </button>
