@@ -245,8 +245,7 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
                     <div key={doc.id} className={`p-4 rounded-lg border lg:p-0 lg:shadow-none lg:rounded-none lg:border-b ${selectedIds.has(doc.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-white'}`}>
                         {/* Mobile Card View */}
                         <div className="lg:hidden">
-                            <div className="flex justify-between items-center">
-                                <div className="flex items-start">
+                            <div className="flex items-start">
                                 <input
                                     type="checkbox"
                                     className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mt-1.5"
@@ -254,11 +253,10 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
                                     onChange={() => handleSelect(doc.id)}
                                 />
                                 <div className="ml-4">
+                                    <span className={`inline-block text-xs font-bold py-1 px-3 rounded-full capitalize mb-1 ${statusInfo.color}`}>{statusInfo.text}</span>
                                     <p className="font-bold text-slate-800">{doc.clientDetails.name}</p>
                                     <p className="text-sm text-slate-500">Quote #{doc.documentNumber}</p>
                                 </div>
-                                </div>
-                                <span className={`text-xs font-bold py-1 px-3 rounded-full capitalize ${statusInfo.color}`}>{statusInfo.text}</span>
                             </div>
                             <div className="mt-2 text-sm text-slate-600 ml-8">
                                 <p>Total: <span className="font-bold text-indigo-600">{formatCurrency(doc.total)}</span></p>

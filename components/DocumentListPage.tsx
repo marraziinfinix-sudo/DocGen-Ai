@@ -363,8 +363,7 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
                       <div key={doc.id} className={`p-4 rounded-lg border lg:p-0 lg:shadow-none lg:rounded-none lg:border-b ${selectedIds.has(doc.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-white'}`}>
                         {/* Mobile Card View */}
                         <div className="lg:hidden space-y-3">
-                          <div className="flex justify-between items-center">
-                              <div className="flex items-start">
+                            <div className="flex items-start">
                                 <input
                                   type="checkbox"
                                   className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mt-1.5"
@@ -372,12 +371,11 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
                                   onChange={() => handleSelect(doc.id)}
                                 />
                                 <div className="ml-4">
+                                    <span className={`inline-block text-xs font-bold py-1 px-3 rounded-full capitalize mb-1 ${displayStatus.color}`}>{displayStatus.text}</span>
                                     <p className="font-bold text-slate-800 text-lg">{doc.clientDetails.name}</p>
                                     <p className="text-sm text-slate-500">Invoice #{doc.documentNumber}</p>
                                 </div>
-                              </div>
-                              <span className={`text-xs font-bold py-1 px-3 rounded-full capitalize ${displayStatus.color}`}>{displayStatus.text}</span>
-                          </div>
+                            </div>
 
                           <div className="flex justify-between items-baseline bg-slate-50 p-3 rounded-lg ml-8">
                               <div>
