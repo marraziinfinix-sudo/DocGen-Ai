@@ -16,6 +16,9 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
   const [openDropdownId, setOpenDropdownId] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('All');
   const [clientFilter, setClientFilter] = useState('All');
+  const [clientSearchInput, setClientSearchInput] = useState('');
+  const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
+
 
   const getQuotationDisplayStatusText = (doc: SavedDocument): QuotationStatus => {
     if (doc.quotationStatus === QuotationStatus.Agreed) {
@@ -31,11 +34,15 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
     return QuotationStatus.Active;
   };
   
-  const uniqueClients = useMemo(() => {
+  const dropdownClients = useMemo(() => {
     if (!Array.isArray(documents)) return [];
-    const clientNames = documents.map(doc => doc.clientDetails.name);
-    return ['All', ...Array.from(new Set(clientNames)).sort()];
-  }, [documents]);
+    const uniqueClientNames = Array.from(new Set(documents.map(doc => doc.clientDetails.name))).sort();
+
+    if (!clientSearchInput) {
+        return uniqueClientNames;
+    }
+    return uniqueClientNames.filter(name => name.toLowerCase().includes(clientSearchInput.toLowerCase()));
+  }, [documents, clientSearchInput]);
 
   const filteredDocuments = useMemo(() => {
     if (!Array.isArray(documents)) return [];
@@ -211,19 +218,55 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
                     </div>
                 </div>
             </div>
-            <div className="flex-shrink-0">
-                <label htmlFor="client-filter" className="block text-sm font-medium text-slate-600 mb-1 sm:hidden">Filter by client:</label>
-                <select
-                    id="client-filter"
-                    value={clientFilter}
-                    onChange={(e) => setClientFilter(e.target.value)}
-                    className="w-full sm:w-auto p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
-                    aria-label="Filter by client"
-                >
-                    {uniqueClients.map(clientName => (
-                        <option key={clientName} value={clientName}>{clientName === 'All' ? 'All Clients' : clientName}</option>
-                    ))}
-                </select>
+             <div className="relative flex-shrink-0">
+              <label htmlFor="client-filter-search" className="block text-sm font-medium text-slate-600 mb-1 sm:hidden">Filter by client:</label>
+              <input
+                  id="client-filter-search"
+                  type="text"
+                  value={clientSearchInput}
+                  onChange={(e) => {
+                      setClientSearchInput(e.target.value);
+                      if (e.target.value === '') {
+                          setClientFilter('All');
+                      }
+                  }}
+                  onFocus={() => setIsClientDropdownOpen(true)}
+                  onBlur={() => setTimeout(() => setIsClientDropdownOpen(false), 200)}
+                  placeholder="Filter by client..."
+                  autoComplete="off"
+                  className="w-full sm:w-56 p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                  aria-label="Filter by client"
+              />
+              {isClientDropdownOpen && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-slate-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                      <button
+                          onClick={() => {
+                              setClientFilter('All');
+                              setClientSearchInput('');
+                              setIsClientDropdownOpen(false);
+                          }}
+                          className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                      >
+                          All Clients
+                      </button>
+                      {dropdownClients.map(name => (
+                          <button
+                              key={name}
+                              onClick={() => {
+                                  setClientFilter(name);
+                                  setClientSearchInput(name);
+                                  setIsClientDropdownOpen(false);
+                              }}
+                              className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                          >
+                              {name}
+                          </button>
+                      ))}
+                      {(dropdownClients.length === 0 && clientSearchInput) && (
+                          <div className="px-4 py-2 text-sm text-slate-500">No clients match search.</div>
+                      )}
+                  </div>
+              )}
             </div>
         </div>
 
