@@ -72,7 +72,7 @@ const CategoryManager: React.FC<{
     return (
         <div className="bg-slate-50 p-6 rounded-lg mb-8 border border-slate-200">
             <h3 className="text-lg font-semibold text-gray-700 mb-4">Manage Categories</h3>
-            <form onSubmit={handleAddCategory} className="flex gap-2 mb-4">
+            <form onSubmit={handleAddCategory} className="flex flex-col sm:flex-row gap-2 mb-4">
                 <input
                     type="text"
                     value={newCategory}
@@ -80,7 +80,7 @@ const CategoryManager: React.FC<{
                     placeholder="Add new category"
                     className="flex-grow p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
                 />
-                <button type="submit" className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 flex items-center gap-2">
+                <button type="submit" className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 flex items-center justify-center gap-2">
                     <PlusIcon /> Add
                 </button>
             </form>
