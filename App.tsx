@@ -310,6 +310,10 @@ const App: React.FC = () => {
     setClientDetails({ name: '', address: '', email: '', phone: '' });
   };
 
+  const handleClearNewLineItem = () => {
+    setNewLineItem({ description: '', quantity: 1, price: 0 });
+  };
+
   const handleClientDetailChange = (field: keyof Details, value: string) => {
     setClientDetails(prev => ({ ...prev, [field]: value }));
     if (field === 'name') {
@@ -827,7 +831,16 @@ const App: React.FC = () => {
                   <h2 className="text-xl font-bold text-gray-800 mb-4">Items</h2>
                   
                   <div className="bg-slate-50 p-4 rounded-lg border space-y-4 mb-6">
-                    <h3 className="text-lg font-semibold text-gray-700">Add an Item</h3>
+                    <div className="flex justify-between items-center">
+                        <h3 className="text-lg font-semibold text-gray-700">Add an Item</h3>
+                        <button 
+                            onClick={handleClearNewLineItem} 
+                            type="button"
+                            className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
+                        >
+                            Clear Fields
+                        </button>
+                    </div>
                     
                     <div className="relative">
                       <label className="block text-sm font-medium text-gray-600 mb-1">Description</label>
