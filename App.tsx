@@ -10,6 +10,7 @@ import ClientListPage from './components/ClientListPage';
 import ItemListPage from './components/ItemListPage';
 import DocumentListPage from './components/DocumentListPage';
 import QuotationListPage from './components/QuotationListPage';
+import SaveItemsModal from './components/SaveItemsModal';
 
 declare const jspdf: any;
 declare const html2canvas: any;
@@ -178,6 +179,11 @@ const App: React.FC = () => {
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [loadedDocumentInfo, setLoadedDocumentInfo] = useState<{ id: number; status: InvoiceStatus | QuotationStatus | null; docType: DocumentType } | null>(null);
   const [isCreatingNew, setIsCreatingNew] = useState(true);
+  
+  // States for the "Save New Items" modal
+  const [isSaveItemsModalOpen, setIsSaveItemsModalOpen] = useState(false);
+  const [potentialNewItems, setPotentialNewItems] = useState<LineItem[]>([]);
+  const [pendingDoc, setPendingDoc] = useState<SavedDocument | null>(null);
 
 
   // --- LocalStorage Persistence ---
@@ -334,6 +340,31 @@ const App: React.FC = () => {
     }, {});
   }, [items, itemSearchQuery]);
 
+  const saveDocument = (docToSave: SavedDocument) => {
+    if (docToSave.documentType === DocumentType.Invoice) {
+        setSavedInvoices(prev => {
+            const existing = prev.find(inv => inv.id === docToSave.id);
+            if (existing) {
+                return prev.map(inv => inv.id === docToSave.id ? docToSave : inv);
+            }
+            return [docToSave, ...prev];
+        });
+        alert('Invoice saved successfully!');
+    } else {
+        setSavedQuotations(prev => {
+            const existing = prev.find(q => q.id === docToSave.id);
+            if (existing) {
+                return prev.map(q => q.id === docToSave.id ? docToSave : q);
+            }
+            return [docToSave, ...prev];
+        });
+        alert('Quotation saved successfully!');
+    }
+    
+    setIsCreatingNew(false);
+    setLoadedDocumentInfo({id: docToSave.id, status: docToSave.status || docToSave.quotationStatus || null, docType: docToSave.documentType});
+  };
+
   const handleSaveDocument = () => {
     if (!clientDetails.name || lineItems.length === 0) {
       alert('Please fill in client details and add at least one line item.');
@@ -362,28 +393,53 @@ const App: React.FC = () => {
       accentColor: accentColor,
     };
     
-    if (documentType === DocumentType.Invoice) {
-        setSavedInvoices(prev => {
-            const existing = prev.find(inv => inv.id === docToSave.id);
-            if (existing) {
-                return prev.map(inv => inv.id === docToSave.id ? docToSave : inv);
-            }
-            return [docToSave, ...prev];
-        });
-        alert('Invoice saved successfully!');
+    const savedItemDescriptions = new Set(items.map(i => i.description.trim().toLowerCase()));
+    const newItemsInDoc = lineItems.filter(li => 
+        li.description.trim() !== '' && 
+        !savedItemDescriptions.has(li.description.trim().toLowerCase())
+    );
+
+    if (newItemsInDoc.length > 0) {
+        setPotentialNewItems(newItemsInDoc);
+        setPendingDoc(docToSave);
+        setIsSaveItemsModalOpen(true);
     } else {
-        setSavedQuotations(prev => {
-            const existing = prev.find(q => q.id === docToSave.id);
-            if (existing) {
-                return prev.map(q => q.id === docToSave.id ? docToSave : q);
-            }
-            return [docToSave, ...prev];
-        });
-        alert('Quotation saved successfully!');
+        saveDocument(docToSave);
     }
-    
-    setIsCreatingNew(false);
-    setLoadedDocumentInfo({id: docToSave.id, status: docToSave.status || docToSave.quotationStatus || null, docType: documentType});
+  };
+
+  const handleConfirmSaveNewItems = () => {
+    if (potentialNewItems.length > 0) {
+        const itemsToAdd: Item[] = potentialNewItems.map((li, index) => ({ 
+            id: Date.now() + index,
+            description: li.description, 
+            price: li.price, 
+            category: '' 
+        }));
+        setItems(prev => [...prev, ...itemsToAdd]);
+    }
+    if (pendingDoc) {
+        saveDocument(pendingDoc);
+    }
+    setIsSaveItemsModalOpen(false);
+    setPotentialNewItems([]);
+    setPendingDoc(null);
+    setCurrentView('items');
+  };
+
+  const handleDeclineSaveNewItems = () => {
+    if (pendingDoc) {
+        saveDocument(pendingDoc);
+    }
+    setIsSaveItemsModalOpen(false);
+    setPotentialNewItems([]);
+    setPendingDoc(null);
+  };
+
+  const handleCancelSaveNewItems = () => {
+    setIsSaveItemsModalOpen(false);
+    setPotentialNewItems([]);
+    setPendingDoc(null);
   };
 
   const handleCreateNew = () => {
@@ -880,6 +936,16 @@ const App: React.FC = () => {
         <div className="sm:pl-16 pb-16 sm:pb-0">
           {renderCurrentView()}
         </div>
+
+        {isSaveItemsModalOpen && (
+            <SaveItemsModal
+                isOpen={isSaveItemsModalOpen}
+                newItems={potentialNewItems}
+                onConfirm={handleConfirmSaveNewItems}
+                onDecline={handleDeclineSaveNewItems}
+                onCancel={handleCancelSaveNewItems}
+            />
+        )}
     </div>
   );
 };
