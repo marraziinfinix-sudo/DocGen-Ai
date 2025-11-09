@@ -17,8 +17,8 @@ declare const html2canvas: any;
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<'editor' | 'setup' | 'clients' | 'items' | 'invoices' | 'quotations'>('editor');
-  const [documentType, setDocumentType] = useState<DocumentType>(DocumentType.Quotation);
   
+  // --- Data States (loaded from localStorage) ---
   const [companies, setCompanies] = useState<Company[]>(() => {
     try {
       const saved = localStorage.getItem('companies');
@@ -43,12 +43,11 @@ const App: React.FC = () => {
       accentColor: '#4f46e5',
     }];
   });
-  
+
   const [activeCompanyId, setActiveCompanyId] = useState<number>(() => {
     try {
         const savedId = localStorage.getItem('activeCompanyId');
         const parsedId = savedId ? parseInt(savedId, 10) : null;
-        // The 'companies' variable is available here due to closure
         const availableCompanies = JSON.parse(localStorage.getItem('companies') || '[]');
         if (parsedId && availableCompanies.some((c: Company) => c.id === parsedId)) {
             return parsedId;
@@ -56,23 +55,52 @@ const App: React.FC = () => {
     } catch (e) {
         console.error('Failed to load active company ID from localStorage', e);
     }
-    // Fallback to the first company's ID
     const firstCompany = (JSON.parse(localStorage.getItem('companies') || '[]') as Company[])[0];
     return firstCompany ? firstCompany.id : 1;
   });
 
-  useEffect(() => {
+  const [clients, setClients] = useState<Client[]>(() => {
     try {
-        localStorage.setItem('activeCompanyId', String(activeCompanyId));
-    } catch (e) {
-        console.error('Failed to save active company ID to localStorage', e);
+      const saved = localStorage.getItem('clients');
+      return saved && Array.isArray(JSON.parse(saved)) ? JSON.parse(saved) : [];
+    } catch (e) { console.error(e); return []; }
+  });
+
+  const [items, setItems] = useState<Item[]>(() => {
+    try {
+      const saved = localStorage.getItem('items');
+      return saved && Array.isArray(JSON.parse(saved)) ? JSON.parse(saved) : [];
+    } catch (e) { console.error(e); return []; }
+  });
+
+  const [savedInvoices, setSavedInvoices] = useState<SavedDocument[]>(() => {
+    try {
+      const saved = localStorage.getItem('savedInvoices');
+      return saved && Array.isArray(JSON.parse(saved)) ? JSON.parse(saved) : [];
+    } catch (e) { console.error(e); return []; }
+  });
+
+  const [savedQuotations, setSavedQuotations] = useState<SavedDocument[]>(() => {
+    try {
+      const saved = localStorage.getItem('savedQuotations');
+      return saved && Array.isArray(JSON.parse(saved)) ? JSON.parse(saved) : [];
+    } catch (e) { console.error(e); return []; }
+  });
+  
+  const getNextDocumentNumber = useCallback((docType: DocumentType, invoices: SavedDocument[], quotations: SavedDocument[]): string => {
+    const list = docType === DocumentType.Invoice ? invoices : quotations;
+    if (!Array.isArray(list) || list.length === 0) {
+        return '001';
     }
-  }, [activeCompanyId]);
+    const numbers = list.map(doc => parseInt(doc.documentNumber, 10)).filter(n => !isNaN(n));
+    const lastNum = numbers.length > 0 ? Math.max(...numbers) : 0;
+    return String(lastNum + 1).padStart(3, '0');
+  }, []);
 
-
+  // --- Document Form States ---
+  const [documentType, setDocumentType] = useState<DocumentType>(DocumentType.Quotation);
   const activeCompany = useMemo(() => companies.find(c => c.id === activeCompanyId) || companies[0], [companies, activeCompanyId]);
-
-  // States for the current document form
+  
   const [companyDetails, setCompanyDetails] = useState<Details>(activeCompany.details);
   const [companyLogo, setCompanyLogo] = useState<string | null>(activeCompany.logo);
   const [bankQRCode, setBankQRCode] = useState<string | null>(activeCompany.bankQRCode);
@@ -81,7 +109,31 @@ const App: React.FC = () => {
   const [currency, setCurrency] = useState(activeCompany.currency);
   const [template, setTemplate] = useState(activeCompany.template);
   const [accentColor, setAccentColor] = useState(activeCompany.accentColor);
+  const [clientDetails, setClientDetails] = useState<Details>({ name: '', address: '', email: '', phone: '' });
+  const [documentNumber, setDocumentNumber] = useState(() => getNextDocumentNumber(DocumentType.Quotation, [], savedQuotations));
+  const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0]);
+  const [dueDate, setDueDate] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() + 15);
+    return date.toISOString().split('T')[0];
+  });
+  const [dueDateOption, setDueDateOption] = useState<string>('15days');
+  const [lineItems, setLineItems] = useState<LineItem[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [status, setStatus] = useState<InvoiceStatus | null>(null);
+  const [generatingStates, setGeneratingStates] = useState<Record<number, boolean>>({});
+  const [loadedDocumentInfo, setLoadedDocumentInfo] = useState<{ id: number; status: InvoiceStatus | QuotationStatus | null; docType: DocumentType } | null>(null);
+  const [isCreatingNew, setIsCreatingNew] = useState(true);
+  const [isSaveItemsModalOpen, setIsSaveItemsModalOpen] = useState(false);
+  const [potentialNewItems, setPotentialNewItems] = useState<LineItem[]>([]);
+  const [pendingDoc, setPendingDoc] = useState<SavedDocument | null>(null);
+  const [isSaveClientModalOpen, setIsSaveClientModalOpen] = useState(false);
+  const [potentialNewClient, setPotentialNewClient] = useState<Details | null>(null);
+  const [newLineItem, setNewLineItem] = useState<Omit<LineItem, 'id'>>({ description: '', quantity: 1, price: 0 });
+  const [isItemDropdownOpen, setIsItemDropdownOpen] = useState(false);
+  const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
 
+  // --- Sync active company changes to form ---
   useEffect(() => {
     if (activeCompany) {
       setCompanyDetails(activeCompany.details);
@@ -94,164 +146,30 @@ const App: React.FC = () => {
       setAccentColor(activeCompany.accentColor);
     }
   }, [activeCompany]);
-
-
-  const [clientDetails, setClientDetails] = useState<Details>({ name: '', address: '', email: '', phone: '' });
   
-  const [clients, setClients] = useState<Client[]>(() => {
+  useEffect(() => {
     try {
-      const saved = localStorage.getItem('clients');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return parsed as Client[];
-        }
-      }
+        localStorage.setItem('activeCompanyId', String(activeCompanyId));
     } catch (e) {
-      console.error('Failed to load clients from localStorage', e);
+        console.error('Failed to save active company ID to localStorage', e);
     }
-    return [];
-  });
-
-   const [items, setItems] = useState<Item[]>(() => {
-    try {
-      const saved = localStorage.getItem('items');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return parsed as Item[];
-        }
-      }
-    } catch (e) {
-      console.error('Failed to load items from localStorage', e);
-    }
-    return [];
-  });
-
-  const [documentNumber, setDocumentNumber] = useState('001');
-  const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0]);
-  
-  const [dueDate, setDueDate] = useState(() => {
-    const date = new Date();
-    date.setDate(date.getDate() + 15);
-    return date.toISOString().split('T')[0];
-  });
-  const [dueDateOption, setDueDateOption] = useState<string>('15days');
-  
-  const [lineItems, setLineItems] = useState<LineItem[]>([]);
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [status, setStatus] = useState<InvoiceStatus | null>(null);
-  
-  const [generatingStates, setGeneratingStates] = useState<Record<number, boolean>>({});
-
-  const [savedInvoices, setSavedInvoices] = useState<SavedDocument[]>(() => {
-    try {
-      const saved = localStorage.getItem('savedInvoices');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return parsed as SavedDocument[];
-        }
-      }
-    } catch (e) {
-      console.error('Failed to load savedInvoices from localStorage', e);
-    }
-    return [];
-  });
-
-  const [savedQuotations, setSavedQuotations] = useState<SavedDocument[]>(() => {
-    try {
-      const saved = localStorage.getItem('savedQuotations');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return parsed as SavedDocument[];
-        }
-      }
-    } catch (e) {
-      console.error('Failed to load savedQuotations from localStorage', e);
-    }
-    return [];
-  });
-
-  const [selectedClientId, setSelectedClientId] = useState<string>('');
-  const [loadedDocumentInfo, setLoadedDocumentInfo] = useState<{ id: number; status: InvoiceStatus | QuotationStatus | null; docType: DocumentType } | null>(null);
-  const [isCreatingNew, setIsCreatingNew] = useState(true);
-  
-  // States for the "Save New Items" modal
-  const [isSaveItemsModalOpen, setIsSaveItemsModalOpen] = useState(false);
-  const [potentialNewItems, setPotentialNewItems] = useState<LineItem[]>([]);
-  const [pendingDoc, setPendingDoc] = useState<SavedDocument | null>(null);
-
-  // States for the "Save New Client" modal
-  const [isSaveClientModalOpen, setIsSaveClientModalOpen] = useState(false);
-  const [potentialNewClient, setPotentialNewClient] = useState<Details | null>(null);
-
-  // States for the new item form
-  const [newLineItem, setNewLineItem] = useState<Omit<LineItem, 'id'>>({ description: '', quantity: 1, price: 0 });
-  const [isItemDropdownOpen, setIsItemDropdownOpen] = useState(false);
-  const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
+  }, [activeCompanyId]);
 
 
   // --- LocalStorage Persistence ---
-  useEffect(() => {
-    try {
-      localStorage.setItem('companies', JSON.stringify(companies));
-    } catch (e) {
-      console.error('Failed to save companies to localStorage', e);
-    }
-  }, [companies]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('clients', JSON.stringify(clients));
-    } catch (e) {
-      console.error('Failed to save clients to localStorage', e);
-    }
-  }, [clients]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('items', JSON.stringify(items));
-    } catch (e) {
-      console.error('Failed to save items to localStorage', e);
-    }
-  }, [items]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('savedInvoices', JSON.stringify(savedInvoices));
-    } catch (e) {
-      console.error('Failed to save savedInvoices to localStorage', e);
-    }
-  }, [savedInvoices]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('savedQuotations', JSON.stringify(savedQuotations));
-    } catch (e) {
-      console.error('Failed to save savedQuotations to localStorage', e);
-    }
-  }, [savedQuotations]);
+  useEffect(() => { localStorage.setItem('companies', JSON.stringify(companies)); }, [companies]);
+  useEffect(() => { localStorage.setItem('clients', JSON.stringify(clients)); }, [clients]);
+  useEffect(() => { localStorage.setItem('items', JSON.stringify(items)); }, [items]);
+  useEffect(() => { localStorage.setItem('savedInvoices', JSON.stringify(savedInvoices)); }, [savedInvoices]);
+  useEffect(() => { localStorage.setItem('savedQuotations', JSON.stringify(savedQuotations)); }, [savedQuotations]);
 
   // --- Calculations ---
   const subtotal = useMemo(() => lineItems.reduce((acc, item) => acc + item.quantity * item.price, 0), [lineItems]);
   const taxAmount = useMemo(() => subtotal * (taxRate / 100), [subtotal, taxRate]);
   const total = useMemo(() => subtotal + taxAmount, [subtotal, taxAmount]);
-
-  const formatCurrency = useCallback((amount: number) => {
-    return `${activeCompany.currency} ${amount.toFixed(2)}`;
-  }, [activeCompany.currency]);
+  const formatCurrency = useCallback((amount: number) => `${activeCompany.currency} ${amount.toFixed(2)}`, [activeCompany.currency]);
 
   // --- Handlers ---
-  const handleDetailChange = (
-    setter: React.Dispatch<React.SetStateAction<Details>>,
-    field: keyof Details,
-    value: string
-  ) => {
-    setter(prev => ({ ...prev, [field]: value }));
-  };
-
   const handleLineItemChange = (id: number, field: keyof LineItem, value: string | number) => {
     setLineItems(prev => prev.map(item => (item.id === id ? { ...item, [field]: value } : item)));
   };
@@ -262,7 +180,6 @@ const App: React.FC = () => {
         return;
     }
     setLineItems(prev => [...prev, { id: Date.now(), ...newLineItem }]);
-    // Reset form for next item
     setNewLineItem({ description: '', quantity: 1, price: 0 });
   };
 
@@ -276,7 +193,7 @@ const App: React.FC = () => {
       const newDescription = await generateDescription(currentDescription);
       handleLineItemChange(id, 'description', newDescription);
     } catch (error) {
-      // Error is logged in the service, but you could add UI feedback here
+      console.error(error);
     } finally {
       setGeneratingStates(prev => ({ ...prev, [id]: false }));
     }
@@ -286,19 +203,11 @@ const App: React.FC = () => {
     setClientDetails(prev => ({ ...prev, [field]: value }));
     if (field === 'name') {
         setIsClientDropdownOpen(true);
-        // If user starts typing a new name, they are no longer on a selected client
-        setSelectedClientId(''); 
     }
   };
 
   const handleSavedClientSelected = (client: Client) => {
-    setClientDetails({
-      name: client.name,
-      address: client.address,
-      email: client.email,
-      phone: client.phone
-    });
-    setSelectedClientId(String(client.id));
+    setClientDetails({ name: client.name, address: client.address, email: client.email, phone: client.phone });
     setIsClientDropdownOpen(false);
   };
 
@@ -310,17 +219,13 @@ const App: React.FC = () => {
       newDueDate.setDate(newDueDate.getDate() + parseInt(value, 10));
     } else if (value.endsWith('months')) {
       newDueDate.setMonth(newDueDate.getMonth() + parseInt(value, 10));
-    } else if (value === 'custom') {
-      // Don't change due date yet, user will use the date picker
-      return;
-    }
+    } else if (value === 'custom') { return; }
     setDueDate(newDueDate.toISOString().split('T')[0]);
   };
 
   const handleIssueDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newIssueDate = e.target.value;
     setIssueDate(newIssueDate);
-    // Recalculate due date based on the current option
     const newDueDate = new Date(newIssueDate);
     if (dueDateOption.endsWith('days')) {
       newDueDate.setDate(newDueDate.getDate() + parseInt(dueDateOption, 10));
@@ -332,41 +237,33 @@ const App: React.FC = () => {
   
   const handleNewLineItemChange = (field: keyof Omit<LineItem, 'id'>, value: string | number) => {
     setNewLineItem(prev => ({ ...prev, [field]: value }));
-    if (field === 'description') {
-      setIsItemDropdownOpen(true);
-    }
+    if (field === 'description') setIsItemDropdownOpen(true);
   };
   
   const handleSavedItemSelected = (item: Item) => {
-    setNewLineItem({
-      description: item.description,
-      price: item.price,
-      quantity: 1,
-    });
+    setNewLineItem({ description: item.description, price: item.price, quantity: 1 });
     setIsItemDropdownOpen(false);
+  };
+
+  const handleDocumentTypeChange = (newType: DocumentType) => {
+    if (newType === documentType) return;
+    setDocumentType(newType);
+    if (isCreatingNew) {
+      setDocumentNumber(getNextDocumentNumber(newType, savedInvoices, savedQuotations));
+    }
   };
   
   const filteredSavedItems = useMemo(() => {
     if (!isItemDropdownOpen || !Array.isArray(items)) return [];
     const searchTerm = newLineItem.description.trim().toLowerCase();
-    
-    if (!searchTerm) {
-        return items;
-    }
-    
-    return items.filter(item => 
-        item.description.toLowerCase().includes(searchTerm)
-    );
+    if (!searchTerm) return items;
+    return items.filter(item => item.description.toLowerCase().includes(searchTerm));
   }, [items, newLineItem.description, isItemDropdownOpen]);
 
   const filteredSavedClients = useMemo(() => {
     if (!isClientDropdownOpen || !Array.isArray(clients)) return [];
     const searchTerm = clientDetails.name.trim().toLowerCase();
-    
-    if (!searchTerm) {
-        return clients;
-    }
-    
+    if (!searchTerm) return clients;
     return clients.filter(client => 
         client.name.toLowerCase().includes(searchTerm) ||
         (client.email && client.email.toLowerCase().includes(searchTerm)) ||
@@ -374,39 +271,29 @@ const App: React.FC = () => {
     );
   }, [clients, clientDetails.name, isClientDropdownOpen]);
 
-
   const saveDocument = (docToSave: SavedDocument) => {
     if (docToSave.documentType === DocumentType.Invoice) {
         setSavedInvoices(prev => {
             const existing = prev.find(inv => inv.id === docToSave.id);
-            if (existing) {
-                return prev.map(inv => inv.id === docToSave.id ? docToSave : inv);
-            }
+            if (existing) return prev.map(inv => inv.id === docToSave.id ? docToSave : inv);
             return [docToSave, ...prev];
         });
         alert('Invoice saved successfully!');
     } else {
         setSavedQuotations(prev => {
             const existing = prev.find(q => q.id === docToSave.id);
-            if (existing) {
-                return prev.map(q => q.id === docToSave.id ? docToSave : q);
-            }
+            if (existing) return prev.map(q => q.id === docToSave.id ? docToSave : q);
             return [docToSave, ...prev];
         });
         alert('Quotation saved successfully!');
     }
-    
     setIsCreatingNew(false);
     setLoadedDocumentInfo({id: docToSave.id, status: docToSave.status || docToSave.quotationStatus || null, docType: docToSave.documentType});
   };
 
   const checkNewItemsAndSave = (docToSave: SavedDocument) => {
     const savedItemDescriptions = new Set(items.map(i => i.description.trim().toLowerCase()));
-    const newItemsInDoc = docToSave.lineItems.filter(li =>
-        li.description.trim() !== '' &&
-        !savedItemDescriptions.has(li.description.trim().toLowerCase())
-    );
-
+    const newItemsInDoc = docToSave.lineItems.filter(li => li.description.trim() && !savedItemDescriptions.has(li.description.trim().toLowerCase()));
     if (newItemsInDoc.length > 0) {
         setPotentialNewItems(newItemsInDoc);
         setPendingDoc(docToSave);
@@ -423,31 +310,37 @@ const App: React.FC = () => {
       return;
     }
     
+    // Check for duplicate document number
+    const trimmedDocNum = documentNumber.trim();
+    if (documentType === DocumentType.Invoice) {
+        const isDuplicate = savedInvoices.some(
+            inv => inv.documentNumber.trim() === trimmedDocNum && inv.id !== loadedDocumentInfo?.id
+        );
+        if (isDuplicate) {
+            alert(`An invoice with number "${trimmedDocNum}" already exists. Please use a unique number.`);
+            return;
+        }
+    } else { // Quotation
+        const isDuplicate = savedQuotations.some(
+            q => q.documentNumber.trim() === trimmedDocNum && q.id !== loadedDocumentInfo?.id
+        );
+        if (isDuplicate) {
+            alert(`A quotation with number "${trimmedDocNum}" already exists. Please use a unique number.`);
+            return;
+        }
+    }
+
     const docToSave: SavedDocument = {
       id: loadedDocumentInfo?.id || Date.now(),
-      documentNumber: documentNumber,
-      documentType: documentType,
-      clientDetails: clientDetails,
-      companyDetails: companyDetails,
-      companyLogo: companyLogo,
-      bankQRCode: bankQRCode,
-      issueDate: issueDate,
-      dueDate: dueDate,
-      lineItems: lineItems,
-      notes: notes,
-      taxRate: taxRate,
-      currency: currency,
-      total: total,
+      documentNumber: trimmedDocNum,
+      documentType, clientDetails, companyDetails, companyLogo, bankQRCode, issueDate, dueDate,
+      lineItems, notes, taxRate, currency, total, template, accentColor,
       status: loadedDocumentInfo?.docType === DocumentType.Invoice ? (loadedDocumentInfo.status as InvoiceStatus) || InvoiceStatus.Pending : null,
       quotationStatus: loadedDocumentInfo?.docType === DocumentType.Quotation ? (loadedDocumentInfo.status as QuotationStatus) || QuotationStatus.Active : null,
       payments: documentType === DocumentType.Invoice ? payments : [],
-      template: template,
-      accentColor: accentColor,
     };
     
-    const clientNameLower = clientDetails.name.trim().toLowerCase();
-    const isExistingClient = clients.some(c => c.name.trim().toLowerCase() === clientNameLower);
-
+    const isExistingClient = clients.some(c => c.name.trim().toLowerCase() === clientDetails.name.trim().toLowerCase());
     if (clientDetails.name.trim() && !isExistingClient) {
         setPotentialNewClient(clientDetails);
         setPendingDoc(docToSave);
@@ -457,25 +350,19 @@ const App: React.FC = () => {
     }
   };
 
-  // Handlers for "Save New Client" Modal
   const handleConfirmSaveNewClient = () => {
     if (potentialNewClient) {
-        const newClient: Client = { id: Date.now(), ...potentialNewClient };
-        setClients(prev => [newClient, ...prev]);
+        setClients(prev => [{ id: Date.now(), ...potentialNewClient }, ...prev]);
     }
     setIsSaveClientModalOpen(false);
     setPotentialNewClient(null);
-    if (pendingDoc) {
-        checkNewItemsAndSave(pendingDoc);
-    }
+    if (pendingDoc) checkNewItemsAndSave(pendingDoc);
   };
 
   const handleDeclineSaveNewClient = () => {
     setIsSaveClientModalOpen(false);
     setPotentialNewClient(null);
-    if (pendingDoc) {
-        checkNewItemsAndSave(pendingDoc);
-    }
+    if (pendingDoc) checkNewItemsAndSave(pendingDoc);
   };
   
   const handleCancelSaveNewClient = () => {
@@ -484,20 +371,12 @@ const App: React.FC = () => {
     setPendingDoc(null);
   };
 
-
   const handleConfirmSaveNewItems = () => {
     if (potentialNewItems.length > 0) {
-        const itemsToAdd: Item[] = potentialNewItems.map((li, index) => ({ 
-            id: Date.now() + index,
-            description: li.description, 
-            price: li.price, 
-            category: '' 
-        }));
+        const itemsToAdd: Item[] = potentialNewItems.map((li, index) => ({ id: Date.now() + index, description: li.description, price: li.price, category: '' }));
         setItems(prev => [...prev, ...itemsToAdd]);
     }
-    if (pendingDoc) {
-        saveDocument(pendingDoc);
-    }
+    if (pendingDoc) saveDocument(pendingDoc);
     setIsSaveItemsModalOpen(false);
     setPotentialNewItems([]);
     setPendingDoc(null);
@@ -505,9 +384,7 @@ const App: React.FC = () => {
   };
 
   const handleDeclineSaveNewItems = () => {
-    if (pendingDoc) {
-        saveDocument(pendingDoc);
-    }
+    if (pendingDoc) saveDocument(pendingDoc);
     setIsSaveItemsModalOpen(false);
     setPotentialNewItems([]);
     setPendingDoc(null);
@@ -522,34 +399,18 @@ const App: React.FC = () => {
   const handleCreateNew = () => {
     setLoadedDocumentInfo(null);
     setIsCreatingNew(true);
-    // Reset form fields
     setDocumentType(DocumentType.Quotation);
     setClientDetails({ name: '', address: '', email: '', phone: '' });
-    setSelectedClientId('');
     setLineItems([]);
     setPayments([]);
     setStatus(null);
-
-    const newDocNumber = '001';
-    // This logic could be improved to find the next available number
-    if (documentType === DocumentType.Invoice && savedInvoices.length > 0) {
-        const lastNum = Math.max(...savedInvoices.map(inv => parseInt(inv.documentNumber, 10)));
-        setDocumentNumber(String(lastNum + 1).padStart(3, '0'));
-    } else if (documentType === DocumentType.Quotation && savedQuotations.length > 0) {
-        const lastNum = Math.max(...savedQuotations.map(q => parseInt(q.documentNumber, 10)));
-        setDocumentNumber(String(lastNum + 1).padStart(3, '0'));
-    } else {
-        setDocumentNumber(newDocNumber);
-    }
-    
+    setDocumentNumber(getNextDocumentNumber(DocumentType.Quotation, savedInvoices, savedQuotations));
     const today = new Date().toISOString().split('T')[0];
     setIssueDate(today);
     const newDueDate = new Date();
     newDueDate.setDate(newDueDate.getDate() + 15);
     setDueDate(newDueDate.toISOString().split('T')[0]);
     setDueDateOption('15days');
-
-    // Reset company specific fields to active company defaults
     setCompanyDetails(activeCompany.details);
     setCompanyLogo(activeCompany.logo);
     setBankQRCode(activeCompany.bankQRCode);
@@ -558,15 +419,11 @@ const App: React.FC = () => {
     setCurrency(activeCompany.currency);
     setTemplate(activeCompany.template);
     setAccentColor(activeCompany.accentColor);
-
   };
 
   const handleLoadDocument = (doc: SavedDocument) => {
       setDocumentType(doc.documentType);
       setClientDetails(doc.clientDetails);
-      const loadedClient = clients.find(c => c.name === doc.clientDetails.name && c.email === doc.clientDetails.email);
-      setSelectedClientId(loadedClient ? String(loadedClient.id) : '');
-      
       setDocumentNumber(doc.documentNumber);
       setIssueDate(doc.issueDate);
       setDueDate(doc.dueDate);
@@ -576,16 +433,13 @@ const App: React.FC = () => {
       setCurrency(doc.currency);
       setStatus(doc.status);
       setPayments(doc.payments || []);
-      
       setCompanyDetails(doc.companyDetails);
       setCompanyLogo(doc.companyLogo);
       setBankQRCode(doc.bankQRCode);
       setTemplate(doc.template);
       setAccentColor(doc.accentColor);
-
       setLoadedDocumentInfo({id: doc.id, status: doc.status || doc.quotationStatus || null, docType: doc.documentType});
       setIsCreatingNew(false);
-      
       setCurrentView('editor');
   };
 
@@ -598,15 +452,8 @@ const App: React.FC = () => {
     });
     setDocumentType(DocumentType.Invoice);
     setStatus(InvoiceStatus.Pending);
-
-    // Update the original quotation to be "Agreed"
     setSavedQuotations(prev => prev.map(q => q.id === quotation.id ? {...q, quotationStatus: QuotationStatus.Agreed} : q));
-
-    // Create a new document number for the invoice
-    const lastNum = savedInvoices.length > 0 ? Math.max(...savedInvoices.map(inv => parseInt(inv.documentNumber, 10))) : 0;
-    setDocumentNumber(String(lastNum + 1).padStart(3, '0'));
-    
-    // Set a new ID for the invoice so it saves as a new document
+    setDocumentNumber(getNextDocumentNumber(DocumentType.Invoice, savedInvoices, savedQuotations));
     setLoadedDocumentInfo({id: Date.now(), status: InvoiceStatus.Pending, docType: DocumentType.Invoice});
     setIsCreatingNew(false);
     setCurrentView('editor');
@@ -620,11 +467,7 @@ const App: React.FC = () => {
       try {
         const canvas = await html2canvas(printArea, { scale: 2 });
         const imgData = canvas.toDataURL('image/png');
-        const pdf = new jspdf.jsPDF({
-          orientation: 'portrait',
-          unit: 'pt',
-          format: 'a4'
-        });
+        const pdf = new jspdf.jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = pdf.internal.pageSize.getHeight();
         const canvasWidth = canvas.width;
@@ -636,27 +479,20 @@ const App: React.FC = () => {
         if (height <= pdfHeight) {
           pdf.addImage(imgData, 'PNG', 0, 0, width, height);
         } else {
-          // Handle multi-page PDF for long content
           let position = 0;
-          const pageHeight = pdf.internal.pageSize.getHeight();
-          let remainingHeight = canvas.height;
-          
+          let remainingHeight = canvasHeight;
           while (remainingHeight > 0) {
             const pageCanvas = document.createElement('canvas');
             pageCanvas.width = canvas.width;
-            pageCanvas.height = Math.min(canvas.height, canvas.width * pageHeight / pdfWidth); // Height of one A4 page in canvas pixels
-            const ctx = pageCanvas.getContext('2d');
-            ctx?.drawImage(canvas, 0, position, canvas.width, pageCanvas.height, 0, 0, pageCanvas.width, pageCanvas.height);
-            const pageImgData = pageCanvas.toDataURL('image/png');
-            if (position > 0) {
-              pdf.addPage();
-            }
-            pdf.addImage(pageImgData, 'PNG', 0, 0, pdfWidth, pageHeight);
+            // FIX: Replaced undefined variable `pageHeight` with `pdfHeight`.
+            pageCanvas.height = Math.min(canvasHeight, canvasWidth * pdfHeight / pdfWidth);
+            pageCanvas.getContext('2d')?.drawImage(canvas, 0, position, canvasWidth, pageCanvas.height, 0, 0, pageCanvas.width, pageCanvas.height);
+            if (position > 0) pdf.addPage();
+            pdf.addImage(pageCanvas.toDataURL('image/png'), 'PNG', 0, 0, pdfWidth, pdfHeight);
             position += pageCanvas.height;
             remainingHeight -= pageCanvas.height;
           }
         }
-        
         pdf.save(`${documentType}_${documentNumber}.pdf`);
       } catch (error) {
         console.error("Error generating PDF:", error);
@@ -668,22 +504,20 @@ const App: React.FC = () => {
   const handleSendReminder = (doc: SavedDocument, channel: 'email' | 'whatsapp') => {
     const balanceDue = doc.total - (doc.payments?.reduce((s, p) => s + p.amount, 0) || 0);
     const message = `Dear ${doc.clientDetails.name},\n\nThis is a friendly reminder regarding invoice #${doc.documentNumber} for the amount of ${formatCurrency(doc.total)}. The outstanding balance is ${formatCurrency(balanceDue)}. The due date is ${new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}.\n\nThank you,\n${doc.companyDetails.name}`;
-    
     if (channel === 'email') {
       const subject = `Reminder: Invoice #${doc.documentNumber} from ${doc.companyDetails.name}`;
       window.location.href = `mailto:${doc.clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
-    } else { // whatsapp
+    } else {
       window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
     }
   };
   
   const handleSendQuotationReminder = (doc: SavedDocument, channel: 'email' | 'whatsapp') => {
     const message = `Dear ${doc.clientDetails.name},\n\nThis is a friendly follow-up on our quotation #${doc.documentNumber} for the amount of ${formatCurrency(doc.total)}. It is valid until ${new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}.\n\nPlease let us know if you have any questions.\n\nBest regards,\n${doc.companyDetails.name}`;
-    
     if (channel === 'email') {
       const subject = `Quotation #${doc.documentNumber} from ${doc.companyDetails.name}`;
       window.location.href = `mailto:${doc.clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
-    } else { // whatsapp
+    } else {
       window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
     }
   };
@@ -733,10 +567,10 @@ const App: React.FC = () => {
                 <div className="bg-white p-6 rounded-lg shadow-md">
                   <h2 className="text-xl font-bold text-gray-800 mb-4">Document Type</h2>
                   <div className="flex gap-2 bg-slate-100 p-1 rounded-lg">
-                      <button onClick={() => setDocumentType(DocumentType.Quotation)} className={`flex-1 text-center font-semibold py-2 px-3 rounded-md transition-all duration-200 ${documentType === DocumentType.Quotation ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>
+                      <button onClick={() => handleDocumentTypeChange(DocumentType.Quotation)} className={`flex-1 text-center font-semibold py-2 px-3 rounded-md transition-all duration-200 ${documentType === DocumentType.Quotation ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>
                           Quotation
                       </button>
-                      <button onClick={() => setDocumentType(DocumentType.Invoice)} className={`flex-1 text-center font-semibold py-2 px-3 rounded-md transition-all duration-200 ${documentType === DocumentType.Invoice ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>
+                      <button onClick={() => handleDocumentTypeChange(DocumentType.Invoice)} className={`flex-1 text-center font-semibold py-2 px-3 rounded-md transition-all duration-200 ${documentType === DocumentType.Invoice ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>
                           Invoice
                       </button>
                   </div>
@@ -825,7 +659,6 @@ const App: React.FC = () => {
                 <div className="bg-white p-6 rounded-lg shadow-md">
                   <h2 className="text-xl font-bold text-gray-800 mb-4">Line Items</h2>
                   
-                  {/* New Item Form */}
                   <div className="bg-slate-50 p-4 rounded-lg border space-y-4 mb-6">
                     <h3 className="text-lg font-semibold text-gray-700">Add an Item</h3>
                     
@@ -981,21 +814,18 @@ const App: React.FC = () => {
     isActive: boolean;
     title: string;
     children: React.ReactNode;
-  }> = ({ onClick, isActive, title, children }) => {
-    return (
-      <button 
-        onClick={onClick}
-        className={`relative group flex items-center justify-center gap-2 p-3 rounded-md transition-colors text-sm font-medium w-12 h-12 ${isActive ? activeNavButtonClasses : inactiveNavButtonClasses}`}
-        title={title}
-      >
-        {children}
-        <span className="absolute left-full ml-3 px-2 py-1 bg-slate-700 text-white text-xs rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-            {title}
-        </span>
-      </button>
-    );
-  };
-
+  }> = ({ onClick, isActive, title, children }) => (
+    <button 
+      onClick={onClick}
+      className={`relative group flex items-center justify-center gap-2 p-3 rounded-md transition-colors text-sm font-medium w-12 h-12 ${isActive ? activeNavButtonClasses : inactiveNavButtonClasses}`}
+      title={title}
+    >
+      {children}
+      <span className="absolute left-full ml-3 px-2 py-1 bg-slate-700 text-white text-xs rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+          {title}
+      </span>
+    </button>
+  );
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -1004,7 +834,6 @@ const App: React.FC = () => {
           <div className="flex justify-between items-center">
              <div className="flex items-center gap-2 sm:gap-4">
                 <h1 className="text-xl sm:text-2xl font-bold text-indigo-600">InvQuo AI</h1>
-                {/* Desktop Navigation */}
                 <nav className="hidden sm:flex items-center gap-2 bg-slate-100 p-1 rounded-lg">
                     <button onClick={() => setCurrentView('editor')} className={`py-1 px-3 rounded-md transition-colors text-sm font-medium ${currentView === 'editor' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Editor</button>
                     <button onClick={() => setCurrentView('quotations')} className={`py-1 px-3 rounded-md transition-colors text-sm font-medium ${currentView === 'quotations' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Quotations</button>
@@ -1015,7 +844,6 @@ const App: React.FC = () => {
         </div>
       </header>
 
-       {/* Floating Nav for Mobile */}
        <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t z-30 grid grid-cols-6">
            <button onClick={() => setCurrentView('editor')} className={`${navButtonClasses} ${currentView === 'editor' ? activeNavButtonClasses : inactiveNavButtonClasses}`}>
                <FileTextIcon /><span className="text-xs">Editor</span>
@@ -1037,18 +865,11 @@ const App: React.FC = () => {
            </button>
        </nav>
 
-        {/* Sidebar Nav for Desktop */}
         <div className="hidden sm:block fixed top-0 left-0 h-full bg-white pt-[52px] z-10 shadow-lg">
              <nav className="flex flex-col p-2 space-y-1">
-                 <DesktopSidebarButton onClick={() => setCurrentView('clients')} isActive={currentView === 'clients'} title="Clients">
-                    <UsersIcon />
-                 </DesktopSidebarButton>
-                 <DesktopSidebarButton onClick={() => setCurrentView('items')} isActive={currentView === 'items'} title="Items">
-                    <ListIcon />
-                 </DesktopSidebarButton>
-                 <DesktopSidebarButton onClick={() => setCurrentView('setup')} isActive={currentView === 'setup'} title="Setup">
-                    <CogIcon />
-                 </DesktopSidebarButton>
+                 <DesktopSidebarButton onClick={() => setCurrentView('clients')} isActive={currentView === 'clients'} title="Clients"><UsersIcon /></DesktopSidebarButton>
+                 <DesktopSidebarButton onClick={() => setCurrentView('items')} isActive={currentView === 'items'} title="Items"><ListIcon /></DesktopSidebarButton>
+                 <DesktopSidebarButton onClick={() => setCurrentView('setup')} isActive={currentView === 'setup'} title="Setup"><CogIcon /></DesktopSidebarButton>
              </nav>
         </div>
         
