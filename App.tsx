@@ -399,8 +399,7 @@ const App: React.FC = () => {
         });
         alert('Quotation saved successfully!');
     }
-    setIsCreatingNew(false);
-    setLoadedDocumentInfo({id: docToSave.id, status: docToSave.status || docToSave.quotationStatus || null, docType: docToSave.documentType});
+    handleCreateNew();
   };
 
   const checkNewItemsAndSave = (docToSave: SavedDocument) => {
@@ -531,7 +530,6 @@ const App: React.FC = () => {
     setIsSaveItemsModalOpen(false);
     setPotentialNewItems([]);
     setPendingDoc(null);
-    setCurrentView('items');
   };
 
   const handleDeclineSaveNewItems = () => {
