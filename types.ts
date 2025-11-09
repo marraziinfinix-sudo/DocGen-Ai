@@ -28,7 +28,9 @@ export interface LineItem {
   id: number;
   description: string;
   quantity: number;
-  price: number;
+  costPrice: number;
+  markup: number;
+  price: number; // This is the selling price
 }
 
 export interface Details {
@@ -61,7 +63,8 @@ export interface Client extends Details {
 export interface Item {
   id: number;
   description: string;
-  price: number;
+  costPrice: number;
+  price: number; // This is the default selling price
   category?: string;
 }
 

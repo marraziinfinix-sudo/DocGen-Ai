@@ -10,9 +10,10 @@ interface ItemListPageProps {
   onDone: () => void;
 }
 
-const emptyFormState: Omit<Item, 'id' | 'price'> & { id: number | null; price: string; category: string } = {
+const emptyFormState: Omit<Item, 'id' | 'price' | 'costPrice'> & { id: number | null; price: string; costPrice: string; category: string } = {
   id: null,
   description: '',
+  costPrice: '',
   price: '',
   category: '',
 };
@@ -267,7 +268,11 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
 
   const handleSaveItem = () => {
     const price = parseFloat(formState.price);
-    if (!formState.description || isNaN(price)) return;
+    const costPrice = parseFloat(formState.costPrice);
+    if (!formState.description || isNaN(price) || isNaN(costPrice)) {
+        alert("Please enter a valid description, cost price, and selling price.");
+        return;
+    }
     
     const trimmedDescription = formState.description.trim();
     const newCategory = formState.category.trim();
@@ -280,19 +285,20 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
       const updatedItem: Item = {
         id: formState.id,
         description: trimmedDescription,
+        costPrice: costPrice,
         price: price,
         category: newCategory,
       };
       setItems(prev => prev.map(i => (i.id === updatedItem.id ? updatedItem : i)));
     } else {
-      setItems(prev => [{ id: Date.now(), description: trimmedDescription, price, category: newCategory }, ...prev]);
+      setItems(prev => [{ id: Date.now(), description: trimmedDescription, costPrice, price, category: newCategory }, ...prev]);
     }
     setFormState(emptyFormState);
     setIsEditing(false);
   };
   
   const handleEditItem = (item: Item) => {
-    setFormState({...item, price: String(item.price), category: item.category || ''});
+    setFormState({...item, price: String(item.price), costPrice: String(item.costPrice), category: item.category || ''});
     setIsEditing(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -388,10 +394,14 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
                     <textarea name="description" placeholder="Item Description" value={formState.description} onChange={handleInputChange} rows={3} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"/>
                 </div>
                 <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-1">Price</label>
-                    <input type="number" name="price" placeholder="Price" value={formState.price} onChange={handleInputChange} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"/>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">Cost Price</label>
+                    <input type="number" name="costPrice" placeholder="Cost Price" value={formState.costPrice} onChange={handleInputChange} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"/>
                 </div>
-                <div className="relative">
+                <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">Selling Price</label>
+                    <input type="number" name="price" placeholder="Selling Price" value={formState.price} onChange={handleInputChange} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"/>
+                </div>
+                <div className="relative md:col-span-2">
                   <label className="block text-sm font-medium text-gray-600 mb-1">Category</label>
                   <input
                     type="text"
@@ -492,7 +502,7 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
                                         />
                                         <div className="ml-4">
                                             <p className="font-bold text-slate-800">{item.description}</p>
-                                            <p className="text-sm text-slate-500">{formatCurrency(item.price)}</p>
+                                            <p className="text-sm text-slate-500">Cost: {formatCurrency(item.costPrice)} &bull; Sell: {formatCurrency(item.price)}</p>
                                         </div>
                                     </div>
                                     <div className="flex gap-2 flex-shrink-0 ml-auto sm:ml-0">

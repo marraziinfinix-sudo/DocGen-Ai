@@ -245,7 +245,7 @@ const App: React.FC = () => {
   const [pendingDoc, setPendingDoc] = useState<SavedDocument | null>(null);
   const [isSaveClientModalOpen, setIsSaveClientModalOpen] = useState(false);
   const [potentialNewClient, setPotentialNewClient] = useState<Details | null>(null);
-  const [newLineItem, setNewLineItem] = useState<Omit<LineItem, 'id'>>({ description: '', quantity: isMobile ? 0 : 1, price: 0 });
+  const [newLineItem, setNewLineItem] = useState<Omit<LineItem, 'id'>>({ description: '', quantity: isMobile ? 0 : 1, costPrice: 0, markup: 0, price: 0 });
   const [isItemDropdownOpen, setIsItemDropdownOpen] = useState(false);
   const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
   const [isUpdateClientModalOpen, setIsUpdateClientModalOpen] = useState(false);
@@ -295,7 +295,34 @@ const App: React.FC = () => {
 
   // --- Handlers ---
   const handleLineItemChange = (id: number, field: keyof LineItem, value: string | number) => {
-    setLineItems(prev => prev.map(item => (item.id === id ? { ...item, [field]: value } : item)));
+    setLineItems(prev =>
+        prev.map(item => {
+            if (item.id === id) {
+                const updatedItem = { ...item };
+                const numericValue = typeof value === 'string' ? parseFloat(value) || 0 : value;
+
+                if (['costPrice', 'markup', 'price', 'quantity'].includes(field)) {
+                    (updatedItem as any)[field] = numericValue;
+                } else {
+                    (updatedItem as any)[field] = value;
+                }
+
+                if (field === 'costPrice') {
+                    const price = numericValue * (1 + updatedItem.markup / 100);
+                    updatedItem.price = parseFloat(price.toFixed(2));
+                } else if (field === 'markup') {
+                    const price = updatedItem.costPrice * (1 + numericValue / 100);
+                    updatedItem.price = parseFloat(price.toFixed(2));
+                } else if (field === 'price') {
+                    const markup = updatedItem.costPrice > 0 ? ((numericValue / updatedItem.costPrice) - 1) * 100 : 0;
+                    updatedItem.markup = parseFloat(markup.toFixed(2));
+                }
+                
+                return updatedItem;
+            }
+            return item;
+        })
+    );
   };
 
   const handleAddLineItem = () => {
@@ -304,7 +331,7 @@ const App: React.FC = () => {
         return;
     }
     setLineItems(prev => [...prev, { id: Date.now(), ...newLineItem }]);
-    setNewLineItem({ description: '', quantity: isMobile ? 0 : 1, price: 0 });
+    setNewLineItem({ description: '', quantity: isMobile ? 0 : 1, costPrice: 0, markup: 0, price: 0 });
   };
 
   const handleDeleteLineItem = (id: number) => {
@@ -328,7 +355,7 @@ const App: React.FC = () => {
   };
 
   const handleClearNewLineItem = () => {
-    setNewLineItem({ description: '', quantity: isMobile ? 0 : 1, price: 0 });
+    setNewLineItem({ description: '', quantity: isMobile ? 0 : 1, costPrice: 0, markup: 0, price: 0 });
   };
 
   const handleClientDetailChange = (field: keyof Details, value: string) => {
@@ -368,12 +395,48 @@ const App: React.FC = () => {
   };
   
   const handleNewLineItemChange = (field: keyof Omit<LineItem, 'id'>, value: string | number) => {
-    setNewLineItem(prev => ({ ...prev, [field]: value }));
-    if (field === 'description') setIsItemDropdownOpen(true);
+    const numericValue = typeof value === 'string' ? parseFloat(value) || 0 : value;
+    
+    setNewLineItem(prev => {
+        const updatedItem = { ...prev };
+
+        if (['costPrice', 'markup', 'price', 'quantity'].includes(field)) {
+            (updatedItem as any)[field] = numericValue;
+        } else {
+            (updatedItem as any)[field] = value;
+        }
+
+        if (field === 'costPrice') {
+            const price = numericValue * (1 + updatedItem.markup / 100);
+            updatedItem.price = parseFloat(price.toFixed(2));
+        } else if (field === 'markup') {
+            const price = updatedItem.costPrice * (1 + numericValue / 100);
+            updatedItem.price = parseFloat(price.toFixed(2));
+        } else if (field === 'price') {
+            const markup = updatedItem.costPrice > 0 ? ((numericValue / updatedItem.costPrice) - 1) * 100 : 0;
+            updatedItem.markup = parseFloat(markup.toFixed(2));
+        }
+        
+        return updatedItem;
+    });
+
+    if (field === 'description') {
+        setIsItemDropdownOpen(true);
+    }
   };
   
   const handleSavedItemSelected = (item: Item) => {
-    setNewLineItem({ description: item.description, price: item.price, quantity: isMobile ? 0 : 1 });
+    const costPrice = item.costPrice || 0;
+    const price = item.price || 0;
+    const markup = costPrice > 0 ? ((price / costPrice) - 1) * 100 : 0;
+    
+    setNewLineItem({
+      description: item.description,
+      quantity: isMobile ? 0 : 1,
+      costPrice: costPrice,
+      markup: parseFloat(markup.toFixed(2)),
+      price: price
+    });
     setIsItemDropdownOpen(false);
   };
 
@@ -540,7 +603,13 @@ const App: React.FC = () => {
 
   const handleConfirmSaveNewItems = () => {
     if (potentialNewItems.length > 0) {
-        const itemsToAdd: Item[] = potentialNewItems.map((li, index) => ({ id: Date.now() + index, description: li.description, price: li.price, category: '' }));
+        const itemsToAdd: Item[] = potentialNewItems.map((li, index) => ({
+            id: Date.now() + index,
+            description: li.description,
+            costPrice: li.costPrice,
+            price: li.price,
+            category: ''
+        }));
         setItems(prev => [...prev, ...itemsToAdd]);
     }
     if (pendingDoc) saveDocument(pendingDoc);
@@ -912,7 +981,7 @@ const App: React.FC = () => {
                                 className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
                               >
                                 <p className="font-semibold">{item.description}</p>
-                                <p className="text-xs text-slate-500">{formatCurrency(item.price)}</p>
+                                <p className="text-xs text-slate-500">Cost: {formatCurrency(item.costPrice)} &bull; Sell: {formatCurrency(item.price)}</p>
                               </button>
                             ))
                           ) : (
@@ -923,25 +992,44 @@ const App: React.FC = () => {
                         </div>
                       )}
                     </div>
-
-                    <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-600 mb-1">Quantity</label>
+                        <input 
+                            type={inputType}
+                            inputMode={inputMode}
+                            value={newLineItem.quantity} 
+                            onChange={e => handleNewLineItemChange('quantity', e.target.value)} 
+                            className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
                         <div>
-                            <label className="block text-sm font-medium text-gray-600 mb-1">Quantity</label>
+                            <label className="block text-sm font-medium text-gray-600 mb-1">Cost Price</label>
                             <input 
                                 type={inputType}
                                 inputMode={inputMode}
-                                value={newLineItem.quantity} 
-                                onChange={e => handleNewLineItemChange('quantity', parseFloat(e.target.value) || 0)} 
+                                step={inputType === 'number' ? "0.01" : undefined}
+                                value={newLineItem.costPrice} 
+                                onChange={e => handleNewLineItemChange('costPrice', e.target.value)} 
                                 className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-600 mb-1">Price</label>
+                            <label className="block text-sm font-medium text-gray-600 mb-1">Markup (%)</label>
+                            <input 
+                                type={inputType}
+                                inputMode={inputMode}
+                                step={inputType === 'number' ? "0.01" : undefined}
+                                value={newLineItem.markup} 
+                                onChange={e => handleNewLineItemChange('markup', e.target.value)} 
+                                className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-600 mb-1">Selling Price</label>
                             <input 
                                 type={inputType}
                                 inputMode={inputMode}
                                 step={inputType === 'number' ? "0.01" : undefined}
                                 value={newLineItem.price} 
-                                onChange={e => handleNewLineItemChange('price', parseFloat(e.target.value) || 0)} 
+                                onChange={e => handleNewLineItemChange('price', e.target.value)} 
                                 className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
                         </div>
                     </div>
@@ -953,7 +1041,7 @@ const App: React.FC = () => {
 
                   <div className="space-y-4">
                     {lineItems.map((item) => (
-                      <div key={item.id} className="grid grid-cols-12 gap-2 p-3 bg-slate-50 rounded-lg border">
+                      <div key={item.id} className="p-3 bg-slate-50 rounded-lg border space-y-2">
                           <div className="col-span-12">
                               <label className="block text-sm font-medium text-gray-600 mb-1">Description</label>
                               <div className="flex gap-1">
@@ -973,29 +1061,45 @@ const App: React.FC = () => {
                                   </button>
                               </div>
                           </div>
-                          <div className="col-span-6 sm:col-span-5">
-                              <label className="block text-sm font-medium text-gray-600 mb-1">Quantity</label>
-                              <input 
-                                  type={inputType}
-                                  inputMode={inputMode}
-                                  value={item.quantity} 
-                                  onChange={e => handleLineItemChange(item.id, 'quantity', parseFloat(e.target.value) || 0)} 
-                                  className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
-                          </div>
-                          <div className="col-span-6 sm:col-span-5">
-                              <label className="block text-sm font-medium text-gray-600 mb-1">Price</label>
-                              <input 
-                                  type={inputType}
-                                  inputMode={inputMode}
-                                  step={inputType === 'number' ? "0.01" : undefined}
-                                  value={item.price} 
-                                  onChange={e => handleLineItemChange(item.id, 'price', parseFloat(e.target.value) || 0)} 
-                                  className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
-                          </div>
-                           <div className="col-span-12 sm:col-span-2 flex items-end">
-                              <button onClick={() => handleDeleteLineItem(item.id)} className="w-full p-2 bg-red-100 text-red-600 rounded-md hover:bg-red-200 flex justify-center items-center">
-                                  <TrashIcon />
-                              </button>
+                          <div className="grid grid-cols-12 gap-2">
+                            <div className="col-span-12 sm:col-span-2">
+                                <label className="block text-sm font-medium text-gray-600 mb-1">Qty</label>
+                                <input 
+                                    type={inputType}
+                                    inputMode={inputMode}
+                                    value={item.quantity} 
+                                    onChange={e => handleLineItemChange(item.id, 'quantity', e.target.value)} 
+                                    className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                            </div>
+                            <div className="col-span-4 sm:col-span-3">
+                                <label className="block text-sm font-medium text-gray-600 mb-1">Cost</label>
+                                <input 
+                                    type={inputType} inputMode={inputMode} step={inputType === 'number' ? "0.01" : undefined}
+                                    value={item.costPrice} 
+                                    onChange={e => handleLineItemChange(item.id, 'costPrice', e.target.value)} 
+                                    className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                            </div>
+                            <div className="col-span-4 sm:col-span-3">
+                                <label className="block text-sm font-medium text-gray-600 mb-1">Markup%</label>
+                                <input 
+                                    type={inputType} inputMode={inputMode} step={inputType === 'number' ? "0.01" : undefined}
+                                    value={item.markup} 
+                                    onChange={e => handleLineItemChange(item.id, 'markup', e.target.value)} 
+                                    className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                            </div>
+                            <div className="col-span-4 sm:col-span-3">
+                                <label className="block text-sm font-medium text-gray-600 mb-1">Selling</label>
+                                <input 
+                                    type={inputType} inputMode={inputMode} step={inputType === 'number' ? "0.01" : undefined}
+                                    value={item.price} 
+                                    onChange={e => handleLineItemChange(item.id, 'price', e.target.value)} 
+                                    className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                            </div>
+                            <div className="col-span-12 sm:col-span-1 flex items-end">
+                                <button onClick={() => handleDeleteLineItem(item.id)} className="w-full h-10 p-2 bg-red-100 text-red-600 rounded-md hover:bg-red-200 flex justify-center items-center">
+                                    <TrashIcon />
+                                </button>
+                            </div>
                           </div>
                       </div>
                     ))}
@@ -1134,6 +1238,7 @@ const App: React.FC = () => {
                 onConfirm={handleConfirmSaveNewItems}
                 onDecline={handleDeclineSaveNewItems}
                 onCancel={handleCancelSaveNewItems}
+                formatCurrency={formatCurrency}
             />
         )}
         {isSaveClientModalOpen && potentialNewClient && (
