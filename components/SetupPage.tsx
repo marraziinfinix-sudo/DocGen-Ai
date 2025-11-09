@@ -1,6 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Company, Details } from '../types';
-import { PlusIcon, DownloadIcon, UploadIcon, ChevronDownIcon } from './Icons';
+import { PlusIcon, GoogleDriveIcon } from './Icons';
+import * as drive from '../services/googleDriveService';
 
 interface SetupPageProps {
   companies: Company[];
@@ -177,6 +178,7 @@ const CompanyForm: React.FC<{
   );
 };
 
+interface UserProfile { email: string; name: string; picture: string; }
 
 const SetupPage: React.FC<SetupPageProps> = ({ 
     companies, setCompanies, 
@@ -186,16 +188,19 @@ const SetupPage: React.FC<SetupPageProps> = ({
 }) => {
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingCompany, setEditingCompany] = useState<Company | null>(null);
-    const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [driveReady, setDriveReady] = useState(false);
+    const [isSignedIn, setIsSignedIn] = useState(false);
+    const [driveUser, setDriveUser] = useState<UserProfile | null>(null);
+    const [isBusy, setIsBusy] = useState(false);
 
     useEffect(() => {
-        const closeMenu = () => setIsExportMenuOpen(false);
-        if (isExportMenuOpen) {
-            window.addEventListener('click', closeMenu);
-        }
-        return () => window.removeEventListener('click', closeMenu);
-    }, [isExportMenuOpen]);
+        drive.initGoogleClient((signedIn, user) => {
+            setIsSignedIn(signedIn);
+            if(user) setDriveUser(user);
+            else setDriveUser(null);
+            setDriveReady(true);
+        });
+    }, []);
 
     const handleAddNew = () => {
         setEditingCompany({ ...emptyCompany });
@@ -215,7 +220,6 @@ const SetupPage: React.FC<SetupPageProps> = ({
         if (window.confirm('Are you sure you want to delete this company profile?')) {
             setCompanies(prev => {
                 const newCompanies = prev.filter(c => c.id !== id);
-                // If the deleted company was the active one, set the first remaining one as active.
                 if (id === activeCompanyId) {
                     setActiveCompanyId(newCompanies[0].id);
                 }
@@ -240,101 +244,85 @@ const SetupPage: React.FC<SetupPageProps> = ({
         setIsFormOpen(false);
         setEditingCompany(null);
     };
+    
+    const handleSignIn = () => {
+        drive.signIn((signedIn, user) => {
+            setIsSignedIn(signedIn);
+            if (user) setDriveUser(user);
+        });
+    };
 
-    const prepareDataForSave = (category: string) => {
-        if (category === 'all') {
+    const handleSignOut = () => {
+        drive.signOut();
+        setIsSignedIn(false);
+        setDriveUser(null);
+    };
+    
+    const handleBackup = async () => {
+        setIsBusy(true);
+        try {
             const dataToExport: { [key: string]: any } = {};
-            const keys = ['companies', 'clients', 'items', 'savedInvoices', 'savedQuotations', 'activeCompanyId'];
+            const keys = ['companies', 'clients', 'items', 'savedInvoices', 'savedQuotations', 'activeCompanyId', 'itemCategories'];
             keys.forEach(key => {
                 const item = localStorage.getItem(key);
                 if (item) {
-                    try {
-                        dataToExport[key] = JSON.parse(item);
-                    } catch (e) {
-                         dataToExport[key] = item; // For non-JSON items like activeCompanyId
-                    }
+                    try { dataToExport[key] = JSON.parse(item); } catch (e) { dataToExport[key] = item; }
                 }
             });
-            return { name: 'all', data: dataToExport };
-        } else {
-            const item = localStorage.getItem(category);
-            return { name: category, data: item ? JSON.parse(item) : [] };
-        }
-    }
-
-    const handleExportData = async (category: string) => {
-        setIsExportMenuOpen(false);
-        const { name, data } = prepareDataForSave(category);
-
-        const dataIsPresent = data && (!Array.isArray(data) || data.length > 0) && (typeof data === 'object' && Object.keys(data).length > 0);
-        if (!dataIsPresent) {
-            alert(`No data to export for "${name}".`);
-            return;
-        }
-
-        const date = new Date().toISOString().split('T')[0];
-        const fileName = `invquo-ai-backup-${name}-${date}.json`;
-        const jsonString = JSON.stringify(data, null, 2);
-        const blob = new Blob([jsonString], { type: 'application/json' });
-
-        // Standard download method
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = fileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-    };
-    
-    const processImportedData = (jsonData: string) => {
-        if (!window.confirm('This will overwrite all existing data. This action cannot be undone. Are you sure you want to proceed?')) {
-            return;
-        }
-        try {
-            const data = JSON.parse(jsonData);
-            const requiredKeys = ['companies', 'clients', 'items', 'savedInvoices', 'savedQuotations'];
-            const importedKeys = Object.keys(data);
-            
-            const isFullBackup = requiredKeys.every(key => importedKeys.includes(key));
-            const isPartialBackup = requiredKeys.some(key => importedKeys.includes(key) && Array.isArray(data[key]));
-
-            if (!isFullBackup && !isPartialBackup) {
-                alert('Invalid backup file. The file does not appear to contain valid data.');
-                return;
-            }
-            
-            [...requiredKeys, 'activeCompanyId'].forEach(key => {
-                if (data[key]) {
-                    localStorage.setItem(key, JSON.stringify(data[key]));
-                } else if (isFullBackup) {
-                    localStorage.removeItem(key);
-                }
-            });
-
-            alert('Data imported successfully! The application will now reload.');
-            window.location.reload();
+            const date = new Date().toISOString().split('T')[0];
+            const fileName = `invquo-ai-backup-all-${date}.json`;
+            const jsonString = JSON.stringify(dataToExport, null, 2);
+            await drive.uploadBackup(jsonString, fileName);
+            alert('Backup successful! File saved to your Google Drive.');
         } catch (error) {
-            console.error('Failed to process imported data:', error);
-            alert('An error occurred while importing data. The file might be corrupted or in the wrong format.');
+            console.error('Backup failed:', error);
+            alert('Backup failed. Please check the console for errors.');
         } finally {
-            if (fileInputRef.current) {
-                fileInputRef.current.value = '';
-            }
+            setIsBusy(false);
         }
     };
 
-    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const text = e.target?.result as string;
-            processImportedData(text);
-        };
-        reader.readAsText(file);
+    const handleRestore = () => {
+        setIsBusy(true);
+        try {
+            drive.selectBackup((fileContent) => {
+                if (!window.confirm('This will overwrite all existing data. This action cannot be undone. Are you sure you want to proceed?')) {
+                    setIsBusy(false);
+                    return;
+                }
+                try {
+                    const data = JSON.parse(fileContent);
+                    const requiredKeys = ['companies', 'clients', 'items', 'savedInvoices', 'savedQuotations'];
+                    const importedKeys = Object.keys(data);
+                    
+                    const isFullBackup = requiredKeys.every(key => importedKeys.includes(key));
+                    if (!isFullBackup) {
+                        alert('Invalid backup file. The file does not appear to contain valid data.');
+                        return;
+                    }
+                    
+                    [...requiredKeys, 'activeCompanyId', 'itemCategories'].forEach(key => {
+                        if (data[key]) {
+                            localStorage.setItem(key, JSON.stringify(data[key]));
+                        } else {
+                            localStorage.removeItem(key);
+                        }
+                    });
+                    alert('Data restored successfully! The application will now reload.');
+                    window.location.reload();
+                } catch (error) {
+                    console.error('Failed to process restored data:', error);
+                    alert('An error occurred while restoring data. The file might be corrupted or in the wrong format.');
+                }
+            });
+        } catch(e) {
+             console.error('Restore failed:', e);
+             alert('Could not open file picker. Please ensure popups are enabled and try again.');
+        } finally {
+             setIsBusy(false);
+        }
     };
+
 
   return (
     <>
@@ -388,34 +376,40 @@ const SetupPage: React.FC<SetupPageProps> = ({
             <div className="mt-8 pt-6 border-t">
                 <div className="mb-8">
                     <h2 className="text-xl font-bold text-gray-800 mb-4">Data Management</h2>
-                    <p className="text-slate-600 mb-4">Backup all your application data to a file on your computer, or restore it from a previously saved backup file.</p>
-                    <div className="flex flex-col sm:flex-row gap-4">
-                        <div className="relative inline-block text-left flex-1">
-                          <button onClick={(e) => { e.stopPropagation(); setIsExportMenuOpen(prev => !prev); }} className="w-full flex items-center justify-center gap-2 bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-700">
-                            <DownloadIcon />
-                            <span>Export to Computer</span>
-                            <ChevronDownIcon />
-                          </button>
-                          {isExportMenuOpen && (
-                            <div className="origin-top-right absolute right-0 mt-2 w-full rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
-                              <div className="py-1" role="menu">
-                                <button onClick={() => handleExportData('all')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" role="menuitem">Export All Data</button>
-                                <div className="border-t my-1"></div>
-                                <button onClick={() => handleExportData('companies')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" role="menuitem">Export Companies</button>
-                                <button onClick={() => handleExportData('clients')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" role="menuitem">Export Clients</button>
-                                <button onClick={() => handleExportData('items')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" role="menuitem">Export Items</button>
-                                <button onClick={() => handleExportData('savedInvoices')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" role="menuitem">Export Invoices</button>
-                                <button onClick={() => handleExportData('savedQuotations')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" role="menuitem">Export Quotations</button>
-                              </div>
+                    <p className="text-slate-600 mb-4">Backup all your application data to Google Drive, or restore it from a previously saved backup file.</p>
+                    
+                    {!driveReady ? (
+                      <div className="text-center p-4 bg-slate-100 rounded-lg">
+                        <p>Loading Google Drive integration...</p>
+                      </div>
+                    ) : isSignedIn ? (
+                      <div className="bg-green-50 border border-green-200 p-4 rounded-lg">
+                          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                                {driveUser?.picture && <img src={driveUser.picture} alt="User" className="w-10 h-10 rounded-full"/>}
+                                <div>
+                                    <p className="font-semibold text-slate-800">Connected to Google Drive</p>
+                                    <p className="text-sm text-slate-600">{driveUser?.email}</p>
+                                </div>
                             </div>
-                          )}
-                        </div>
-
-                        <button onClick={() => fileInputRef.current?.click()} className="flex-1 flex items-center justify-center gap-2 bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-700">
-                            <UploadIcon /> Import from Computer
-                        </button>
-                        <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" className="hidden"/>
-                    </div>
+                            <button onClick={handleSignOut} disabled={isBusy} className="text-sm font-semibold text-slate-600 py-2 px-3 rounded-lg hover:bg-slate-200/80 disabled:opacity-50">
+                                Disconnect
+                            </button>
+                          </div>
+                          <div className="mt-4 pt-4 border-t border-green-200 flex flex-col sm:flex-row gap-4">
+                              <button onClick={handleBackup} disabled={isBusy} className="flex-1 flex items-center justify-center gap-2 bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-blue-700 disabled:bg-blue-400">
+                                  {isBusy ? 'Busy...' : 'Backup to Drive'}
+                              </button>
+                              <button onClick={handleRestore} disabled={isBusy} className="flex-1 flex items-center justify-center gap-2 bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-blue-700 disabled:bg-blue-400">
+                                  {isBusy ? 'Busy...' : 'Restore from Drive'}
+                              </button>
+                          </div>
+                      </div>
+                    ) : (
+                      <button onClick={handleSignIn} disabled={isBusy} className="w-full flex items-center justify-center gap-3 bg-white text-slate-700 font-semibold py-3 px-4 rounded-lg shadow-sm border hover:bg-slate-50 transition-colors">
+                          <GoogleDriveIcon /> Connect Google Drive
+                      </button>
+                    )}
                 </div>
                 <div className="text-right">
                     <button onClick={onDone} className="bg-slate-500 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-slate-600 transition-colors duration-200">
