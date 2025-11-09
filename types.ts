@@ -68,6 +68,12 @@ export interface Item {
   category?: string;
 }
 
+export interface Recurrence {
+  frequency: 'daily' | 'weekly' | 'monthly' | 'yearly';
+  interval: number;
+  endDate?: string | null;
+}
+
 export interface SavedDocument {
   id: number;
   documentNumber: string;
@@ -89,4 +95,6 @@ export interface SavedDocument {
   payments?: Payment[];
   template: string;
   accentColor: string;
+  recurrence?: Recurrence | null;
+  recurrenceParentId?: number | null;
 }

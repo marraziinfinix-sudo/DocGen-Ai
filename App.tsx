@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus } from './types';
+import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus, Recurrence } from './types';
 import { generateDescription } from './services/geminiService';
 import { SparklesIcon, PlusIcon, TrashIcon, CogIcon, UsersIcon, ListIcon, DocumentIcon, MailIcon, WhatsAppIcon, FileTextIcon, DownloadIcon, MoreVerticalIcon, PrinterIcon, ChevronDownIcon, CashIcon } from './components/Icons';
 import DocumentPreview from './components/DocumentPreview';
@@ -238,7 +238,7 @@ const App: React.FC = () => {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [status, setStatus] = useState<InvoiceStatus | null>(null);
   const [generatingStates, setGeneratingStates] = useState<Record<number, boolean>>({});
-  const [loadedDocumentInfo, setLoadedDocumentInfo] = useState<{ id: number; status: InvoiceStatus | QuotationStatus | null; docType: DocumentType } | null>(null);
+  const [loadedDocumentInfo, setLoadedDocumentInfo] = useState<{ id: number; status: InvoiceStatus | QuotationStatus | null; docType: DocumentType, recurrenceParentId?: number | null } | null>(null);
   const [isCreatingNew, setIsCreatingNew] = useState(true);
   const [isSaveItemsModalOpen, setIsSaveItemsModalOpen] = useState(false);
   const [potentialNewItems, setPotentialNewItems] = useState<LineItem[]>([]);
@@ -250,6 +250,7 @@ const App: React.FC = () => {
   const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
   const [isUpdateClientModalOpen, setIsUpdateClientModalOpen] = useState(false);
   const [clientUpdateInfo, setClientUpdateInfo] = useState<{ original: Client; updated: Details } | null>(null);
+  const [recurrence, setRecurrence] = useState<Recurrence | null>(null);
 
   // --- Sync active company changes to form ---
   useEffect(() => {
@@ -278,6 +279,65 @@ const App: React.FC = () => {
       setDocumentNumber(generateDocumentNumber(clientDetails, documentType, savedInvoices, savedQuotations));
     }
   }, [isCreatingNew, clientDetails, documentType, savedInvoices, savedQuotations, generateDocumentNumber]);
+
+  // --- Recurring Invoice Generation ---
+  useEffect(() => {
+    const calculateNextIssueDate = (lastDateStr: string, rec: Recurrence): Date => {
+      const lastDate = new Date(lastDateStr + 'T00:00:00');
+      const { frequency, interval } = rec;
+      switch (frequency) {
+        case 'daily': lastDate.setDate(lastDate.getDate() + interval); break;
+        case 'weekly': lastDate.setDate(lastDate.getDate() + interval * 7); break;
+        case 'monthly': lastDate.setMonth(lastDate.getMonth() + interval); break;
+        case 'yearly': lastDate.setFullYear(lastDate.getFullYear() + interval); break;
+      }
+      return lastDate;
+    };
+
+    const createInvoiceFromTemplate = (parent: SavedDocument, nextIssueDate: Date): SavedDocument => {
+      const issueDateObj = new Date(parent.issueDate + 'T00:00:00');
+      const dueDateObj = new Date(parent.dueDate + 'T00:00:00');
+      const duration = dueDateObj.getTime() - issueDateObj.getTime();
+      
+      const newDueDate = new Date(nextIssueDate.getTime() + duration);
+      
+      return {
+        ...parent,
+        id: Date.now() + Math.random(),
+        issueDate: nextIssueDate.toISOString().split('T')[0],
+        dueDate: newDueDate.toISOString().split('T')[0],
+        documentNumber: generateDocumentNumber(parent.clientDetails, DocumentType.Invoice, savedInvoices, savedQuotations),
+        status: InvoiceStatus.Pending,
+        payments: [],
+        paidDate: null,
+        recurrence: null, // Child invoices don't have recurrence settings themselves
+        recurrenceParentId: parent.id,
+      };
+    };
+
+    const parentInvoices = savedInvoices.filter(inv => inv.recurrence && !inv.recurrenceParentId);
+    let newInvoicesToGenerate: SavedDocument[] = [];
+
+    parentInvoices.forEach(parent => {
+      const seriesInvoices = savedInvoices.filter(inv => inv.recurrenceParentId === parent.id);
+      const allSeries = [parent, ...seriesInvoices];
+      const latestInvoice = allSeries.sort((a, b) => new Date(b.issueDate).getTime() - new Date(a.issueDate).getTime())[0];
+      
+      let nextIssueDate = calculateNextIssueDate(latestInvoice.issueDate, parent.recurrence!);
+      
+      while (nextIssueDate <= new Date() && (!parent.recurrence!.endDate || nextIssueDate <= new Date(parent.recurrence!.endDate))) {
+        const newInvoice = createInvoiceFromTemplate(parent, nextIssueDate);
+        newInvoicesToGenerate.push(newInvoice);
+        nextIssueDate = calculateNextIssueDate(newInvoice.issueDate, parent.recurrence!);
+      }
+    });
+
+    if (newInvoicesToGenerate.length > 0) {
+      setSavedInvoices(prev => [...prev, ...newInvoicesToGenerate]);
+      alert(`Generated ${newInvoicesToGenerate.length} new recurring invoice(s).`);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
 
   // --- LocalStorage Persistence ---
@@ -443,6 +503,9 @@ const App: React.FC = () => {
   const handleDocumentTypeChange = (newType: DocumentType) => {
     if (newType === documentType) return;
     setDocumentType(newType);
+    if (newType === DocumentType.Quotation) {
+      setRecurrence(null); // Clear recurrence when switching to quotation
+    }
   };
   
   const filteredSavedItems = useMemo(() => {
@@ -528,6 +591,8 @@ const App: React.FC = () => {
       status: loadedDocumentInfo?.docType === DocumentType.Invoice ? (loadedDocumentInfo.status as InvoiceStatus) || InvoiceStatus.Pending : null,
       quotationStatus: loadedDocumentInfo?.docType === DocumentType.Quotation ? (loadedDocumentInfo.status as QuotationStatus) || QuotationStatus.Active : null,
       payments: documentType === DocumentType.Invoice ? payments : [],
+      recurrence: documentType === DocumentType.Invoice ? recurrence : null,
+      recurrenceParentId: loadedDocumentInfo?.docType === DocumentType.Invoice ? loadedDocumentInfo.recurrenceParentId : null,
     };
     
     if (!isCreatingNew) { // If editing, check if client details were modified
@@ -639,6 +704,7 @@ const App: React.FC = () => {
     setLineItems([]);
     setPayments([]);
     setStatus(null);
+    setRecurrence(null);
     const today = new Date().toISOString().split('T')[0];
     setIssueDate(today);
     const newDueDate = new Date();
@@ -672,7 +738,8 @@ const App: React.FC = () => {
       setBankQRCode(doc.bankQRCode);
       setTemplate(doc.template);
       setAccentColor(doc.accentColor);
-      setLoadedDocumentInfo({id: doc.id, status: doc.status || doc.quotationStatus || null, docType: doc.documentType});
+      setRecurrence(doc.recurrence || null);
+      setLoadedDocumentInfo({id: doc.id, status: doc.status || doc.quotationStatus || null, docType: doc.documentType, recurrenceParentId: doc.recurrenceParentId});
       setIsCreatingNew(false);
       setCurrentView('editor');
   };
@@ -942,6 +1009,63 @@ const App: React.FC = () => {
                           <input type="date" value={dueDate} onChange={e => { setDueDate(e.target.value); setDueDateOption('custom'); }} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
                       </div>
                   </div>
+                  {documentType === DocumentType.Invoice && (
+                    <div className="space-y-2 mt-4 pt-4 border-t">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                            <input 
+                                type="checkbox"
+                                checked={!!recurrence}
+                                onChange={e => {
+                                    if (e.target.checked) {
+                                        setRecurrence({ frequency: 'monthly', interval: 1 });
+                                    } else {
+                                        setRecurrence(null);
+                                    }
+                                }}
+                                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                            />
+                            <span className="font-medium text-gray-700">Make this a recurring invoice</span>
+                        </label>
+                        {recurrence && (
+                            <div className="pl-6 space-y-4 pt-2">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-600 mb-1">Repeat Every</label>
+                                        <input 
+                                            type="number" 
+                                            min="1"
+                                            value={recurrence.interval}
+                                            onChange={e => setRecurrence(r => r ? {...r, interval: parseInt(e.target.value, 10) || 1} : null)}
+                                            className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-600 mb-1">Frequency</label>
+                                        <select 
+                                            value={recurrence.frequency}
+                                            onChange={e => setRecurrence(r => r ? {...r, frequency: e.target.value as Recurrence['frequency']} : null)}
+                                            className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                                        >
+                                            <option value="daily">Day(s)</option>
+                                            <option value="weekly">Week(s)</option>
+                                            <option value="monthly">Month(s)</option>
+                                            <option value="yearly">Year(s)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-600 mb-1">End Date (Optional)</label>
+                                    <input 
+                                        type="date" 
+                                        value={recurrence.endDate || ''}
+                                        onChange={e => setRecurrence(r => r ? {...r, endDate: e.target.value || null} : null)}
+                                        className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                                    />
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="bg-white p-6 rounded-lg shadow-md">

@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { SavedDocument, InvoiceStatus, Payment } from '../types';
-import { MailIcon, WhatsAppIcon, CashIcon, ViewIcon, TrashIcon, MoreVerticalIcon } from './Icons';
+import { MailIcon, WhatsAppIcon, CashIcon, ViewIcon, TrashIcon, MoreVerticalIcon, RepeatIcon } from './Icons';
 import PaymentModal from './PaymentModal';
 
 interface DocumentListPageProps {
@@ -22,6 +23,8 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
   const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
 
   const getDisplayStatusText = (doc: SavedDocument): string => {
+    if (!!doc.recurrence && !doc.recurrenceParentId) return 'Recurring';
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const dueDate = new Date(doc.dueDate + 'T00:00:00');
@@ -159,6 +162,12 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
       setDocuments(prev => prev.filter(doc => doc.id !== id));
     }
   };
+
+  const handleStopRecurrence = (id: number) => {
+    if (window.confirm('Are you sure you want to stop this invoice from recurring? This will not delete any existing invoices in the series.')) {
+        setDocuments(prev => prev.map(doc => doc.id === id ? { ...doc, recurrence: null } : doc));
+    }
+  };
   
   const handleSelect = (id: number) => {
     setSelectedIds(prev => {
@@ -189,16 +198,13 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
   };
 
   const getDisplayStatus = (doc: SavedDocument) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const dueDate = new Date(doc.dueDate + 'T00:00:00');
-    
-    const isOverdue = doc.status !== InvoiceStatus.Paid && dueDate < today;
-    if (isOverdue) return { text: 'Overdue', color: 'bg-red-100 text-red-700' };
-
-    switch (doc.status) {
-        case InvoiceStatus.Paid: return { text: 'Paid', color: 'bg-green-100 text-green-700' };
-        case InvoiceStatus.PartiallyPaid: return { text: 'Partially Paid', color: 'bg-blue-100 text-blue-700' };
+    const statusText = getDisplayStatusText(doc);
+    switch (statusText) {
+        case 'Paid': return { text: 'Paid', color: 'bg-green-100 text-green-700' };
+        case 'Partially Paid': return { text: 'Partially Paid', color: 'bg-blue-100 text-blue-700' };
+        case 'Pending': return { text: 'Pending', color: 'bg-yellow-100 text-yellow-700' };
+        case 'Overdue': return { text: 'Overdue', color: 'bg-red-100 text-red-700' };
+        case 'Recurring': return { text: 'Recurring', color: 'bg-purple-100 text-purple-700' };
         default: return { text: 'Pending', color: 'bg-yellow-100 text-yellow-700' };
     }
   };
@@ -228,7 +234,7 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
                     <CashIcon /> Record Payment
                 </button>
                 <button onClick={() => { handleLoadDocument(doc); setOpenDropdownId(null); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">
-                    <ViewIcon /> View Invoice
+                    <ViewIcon /> View/Edit Invoice
                 </button>
                  {doc.status !== InvoiceStatus.Paid && (
                     <>
@@ -242,6 +248,11 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
                     </>
                  )}
                 <div className="border-t my-1"></div>
+                {!!doc.recurrence && !doc.recurrenceParentId && (
+                    <button onClick={() => { handleStopRecurrence(doc.id); setOpenDropdownId(null); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-orange-600 hover:bg-orange-50">
+                        <RepeatIcon /> Stop Recurrence
+                    </button>
+                )}
                 <button onClick={() => { handleDeleteDocument(doc.id); setOpenDropdownId(null); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50">
                     <TrashIcon /> Delete Invoice
                 </button>
@@ -251,7 +262,7 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
     </div>
   );
   
-  const filterOptions = ['All', 'Paid', 'Partially Paid', 'Pending', 'Overdue'];
+  const filterOptions = ['All', 'Paid', 'Partially Paid', 'Pending', 'Overdue', 'Recurring'];
 
   return (
     <>
@@ -425,6 +436,8 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
                       balanceDue = 0;
                     }
                     const displayStatus = getDisplayStatus(doc);
+                    const isRecurringParent = !!doc.recurrence && !doc.recurrenceParentId;
+                    const isRecurringChild = !!doc.recurrenceParentId;
 
                     return (
                       <div key={doc.id} className={`p-4 rounded-lg border lg:p-0 lg:shadow-none lg:rounded-none lg:border-b ${selectedIds.has(doc.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-white'}`}>
@@ -471,8 +484,13 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
                               checked={selectedIds.has(doc.id)}
                               onChange={() => handleSelect(doc.id)}
                             />
-                            <div className="text-center">
+                            <div className="text-center flex items-center justify-center gap-2">
                                 <span className={`text-xs font-bold py-1 px-3 rounded-full capitalize ${displayStatus.color}`}>{displayStatus.text}</span>
+                                {(isRecurringParent || isRecurringChild) && (
+                                    <span title={isRecurringParent ? "Recurring Template" : "Part of a recurring series"} className="text-slate-400">
+                                        <RepeatIcon />
+                                    </span>
+                                )}
                             </div>
                             <span className="font-medium text-slate-800 truncate" title={doc.documentNumber}>{doc.documentNumber}</span>
                             <span className="text-slate-700 truncate">{doc.clientDetails.name}</span>
