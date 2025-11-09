@@ -714,19 +714,21 @@ const App: React.FC = () => {
           <>
             <div className="sticky top-[52px] bg-gray-100/80 backdrop-blur-sm z-10 border-b">
                 <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="flex flex-col items-start sm:flex-row sm:justify-between sm:items-center py-2">
-                        <div className="flex items-center gap-2 sm:order-2">
+                    <div className="flex flex-col items-start sm:flex-row sm:justify-between sm:items-center py-2 gap-1 sm:gap-0">
+                        {/* Status text: appears below buttons on mobile */}
+                        <div className="flex items-center gap-2 order-2 sm:order-1">
+                            <span className="text-sm font-medium text-slate-600">
+                              {isCreatingNew ? 'Creating New Document' : `Editing ${loadedDocumentInfo?.docType} #${documentNumber}`}
+                            </span>
+                        </div>
+                        {/* Action buttons: appear above status text on mobile */}
+                        <div className="flex items-center gap-2 order-1 sm:order-2">
                             <button onClick={handleCreateNew} className="flex items-center gap-1.5 bg-white text-slate-700 font-semibold py-2 px-3 rounded-lg shadow-sm border hover:bg-slate-100 text-sm">
                                 <PlusIcon /> New
                             </button>
                             <button onClick={handleSaveDocument} className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700">
                                 {isCreatingNew ? 'Save' : 'Update'}
                             </button>
-                        </div>
-                        <div className="flex items-center gap-2 mt-2 sm:mt-0 sm:order-1">
-                            <span className="text-sm font-medium text-slate-600">
-                              {isCreatingNew ? 'Creating New Document' : `Editing ${loadedDocumentInfo?.docType} #${documentNumber}`}
-                            </span>
                         </div>
                     </div>
                 </div>
