@@ -722,7 +722,7 @@ const App: React.FC = () => {
                         </div>
                         <div className="flex items-center gap-2">
                             <button onClick={handleCreateNew} className="flex items-center gap-1.5 bg-white text-slate-700 font-semibold py-2 px-3 rounded-lg shadow-sm border hover:bg-slate-100 text-sm">
-                                <PlusIcon /> Create New
+                                <PlusIcon /> New
                             </button>
                             <button onClick={handleSaveDocument} className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700">
                                 {isCreatingNew ? 'Save' : 'Update'}
