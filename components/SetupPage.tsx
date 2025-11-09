@@ -262,14 +262,44 @@ const SetupPage: React.FC<SetupPageProps> = ({
         const jsonString = JSON.stringify(data, null, 2);
         const blob = new Blob([jsonString], { type: 'application/json' });
 
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = fileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+        // Modern approach: File System Access API
+        if ('showSaveFilePicker' in window) {
+            try {
+                const handle = await (window as any).showSaveFilePicker({
+                    suggestedName: fileName,
+                    types: [{
+                        description: 'JSON Backup File',
+                        accept: { 'application/json': ['.json'] },
+                    }],
+                });
+                const writable = await handle.createWritable();
+                await writable.write(blob);
+                await writable.close();
+                return; // Success!
+            } catch (err: any) {
+                // AbortError is thrown when the user clicks "Cancel". We can safely ignore it.
+                if (err.name === 'AbortError') {
+                    return;
+                }
+                // Log other errors and proceed to fallback.
+                console.error('Error using showSaveFilePicker, trying fallback:', err);
+            }
+        }
+
+        // Fallback approach for older browsers or if the modern API fails
+        try {
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('Fallback download method also failed:', error);
+            alert('Could not save the file. Your browser may not support this feature or it may be blocked.');
+        }
     };
     
     const processImportedData = (jsonData: string) => {
