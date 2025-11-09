@@ -87,12 +87,12 @@ const App: React.FC = () => {
     } catch (e) { console.error(e); return []; }
   });
   
-  const getNextDocumentNumber = useCallback((docType: DocumentType, invoices: SavedDocument[], quotations: SavedDocument[]): string => {
-    const list = docType === DocumentType.Invoice ? invoices : quotations;
-    if (!Array.isArray(list) || list.length === 0) {
+  const getNextDocumentNumber = useCallback((invoices: SavedDocument[], quotations: SavedDocument[]): string => {
+    const allDocs = [...invoices, ...quotations];
+    if (!Array.isArray(allDocs) || allDocs.length === 0) {
         return '001';
     }
-    const numbers = list.map(doc => parseInt(doc.documentNumber, 10)).filter(n => !isNaN(n));
+    const numbers = allDocs.map(doc => parseInt(doc.documentNumber, 10)).filter(n => !isNaN(n));
     const lastNum = numbers.length > 0 ? Math.max(...numbers) : 0;
     return String(lastNum + 1).padStart(3, '0');
   }, []);
@@ -110,7 +110,24 @@ const App: React.FC = () => {
   const [template, setTemplate] = useState(activeCompany.template);
   const [accentColor, setAccentColor] = useState(activeCompany.accentColor);
   const [clientDetails, setClientDetails] = useState<Details>({ name: '', address: '', email: '', phone: '' });
-  const [documentNumber, setDocumentNumber] = useState(() => getNextDocumentNumber(DocumentType.Quotation, [], savedQuotations));
+  const [documentNumber, setDocumentNumber] = useState(() => {
+    try {
+        const savedInv = localStorage.getItem('savedInvoices');
+        const invoices: SavedDocument[] = savedInv && Array.isArray(JSON.parse(savedInv)) ? JSON.parse(savedInv) : [];
+        const savedQuo = localStorage.getItem('savedQuotations');
+        const quotations: SavedDocument[] = savedQuo && Array.isArray(JSON.parse(savedQuo)) ? JSON.parse(savedQuo) : [];
+        
+        const allDocs = [...invoices, ...quotations];
+        if (allDocs.length === 0) return '001';
+        
+        const numbers = allDocs.map(doc => parseInt(doc.documentNumber, 10)).filter(n => !isNaN(n));
+        const lastNum = numbers.length > 0 ? Math.max(...numbers) : 0;
+        return String(lastNum + 1).padStart(3, '0');
+    } catch (e) {
+        console.error("Failed to calculate initial document number", e);
+        return '001';
+    }
+  });
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0]);
   const [dueDate, setDueDate] = useState(() => {
     const date = new Date();
@@ -249,7 +266,7 @@ const App: React.FC = () => {
     if (newType === documentType) return;
     setDocumentType(newType);
     if (isCreatingNew) {
-      setDocumentNumber(getNextDocumentNumber(newType, savedInvoices, savedQuotations));
+      setDocumentNumber(getNextDocumentNumber(savedInvoices, savedQuotations));
     }
   };
   
@@ -310,24 +327,16 @@ const App: React.FC = () => {
       return;
     }
     
-    // Check for duplicate document number
+    // Check for duplicate document number across both invoices and quotations
     const trimmedDocNum = documentNumber.trim();
-    if (documentType === DocumentType.Invoice) {
-        const isDuplicate = savedInvoices.some(
-            inv => inv.documentNumber.trim() === trimmedDocNum && inv.id !== loadedDocumentInfo?.id
-        );
-        if (isDuplicate) {
-            alert(`An invoice with number "${trimmedDocNum}" already exists. Please use a unique number.`);
-            return;
-        }
-    } else { // Quotation
-        const isDuplicate = savedQuotations.some(
-            q => q.documentNumber.trim() === trimmedDocNum && q.id !== loadedDocumentInfo?.id
-        );
-        if (isDuplicate) {
-            alert(`A quotation with number "${trimmedDocNum}" already exists. Please use a unique number.`);
-            return;
-        }
+    const allDocs = [...savedInvoices, ...savedQuotations];
+    const isDuplicate = allDocs.some(
+        doc => doc.documentNumber.trim().toLowerCase() === trimmedDocNum.toLowerCase() && doc.id !== loadedDocumentInfo?.id
+    );
+
+    if (isDuplicate) {
+        alert(`A document (invoice or quotation) with number "${trimmedDocNum}" already exists. Please use a unique number.`);
+        return;
     }
 
     const docToSave: SavedDocument = {
@@ -404,7 +413,7 @@ const App: React.FC = () => {
     setLineItems([]);
     setPayments([]);
     setStatus(null);
-    setDocumentNumber(getNextDocumentNumber(DocumentType.Quotation, savedInvoices, savedQuotations));
+    setDocumentNumber(getNextDocumentNumber(savedInvoices, savedQuotations));
     const today = new Date().toISOString().split('T')[0];
     setIssueDate(today);
     const newDueDate = new Date();
@@ -453,7 +462,7 @@ const App: React.FC = () => {
     setDocumentType(DocumentType.Invoice);
     setStatus(InvoiceStatus.Pending);
     setSavedQuotations(prev => prev.map(q => q.id === quotation.id ? {...q, quotationStatus: QuotationStatus.Agreed} : q));
-    setDocumentNumber(getNextDocumentNumber(DocumentType.Invoice, savedInvoices, savedQuotations));
+    setDocumentNumber(getNextDocumentNumber(savedInvoices, savedQuotations));
     setLoadedDocumentInfo({id: Date.now(), status: InvoiceStatus.Pending, docType: DocumentType.Invoice});
     setIsCreatingNew(false);
     setCurrentView('editor');
