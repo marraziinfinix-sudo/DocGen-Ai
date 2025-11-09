@@ -623,7 +623,7 @@ const App: React.FC = () => {
                             onChange={e => handleClientDetailChange('name', e.target.value)} 
                             onFocus={() => setIsClientDropdownOpen(true)}
                             onBlur={() => setTimeout(() => setIsClientDropdownOpen(false), 200)}
-                            placeholder="Search or add new client..."
+                            placeholder="Search name, email, or phone..."
                             className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
                             autoComplete="off"
                         />
@@ -638,7 +638,7 @@ const App: React.FC = () => {
                                     className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
                                 >
                                     <p className="font-semibold">{client.name}</p>
-                                    <p className="text-xs text-slate-500">{client.email}</p>
+                                    <p className="text-xs text-slate-500">{client.email} {client.email && client.phone && '•'} {client.phone}</p>
                                 </button>
                                 ))
                             ) : (
