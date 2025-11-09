@@ -28,6 +28,15 @@
           display: none;
         }
       }
+      /* Restore number input spinners hidden by Tailwind CSS */
+      input[type="number"] {
+        -moz-appearance: auto;
+      }
+      input[type="number"]::-webkit-inner-spin-button,
+      input[type="number"]::-webkit-outer-spin-button {
+        -webkit-appearance: auto;
+        margin: 0;
+      }
     </style>
   <script type="importmap">
 {
