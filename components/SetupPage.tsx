@@ -1,6 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Company, Details } from '../types';
-import { PlusIcon, DownloadIcon, UploadIcon } from './Icons';
+import { PlusIcon, DownloadIcon, UploadIcon, ChevronDownIcon } from './Icons';
 
 interface SetupPageProps {
   companies: Company[];
@@ -186,7 +186,16 @@ const SetupPage: React.FC<SetupPageProps> = ({
 }) => {
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingCompany, setEditingCompany] = useState<Company | null>(null);
+    const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        const closeMenu = () => setIsExportMenuOpen(false);
+        if (isExportMenuOpen) {
+            window.addEventListener('click', closeMenu);
+        }
+        return () => window.removeEventListener('click', closeMenu);
+    }, [isExportMenuOpen]);
 
     const handleAddNew = () => {
         setEditingCompany({ ...emptyCompany });
@@ -232,74 +241,51 @@ const SetupPage: React.FC<SetupPageProps> = ({
         setEditingCompany(null);
     };
 
-    const prepareDataForSave = () => {
-        const dataToExport: { [key: string]: any } = {};
-        const keys = ['companies', 'clients', 'items', 'savedInvoices', 'savedQuotations', 'activeCompanyId'];
-        keys.forEach(key => {
-            const item = localStorage.getItem(key);
-            if (item) {
-                try {
-                    dataToExport[key] = JSON.parse(item);
-                } catch (e) {
-                     dataToExport[key] = item; // For non-JSON items like activeCompanyId
+    const prepareDataForSave = (category: string) => {
+        if (category === 'all') {
+            const dataToExport: { [key: string]: any } = {};
+            const keys = ['companies', 'clients', 'items', 'savedInvoices', 'savedQuotations', 'activeCompanyId'];
+            keys.forEach(key => {
+                const item = localStorage.getItem(key);
+                if (item) {
+                    try {
+                        dataToExport[key] = JSON.parse(item);
+                    } catch (e) {
+                         dataToExport[key] = item; // For non-JSON items like activeCompanyId
+                    }
                 }
-            }
-        });
-        return dataToExport;
+            });
+            return { name: 'all', data: dataToExport };
+        } else {
+            const item = localStorage.getItem(category);
+            return { name: category, data: item ? JSON.parse(item) : [] };
+        }
     }
 
-    const handleExportData = async () => {
-        const data = prepareDataForSave();
+    const handleExportData = async (category: string) => {
+        setIsExportMenuOpen(false);
+        const { name, data } = prepareDataForSave(category);
 
-        const dataIsPresent = data && Object.keys(data).length > 0;
+        const dataIsPresent = data && (!Array.isArray(data) || data.length > 0) && (typeof data === 'object' && Object.keys(data).length > 0);
         if (!dataIsPresent) {
-            alert(`No data to export.`);
+            alert(`No data to export for "${name}".`);
             return;
         }
 
         const date = new Date().toISOString().split('T')[0];
-        const fileName = `invquo-ai-backup-all-${date}.json`;
+        const fileName = `invquo-ai-backup-${name}-${date}.json`;
         const jsonString = JSON.stringify(data, null, 2);
         const blob = new Blob([jsonString], { type: 'application/json' });
 
-        // Modern approach: File System Access API
-        if ('showSaveFilePicker' in window) {
-            try {
-                const handle = await (window as any).showSaveFilePicker({
-                    suggestedName: fileName,
-                    types: [{
-                        description: 'JSON Backup File',
-                        accept: { 'application/json': ['.json'] },
-                    }],
-                });
-                const writable = await handle.createWritable();
-                await writable.write(blob);
-                await writable.close();
-                return; // Success!
-            } catch (err: any) {
-                // AbortError is thrown when the user clicks "Cancel". We can safely ignore it.
-                if (err.name === 'AbortError') {
-                    return;
-                }
-                // Log other errors and proceed to fallback.
-                console.error('Error using showSaveFilePicker, trying fallback:', err);
-            }
-        }
-
-        // Fallback approach for older browsers or if the modern API fails
-        try {
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = fileName;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-        } catch (error) {
-            console.error('Fallback download method also failed:', error);
-            alert('Could not save the file. Your browser may not support this feature or it may be blocked.');
-        }
+        // Standard download method
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
     };
     
     const processImportedData = (jsonData: string) => {
@@ -312,16 +298,17 @@ const SetupPage: React.FC<SetupPageProps> = ({
             const importedKeys = Object.keys(data);
             
             const isFullBackup = requiredKeys.every(key => importedKeys.includes(key));
+            const isPartialBackup = requiredKeys.some(key => importedKeys.includes(key) && Array.isArray(data[key]));
 
-            if (!isFullBackup) {
-                alert('Invalid backup file. The file does not appear to contain all the required data.');
+            if (!isFullBackup && !isPartialBackup) {
+                alert('Invalid backup file. The file does not appear to contain valid data.');
                 return;
             }
             
             [...requiredKeys, 'activeCompanyId'].forEach(key => {
                 if (data[key]) {
                     localStorage.setItem(key, JSON.stringify(data[key]));
-                } else {
+                } else if (isFullBackup) {
                     localStorage.removeItem(key);
                 }
             });
@@ -401,20 +388,34 @@ const SetupPage: React.FC<SetupPageProps> = ({
             <div className="mt-8 pt-6 border-t">
                 <div className="mb-8">
                     <h2 className="text-xl font-bold text-gray-800 mb-4">Data Management</h2>
-                    <p className="text-slate-600 mb-4">Backup all your application data (companies, clients, items, documents) to a single file, or restore from a previous backup.</p>
+                    <p className="text-slate-600 mb-4">Save your data to a file for backup, or restore from a previously saved file.</p>
                     <div className="flex flex-col sm:flex-row gap-4">
-                        <button onClick={handleExportData} className="flex-1 flex items-center justify-center gap-2 bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-700">
-                            <DownloadIcon /> Choose Folder &amp; Save Full Backup...
-                        </button>
+                        <div className="relative inline-block text-left flex-1">
+                          <button onClick={(e) => { e.stopPropagation(); setIsExportMenuOpen(prev => !prev); }} className="w-full flex items-center justify-center gap-2 bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-700">
+                            <DownloadIcon />
+                            <span>Export Data</span>
+                            <ChevronDownIcon />
+                          </button>
+                          {isExportMenuOpen && (
+                            <div className="origin-top-right absolute right-0 mt-2 w-full rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
+                              <div className="py-1" role="menu">
+                                <button onClick={() => handleExportData('all')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" role="menuitem">Export All Data</button>
+                                <div className="border-t my-1"></div>
+                                <button onClick={() => handleExportData('companies')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" role="menuitem">Export Companies</button>
+                                <button onClick={() => handleExportData('clients')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" role="menuitem">Export Clients</button>
+                                <button onClick={() => handleExportData('items')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" role="menuitem">Export Items</button>
+                                <button onClick={() => handleExportData('savedInvoices')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" role="menuitem">Export Invoices</button>
+                                <button onClick={() => handleExportData('savedQuotations')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100" role="menuitem">Export Quotations</button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
 
                         <button onClick={() => fileInputRef.current?.click()} className="flex-1 flex items-center justify-center gap-2 bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-slate-700">
-                            <UploadIcon /> Choose File &amp; Load Backup...
+                            <UploadIcon /> Import Data
                         </button>
                         <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" className="hidden"/>
                     </div>
-                    <p className="text-xs text-slate-500 mt-3 text-center sm:text-left">
-                        Your browser will prompt you to choose a save location. For security reasons, you must select your folder each time you save a backup. All data remains on your local computer.
-                    </p>
                 </div>
                 <div className="text-right">
                     <button onClick={onDone} className="bg-slate-500 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-slate-600 transition-colors duration-200">
