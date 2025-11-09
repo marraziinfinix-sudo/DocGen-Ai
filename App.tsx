@@ -716,8 +716,8 @@ const App: React.FC = () => {
                 <div className="container mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex justify-between items-center py-2">
                         {/* Status text */}
-                        <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-slate-600">
+                        <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-sm font-medium text-slate-600 truncate">
                               {isCreatingNew ? 'Creating New Document' : `Editing ${loadedDocumentInfo?.docType} #${documentNumber}`}
                             </span>
                         </div>
