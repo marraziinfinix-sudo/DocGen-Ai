@@ -6,6 +6,8 @@ interface SetupPageProps {
   companies: Company[];
   setCompanies: React.Dispatch<React.SetStateAction<Company[]>>;
   onDone: () => void;
+  activeCompanyId: number;
+  setActiveCompanyId: React.Dispatch<React.SetStateAction<number>>;
 }
 
 const emptyCompany: Company = {
@@ -178,7 +180,9 @@ const CompanyForm: React.FC<{
 
 const SetupPage: React.FC<SetupPageProps> = ({ 
     companies, setCompanies, 
-    onDone 
+    onDone,
+    activeCompanyId,
+    setActiveCompanyId
 }) => {
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingCompany, setEditingCompany] = useState<Company | null>(null);
@@ -209,13 +213,22 @@ const SetupPage: React.FC<SetupPageProps> = ({
             return;
         }
         if (window.confirm('Are you sure you want to delete this company profile?')) {
-            setCompanies(prev => prev.filter(c => c.id !== id));
+            setCompanies(prev => {
+                const newCompanies = prev.filter(c => c.id !== id);
+                // If the deleted company was the active one, set the first remaining one as active.
+                if (id === activeCompanyId) {
+                    setActiveCompanyId(newCompanies[0].id);
+                }
+                return newCompanies;
+            });
         }
     };
     
     const handleFormSave = (updatedCompany: Company) => {
         if (updatedCompany.id === 0) { // New company
-            setCompanies(prev => [...prev, { ...updatedCompany, id: Date.now() }]);
+            const newCompany = { ...updatedCompany, id: Date.now() };
+            setCompanies(prev => [...prev, newCompany]);
+            setActiveCompanyId(newCompany.id); // Set new company as active
         } else { // Existing company
             setCompanies(prev => prev.map(c => c.id === updatedCompany.id ? updatedCompany : c));
         }
@@ -231,14 +244,14 @@ const SetupPage: React.FC<SetupPageProps> = ({
     const prepareDataForSave = (category: string) => {
         if (category === 'all') {
             const dataToExport: { [key: string]: any } = {};
-            const keys = ['companies', 'clients', 'items', 'savedInvoices', 'savedQuotations'];
+            const keys = ['companies', 'clients', 'items', 'savedInvoices', 'savedQuotations', 'activeCompanyId'];
             keys.forEach(key => {
                 const item = localStorage.getItem(key);
                 if (item) {
                     try {
                         dataToExport[key] = JSON.parse(item);
                     } catch (e) {
-                        console.error(`Could not parse ${key} from localStorage`, e);
+                         dataToExport[key] = item; // For non-JSON items like activeCompanyId
                     }
                 }
             });
@@ -292,7 +305,7 @@ const SetupPage: React.FC<SetupPageProps> = ({
                 return;
             }
             
-            requiredKeys.forEach(key => {
+            [...requiredKeys, 'activeCompanyId'].forEach(key => {
                 if (data[key]) {
                     localStorage.setItem(key, JSON.stringify(data[key]));
                 } else if (isFullBackup) {
@@ -327,8 +340,25 @@ const SetupPage: React.FC<SetupPageProps> = ({
     <>
       <main className="container mx-auto p-4 sm:p-6 lg:p-8">
         <div className="max-w-4xl mx-auto bg-white p-4 sm:p-8 rounded-lg shadow-md">
+            <div className="mb-8 p-6 bg-slate-50 rounded-lg border border-slate-200">
+                <h2 className="text-xl font-bold text-gray-800 mb-2">Active Company Profile</h2>
+                <p className="text-slate-600 mb-4">Select the default company profile to be used when creating new documents.</p>
+                <select
+                    value={activeCompanyId}
+                    onChange={e => setActiveCompanyId(parseInt(e.target.value, 10))}
+                    className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                    aria-label="Select active company profile"
+                >
+                    {companies.map(company => (
+                    <option key={company.id} value={company.id}>
+                        {company.details.name || `Company #${company.id}`}
+                    </option>
+                    ))}
+                </select>
+            </div>
+
             <div className="flex justify-between items-center mb-6 border-b pb-4">
-                <h2 className="text-2xl font-bold text-gray-800">Company Profiles</h2>
+                <h2 className="text-2xl font-bold text-gray-800">Manage Company Profiles</h2>
                 <button onClick={handleAddNew} className="flex items-center gap-2 bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700">
                     <PlusIcon /> <span className="hidden sm:inline">Add New</span>
                 </button>

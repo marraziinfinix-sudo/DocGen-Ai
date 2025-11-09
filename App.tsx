@@ -42,7 +42,32 @@ const App: React.FC = () => {
       accentColor: '#4f46e5',
     }];
   });
-  const [activeCompanyId, setActiveCompanyId] = useState<number>(companies[0].id);
+  
+  const [activeCompanyId, setActiveCompanyId] = useState<number>(() => {
+    try {
+        const savedId = localStorage.getItem('activeCompanyId');
+        const parsedId = savedId ? parseInt(savedId, 10) : null;
+        // The 'companies' variable is available here due to closure
+        const availableCompanies = JSON.parse(localStorage.getItem('companies') || '[]');
+        if (parsedId && availableCompanies.some((c: Company) => c.id === parsedId)) {
+            return parsedId;
+        }
+    } catch (e) {
+        console.error('Failed to load active company ID from localStorage', e);
+    }
+    // Fallback to the first company's ID
+    const firstCompany = (JSON.parse(localStorage.getItem('companies') || '[]') as Company[])[0];
+    return firstCompany ? firstCompany.id : 1;
+  });
+
+  useEffect(() => {
+    try {
+        localStorage.setItem('activeCompanyId', String(activeCompanyId));
+    } catch (e) {
+        console.error('Failed to save active company ID to localStorage', e);
+    }
+  }, [activeCompanyId]);
+
 
   const activeCompany = useMemo(() => companies.find(c => c.id === activeCompanyId) || companies[0], [companies, activeCompanyId]);
 
@@ -537,7 +562,7 @@ const App: React.FC = () => {
   const renderCurrentView = () => {
     switch(currentView) {
       case 'setup':
-        return <SetupPage companies={companies} setCompanies={setCompanies} onDone={() => setCurrentView('editor')} />;
+        return <SetupPage companies={companies} setCompanies={setCompanies} onDone={() => setCurrentView('editor')} activeCompanyId={activeCompanyId} setActiveCompanyId={setActiveCompanyId} />;
       case 'clients':
         return <ClientListPage clients={clients} setClients={setClients} onDone={() => setCurrentView('editor')} />;
       case 'items':
@@ -591,8 +616,8 @@ const App: React.FC = () => {
                       <label className="block text-sm font-medium text-gray-600 mb-1">Select Existing Client</label>
                       <select value={selectedClientId} onChange={e => handleClientSelect(e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500">
                         <option value="">-- New Client --</option>
-                        {/* FIX: Added an Array.isArray check for `clients` before accessing its `map` property to prevent potential runtime errors if `clients` is not an array. This also provides a type guard for the code inside the map, resolving the static analysis error. */}
-                        {Array.isArray(clients) ? clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>) : null}
+                        {/* FIX: Added an Array.isArray check for `clients` before accessing its `map` property to prevent potential runtime errors if `clients` is not an array. */}
+                        {Array.isArray(clients) && clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
                       </select>
                     </div>
                     <div>
