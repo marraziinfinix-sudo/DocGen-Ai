@@ -231,6 +231,17 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
     }
   }, [categories]);
 
+  const formMarkup = useMemo(() => {
+    const cost = parseFloat(formState.costPrice);
+    const sell = parseFloat(formState.price);
+
+    if (isNaN(cost) || isNaN(sell) || cost <= 0) {
+        return 0;
+    }
+
+    return ((sell - cost) / cost) * 100;
+  }, [formState.costPrice, formState.price]);
+
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -388,8 +399,8 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
 
         <div className="bg-slate-50 p-6 rounded-lg mb-8 border border-slate-200">
             <h3 className="text-lg font-semibold text-gray-700 mb-4">{isEditing ? 'Edit Item' : 'Add New Item'}</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="md:col-span-2">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="md:col-span-3">
                     <label className="block text-sm font-medium text-gray-600 mb-1">Description</label>
                     <textarea name="description" placeholder="Item Description" value={formState.description} onChange={handleInputChange} rows={3} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"/>
                 </div>
@@ -401,7 +412,13 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
                     <label className="block text-sm font-medium text-gray-600 mb-1">Selling Price</label>
                     <input type="number" name="price" placeholder="Selling Price" value={formState.price} onChange={handleInputChange} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"/>
                 </div>
-                <div className="relative md:col-span-2">
+                 <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">Markup (%)</label>
+                    <div className="w-full p-2 bg-slate-100 border border-slate-300 rounded-md">
+                        <span className={`font-medium ${formMarkup >= 0 ? 'text-green-700' : 'text-red-700'}`}>{formMarkup.toFixed(2)}%</span>
+                    </div>
+                </div>
+                <div className="relative md:col-span-3">
                   <label className="block text-sm font-medium text-gray-600 mb-1">Category</label>
                   <input
                     type="text"
@@ -470,7 +487,6 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
                     {categoryFilterOptions.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                 </select>
             </div>
-            {/* FIX: Added an Array.isArray check for `items` before accessing its `length` property to prevent potential runtime errors if `items` is not an array. */}
             {(!Array.isArray(items) || items.length === 0) ? (
                 <p className="text-slate-500 text-center py-4 bg-slate-50 rounded-lg">No items saved yet.</p>
             ) : (
@@ -490,19 +506,24 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
                           Object.entries(groupedItems).sort(([a], [b]) => a.localeCompare(b)).map(([category, itemsInCategory]) => (
                             <div key={category}>
                               <h4 className="font-bold text-sm uppercase text-slate-500 bg-slate-100 p-2 rounded-t-md mt-4">{category}</h4>
-                              {/* FIX: Add an Array.isArray check before mapping over itemsInCategory to prevent runtime errors if the value is not an array. */}
-                              {Array.isArray(itemsInCategory) && itemsInCategory.map(item => (
+                              {Array.isArray(itemsInCategory) && itemsInCategory.map(item => {
+                                const cost = item.costPrice || 0;
+                                const sell = item.price || 0;
+                                const markup = cost > 0 ? ((sell - cost) / cost) * 100 : 0;
+                                return (
                                 <div key={item.id} className={`p-4 border-x border-b flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 ${selectedIds.has(item.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-white'}`}>
-                                    <div className="flex items-start w-full sm:w-auto">
+                                    <div className="flex items-start w-full sm:flex-1">
                                         <input
                                           type="checkbox"
                                           className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mt-1"
                                           checked={selectedIds.has(item.id)}
                                           onChange={() => handleSelect(item.id)}
                                         />
-                                        <div className="ml-4">
+                                        <div className="ml-4 flex-1">
                                             <p className="font-bold text-slate-800 break-words">{item.description}</p>
-                                            <p className="text-sm text-slate-500">Cost: {formatCurrency(item.costPrice)} &bull; Sell: {formatCurrency(item.price)}</p>
+                                            <p className="text-sm text-slate-500">
+                                                Cost: {formatCurrency(cost)} &bull; Sell: {formatCurrency(sell)} &bull; <span className={`font-medium ${markup >= 0 ? 'text-green-700' : 'text-red-700'}`}>Markup: {markup.toFixed(2)}%</span>
+                                            </p>
                                         </div>
                                     </div>
                                     <div className="flex gap-2 flex-shrink-0 self-end sm:self-auto">
@@ -510,7 +531,7 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
                                         <button onClick={() => handleDeleteItem(item.id)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-100">Delete</button>
                                     </div>
                                 </div>
-                              ))}
+                              )})}
                             </div>
                           ))
                         ) : (
