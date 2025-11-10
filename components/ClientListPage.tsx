@@ -191,6 +191,11 @@ const ClientListPage: React.FC<ClientListPageProps> = ({ clients, setClients, on
                 <p className="text-slate-500 text-center py-4 bg-slate-50 rounded-lg">No clients saved yet.</p>
             )}
         </div>
+        <div className="mt-8 text-right">
+            <button onClick={onDone} className="bg-slate-500 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-slate-600 transition-colors duration-200">
+                Done
+            </button>
+        </div>
       </div>
     </main>
   );

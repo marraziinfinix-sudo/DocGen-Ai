@@ -492,7 +492,7 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
                               <h4 className="font-bold text-sm uppercase text-slate-500 bg-slate-100 p-2 rounded-t-md mt-4">{category}</h4>
                               {/* FIX: Add an Array.isArray check before mapping over itemsInCategory to prevent runtime errors if the value is not an array. */}
                               {Array.isArray(itemsInCategory) && itemsInCategory.map(item => (
-                                <div key={item.id} className={`p-4 border-x border-b flex flex-wrap justify-between items-center gap-x-4 gap-y-2 ${selectedIds.has(item.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-white'}`}>
+                                <div key={item.id} className={`p-4 border-x border-b flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 ${selectedIds.has(item.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-white'}`}>
                                     <div className="flex items-start">
                                         <input
                                           type="checkbox"
@@ -501,11 +501,11 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
                                           onChange={() => handleSelect(item.id)}
                                         />
                                         <div className="ml-4">
-                                            <p className="font-bold text-slate-800">{item.description}</p>
+                                            <p className="font-bold text-slate-800 break-words">{item.description}</p>
                                             <p className="text-sm text-slate-500">Cost: {formatCurrency(item.costPrice)} &bull; Sell: {formatCurrency(item.price)}</p>
                                         </div>
                                     </div>
-                                    <div className="flex gap-2 flex-shrink-0 ml-auto sm:ml-0">
+                                    <div className="flex gap-2 flex-shrink-0 self-end sm:self-auto">
                                         <button onClick={() => handleEditItem(item)} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-100">Edit</button>
                                         <button onClick={() => handleDeleteItem(item.id)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-100">Delete</button>
                                     </div>
@@ -519,6 +519,11 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
                     </div>
                 </>
             )}
+        </div>
+         <div className="mt-8 text-right">
+            <button onClick={onDone} className="bg-slate-500 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-slate-600 transition-colors duration-200">
+                Done
+            </button>
         </div>
       </div>
        {isBulkEditModalOpen && (
