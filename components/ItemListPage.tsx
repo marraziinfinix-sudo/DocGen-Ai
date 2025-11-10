@@ -493,7 +493,7 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
                               {/* FIX: Add an Array.isArray check before mapping over itemsInCategory to prevent runtime errors if the value is not an array. */}
                               {Array.isArray(itemsInCategory) && itemsInCategory.map(item => (
                                 <div key={item.id} className={`p-4 border-x border-b flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 ${selectedIds.has(item.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-white'}`}>
-                                    <div className="flex items-start">
+                                    <div className="flex items-start w-full sm:w-auto">
                                         <input
                                           type="checkbox"
                                           className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mt-1"
