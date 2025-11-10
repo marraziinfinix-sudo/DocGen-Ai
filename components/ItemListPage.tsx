@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { Item } from '../types';
 import { TrashIcon, PlusIcon } from './Icons';
@@ -10,11 +9,12 @@ interface ItemListPageProps {
   onDone: () => void;
 }
 
-const emptyFormState: Omit<Item, 'id' | 'price' | 'costPrice'> & { id: number | null; price: string; costPrice: string; category: string } = {
+const emptyFormState: Omit<Item, 'id' | 'price' | 'costPrice'> & { id: number | null; price: string; costPrice: string; markup: string; category: string } = {
   id: null,
   description: '',
   costPrice: '',
   price: '',
+  markup: '',
   category: '',
 };
 
@@ -231,21 +231,36 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
     }
   }, [categories]);
 
-  const formMarkup = useMemo(() => {
-    const cost = parseFloat(formState.costPrice);
-    const sell = parseFloat(formState.price);
-
-    if (isNaN(cost) || isNaN(sell) || cost <= 0) {
-        return 0;
-    }
-
-    return ((sell - cost) / cost) * 100;
-  }, [formState.costPrice, formState.price]);
-
-
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormState(prev => ({ ...prev, [name]: value }));
+    
+    setFormState(prev => {
+        const updatedState = { ...prev, [name]: value };
+        
+        const cost = parseFloat(updatedState.costPrice);
+        const sell = parseFloat(updatedState.price);
+        const markup = parseFloat(updatedState.markup);
+
+        if (name === 'costPrice' || name === 'markup') {
+            if (!isNaN(cost) && !isNaN(markup)) {
+                const newPrice = cost * (1 + markup / 100);
+                if (!isNaN(newPrice)) {
+                    updatedState.price = newPrice.toFixed(2);
+                }
+            }
+        } else if (name === 'price') {
+            if (!isNaN(cost) && !isNaN(sell)) {
+                if (cost > 0) {
+                    const newMarkup = ((sell / cost) - 1) * 100;
+                    updatedState.markup = newMarkup.toFixed(2);
+                } else {
+                    updatedState.markup = '0.00';
+                }
+            }
+        }
+
+        return updatedState;
+    });
   };
 
   const filteredItems = useMemo(() => {
@@ -309,7 +324,16 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
   };
   
   const handleEditItem = (item: Item) => {
-    setFormState({...item, price: String(item.price), costPrice: String(item.costPrice), category: item.category || ''});
+    const cost = item.costPrice || 0;
+    const sell = item.price || 0;
+    const markup = cost > 0 ? (((sell - cost) / cost) * 100).toFixed(2) : '0.00';
+    setFormState({
+      ...item, 
+      price: String(item.price), 
+      costPrice: String(item.costPrice), 
+      markup: String(markup),
+      category: item.category || ''
+    });
     setIsEditing(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -409,14 +433,19 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
                     <input type="number" name="costPrice" placeholder="Cost Price" value={formState.costPrice} onChange={handleInputChange} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"/>
                 </div>
                 <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">Markup (%)</label>
+                    <input
+                      type="number"
+                      name="markup"
+                      placeholder="Markup %"
+                      value={formState.markup}
+                      onChange={handleInputChange}
+                      className={`w-full p-2 bg-white font-medium border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${parseFloat(formState.markup) >= 0 ? 'text-green-700' : 'text-red-700'}`}
+                    />
+                </div>
+                <div>
                     <label className="block text-sm font-medium text-gray-600 mb-1">Selling Price</label>
                     <input type="number" name="price" placeholder="Selling Price" value={formState.price} onChange={handleInputChange} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"/>
-                </div>
-                 <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-1">Markup (%)</label>
-                    <div className="w-full p-2 bg-slate-100 border border-slate-300 rounded-md">
-                        <span className={`font-medium ${formMarkup >= 0 ? 'text-green-700' : 'text-red-700'}`}>{formMarkup.toFixed(2)}%</span>
-                    </div>
                 </div>
                 <div className="relative md:col-span-3">
                   <label className="block text-sm font-medium text-gray-600 mb-1">Category</label>
