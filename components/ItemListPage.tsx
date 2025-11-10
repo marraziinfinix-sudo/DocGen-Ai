@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Item } from '../types';
 import { TrashIcon, PlusIcon } from './Icons';
@@ -429,8 +430,8 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
                     <textarea name="description" placeholder="Item Description" value={formState.description} onChange={handleInputChange} rows={3} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"/>
                 </div>
                 <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-1">Cost Price</label>
-                    <input type="number" name="costPrice" placeholder="Cost Price" value={formState.costPrice} onChange={handleInputChange} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"/>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">Cost</label>
+                    <input type="number" name="costPrice" placeholder="Cost" value={formState.costPrice} onChange={handleInputChange} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"/>
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-gray-600 mb-1">Markup (%)</label>
@@ -444,8 +445,8 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
                     />
                 </div>
                 <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-1">Selling Price</label>
-                    <input type="number" name="price" placeholder="Selling Price" value={formState.price} onChange={handleInputChange} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"/>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">Sell</label>
+                    <input type="number" name="price" placeholder="Sell Price" value={formState.price} onChange={handleInputChange} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"/>
                 </div>
                 <div className="relative md:col-span-3">
                   <label className="block text-sm font-medium text-gray-600 mb-1">Category</label>

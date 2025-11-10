@@ -1129,7 +1129,7 @@ const App: React.FC = () => {
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                         <div>
-                            <label className="block text-sm font-medium text-gray-600 mb-1">Cost Price</label>
+                            <label className="block text-sm font-medium text-gray-600 mb-1">Cost</label>
                             <input 
                                 type={inputType}
                                 inputMode={inputMode}
@@ -1149,7 +1149,7 @@ const App: React.FC = () => {
                                 className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-600 mb-1">Selling Price</label>
+                            <label className="block text-sm font-medium text-gray-600 mb-1">Sell</label>
                             <input 
                                 type={inputType}
                                 inputMode={inputMode}
