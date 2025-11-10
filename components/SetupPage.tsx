@@ -1,52 +1,8 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Company, Details } from '../types';
-import { PlusIcon, UploadIcon, ChevronDownIcon } from './Icons';
+import { PlusIcon, UploadIcon, ChevronDownIcon, DownloadIcon } from './Icons';
 
-// --- IndexedDB Helpers for FileSystemDirectoryHandle ---
-const DB_NAME = 'invquo-ai-fs-handles';
-const STORE_NAME = 'handles';
-
-const openDb = (): Promise<IDBDatabase> => {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, 1);
-    request.onupgradeneeded = () => {
-      request.result.createObjectStore(STORE_NAME);
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-};
-
-const getHandle = async (key: IDBValidKey): Promise<FileSystemDirectoryHandle | undefined> => {
-  const db = await openDb();
-  return new Promise((resolve) => {
-    const tx = db.transaction(STORE_NAME, 'readonly');
-    const request = tx.objectStore(STORE_NAME).get(key);
-    tx.oncomplete = () => resolve(request.result);
-  });
-};
-
-const setHandle = async (key: IDBValidKey, value: FileSystemDirectoryHandle): Promise<void> => {
-  const db = await openDb();
-  const tx = db.transaction(STORE_NAME, 'readwrite');
-  tx.objectStore(STORE_NAME).put(value, key);
-  return new Promise((resolve, reject) => {
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-};
-
-const deleteHandle = async (key: IDBValidKey): Promise<void> => {
-  const db = await openDb();
-  const tx = db.transaction(STORE_NAME, 'readwrite');
-  tx.objectStore(STORE_NAME).delete(key);
-  return new Promise((resolve, reject) => {
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-};
-
-// --- Component Interfaces ---
 interface SetupPageProps {
   companies: Company[];
   setCompanies: React.Dispatch<React.SetStateAction<Company[]>>;
@@ -231,77 +187,7 @@ const SetupPage: React.FC<SetupPageProps> = ({
 }) => {
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingCompany, setEditingCompany] = useState<Company | null>(null);
-    const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const exportMenuRef = useRef<HTMLDivElement>(null);
-    const [dirHandle, setDirHandle] = useState<FileSystemDirectoryHandle | null>(null);
-    const [dirName, setDirName] = useState<string | null>(null);
-    
-    // --- File System Access API ---
-    const verifyPermission = async (handle: FileSystemDirectoryHandle): Promise<boolean> => {
-      if (!handle) return false;
-      // FIX: Cast handle to `any` to access experimental File System Access API methods (`queryPermission` and `requestPermission`) that may not be in the default TypeScript typings.
-      const anyHandle = handle as any;
-      if (await anyHandle.queryPermission({ mode: 'readwrite' }) === 'granted') {
-        return true;
-      }
-      if (await anyHandle.requestPermission({ mode: 'readwrite' }) === 'granted') {
-        return true;
-      }
-      return false;
-    };
-    
-    useEffect(() => {
-      const loadHandle = async () => {
-        if (!('showDirectoryPicker' in window)) return;
-        try {
-          const handle = await getHandle('backupDirHandle');
-          if (handle && await verifyPermission(handle)) {
-            setDirHandle(handle);
-            setDirName(handle.name);
-          } else {
-            await deleteHandle('backupDirHandle').catch(() => {});
-          }
-        } catch (error) {
-          console.error("Error loading directory handle from IndexedDB:", error);
-        }
-      };
-      loadHandle();
-    }, []);
-
-    const handleSelectFolder = async () => {
-      if (!('showDirectoryPicker' in window)) {
-        alert('Your browser does not support this feature. Backups will be saved to your Downloads folder.');
-        return;
-      }
-      try {
-        const handle = await (window as any).showDirectoryPicker();
-        if (await verifyPermission(handle)) {
-          await setHandle('backupDirHandle', handle);
-          setDirHandle(handle);
-          setDirName(handle.name);
-          alert(`Save folder set to "${handle.name}".`);
-        }
-      } catch (err: any) {
-        if (err.name !== 'AbortError') {
-          console.error('Error selecting folder:', err);
-          alert('Could not set save folder. Please ensure you grant permission.');
-        }
-      }
-    };
-
-
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
-                setIsExportMenuOpen(false);
-            }
-        };
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => {
-            document.removeEventListener("mousedown", handleClickOutside);
-        };
-    }, [exportMenuRef]);
 
     const handleAddNew = () => {
         setEditingCompany({ ...emptyCompany });
@@ -391,29 +277,7 @@ const SetupPage: React.FC<SetupPageProps> = ({
 
         const jsonString = JSON.stringify(dataToExport, null, 2);
         const blob = new Blob([jsonString], { type: 'application/json' });
-        
-        // --- Try saving to designated folder first ---
-        if (dirHandle) {
-            try {
-                if (!(await verifyPermission(dirHandle))) {
-                    throw new Error('Permission to the save folder was denied or revoked.');
-                }
-                const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
-                const writable = await fileHandle.createWritable();
-                await writable.write(blob);
-                await writable.close();
-                alert(`Successfully exported ${dataType} to "${dirName}" folder.`);
-                return;
-            } catch (err) {
-                console.error('Failed to save to designated folder:', err);
-                alert(`Could not save to the selected folder "${dirName}". It may have been moved, deleted, or permissions were revoked. Falling back to standard download.`);
-                setDirHandle(null);
-                setDirName(null);
-                await deleteHandle('backupDirHandle').catch(()=>{}); // Clear bad handle
-            }
-        }
 
-        // --- Fallback to showSaveFilePicker or anchor link download ---
         if ('showSaveFilePicker' in window && window.self === window.top) {
             try {
                 const handle = await (window as any).showSaveFilePicker({
@@ -546,48 +410,28 @@ const SetupPage: React.FC<SetupPageProps> = ({
             
             <div className="mt-8 pt-6 border-t">
                 <h2 className="text-xl font-bold text-gray-800 mb-4">Data Management</h2>
-
-                <div className="bg-slate-50 p-4 rounded-lg border mb-6">
-                    <h3 className="font-semibold text-slate-700 mb-2">Automatic Backup Location</h3>
-                    <p className="text-sm text-slate-500 mb-3">Choose a folder to automatically save your backups. If not set, you'll be prompted to choose a location for each download.</p>
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                        <button onClick={handleSelectFolder} className="w-full sm:w-auto flex-shrink-0 bg-white text-slate-700 font-semibold py-2 px-4 rounded-lg shadow-sm border hover:bg-slate-100">
-                            Set Save Folder...
-                        </button>
-                        <div className="w-full text-sm text-slate-600 bg-white border rounded-md p-2 truncate">
-                            <span className="font-medium">Current folder:</span> {dirName ? (
-                                <span className="text-indigo-700 font-semibold">{dirName}</span>
-                            ) : (
-                                <span className="text-slate-500">Downloads (Default)</span>
-                            )}
-                        </div>
-                    </div>
-                </div>
-
                 <p className="text-slate-600 mb-4">Backup your application data to a JSON file, or restore from a previous backup. You can export a full backup or specific data types.</p>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="bg-slate-50 p-4 rounded-lg border">
                         <h3 className="font-semibold text-slate-700 mb-2">Export Data</h3>
-                        <p className="text-sm text-slate-500 mb-4">Save your data to a file. You can save a full backup or individual data types.</p>
-                        <div ref={exportMenuRef} className="relative inline-block text-left">
-                            <button onClick={() => setIsExportMenuOpen(!isExportMenuOpen)} type="button" className="inline-flex items-center justify-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                                Choose data to export
-                                <ChevronDownIcon />
+                        <p className="text-sm text-slate-500 mb-4">Save your data to a file. A full backup is recommended.</p>
+                        <div className="space-y-2">
+                             <button onClick={() => handleExportData('full')} className="w-full flex items-center justify-center gap-2 bg-white text-slate-700 font-semibold py-2 px-4 rounded-lg shadow-sm border hover:bg-slate-100">
+                                <DownloadIcon /> Export Full Backup...
                             </button>
-                            {isExportMenuOpen && (
-                                <div className="origin-top-left absolute left-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
-                                    <div className="py-1" role="menu" aria-orientation="vertical">
-                                        <button onClick={() => { handleExportData('full'); setIsExportMenuOpen(false); }} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Full Backup</button>
-                                        <div className="border-t my-1"></div>
-                                        <button onClick={() => { handleExportData('companies'); setIsExportMenuOpen(false); }} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Companies</button>
-                                        <button onClick={() => { handleExportData('clients'); setIsExportMenuOpen(false); }} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Clients</button>
-                                        <button onClick={() => { handleExportData('items'); setIsExportMenuOpen(false); }} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Items</button>
-                                        <button onClick={() => { handleExportData('invoices'); setIsExportMenuOpen(false); }} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Invoices</button>
-                                        <button onClick={() => { handleExportData('quotations'); setIsExportMenuOpen(false); }} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Quotations</button>
-                                    </div>
+                            <details className="pt-2">
+                                <summary className="text-sm text-slate-600 hover:text-indigo-600 cursor-pointer select-none">
+                                    Export specific data...
+                                </summary>
+                                <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t">
+                                    <button onClick={() => handleExportData('companies')} className="text-sm bg-white text-slate-700 font-medium py-1.5 px-3 rounded-md shadow-sm border hover:bg-slate-100">Companies</button>
+                                    <button onClick={() => handleExportData('clients')} className="text-sm bg-white text-slate-700 font-medium py-1.5 px-3 rounded-md shadow-sm border hover:bg-slate-100">Clients</button>
+                                    <button onClick={() => handleExportData('items')} className="text-sm bg-white text-slate-700 font-medium py-1.5 px-3 rounded-md shadow-sm border hover:bg-slate-100">Items</button>
+                                    <button onClick={() => handleExportData('invoices')} className="text-sm bg-white text-slate-700 font-medium py-1.5 px-3 rounded-md shadow-sm border hover:bg-slate-100">Invoices</button>
+                                    <button onClick={() => handleExportData('quotations')} className="text-sm bg-white text-slate-700 font-medium py-1.5 px-3 rounded-md shadow-sm border hover:bg-slate-100">Quotations</button>
                                 </div>
-                            )}
+                            </details>
                         </div>
                     </div>
                     
