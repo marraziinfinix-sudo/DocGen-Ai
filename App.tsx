@@ -1,7 +1,10 @@
 
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { User } from 'firebase/auth';
 import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus, Recurrence } from './types';
 import { generateDescription } from './services/geminiService';
+import { onAuthChange, signOutUser, fetchUserData, saveCompanies, saveClients, saveItems, saveInvoices, saveQuotations, saveDocument, saveActiveCompanyId } from './services/firebaseService';
 import { SparklesIcon, PlusIcon, TrashIcon, CogIcon, UsersIcon, ListIcon, DocumentIcon, MailIcon, WhatsAppIcon, FileTextIcon, DownloadIcon, MoreVerticalIcon, PrinterIcon, ChevronDownIcon, CashIcon } from './components/Icons';
 import DocumentPreview from './components/DocumentPreview';
 import SetupPage from './components/SetupPage';
@@ -11,6 +14,7 @@ import DocumentListPage from './components/DocumentListPage';
 import QuotationListPage from './components/QuotationListPage';
 import SaveItemsModal from './components/SaveItemsModal';
 import SaveClientModal from './components/SaveClientModal';
+import AuthPage from './components/AuthPage';
 
 declare const jspdf: any;
 declare const html2canvas: any;
@@ -95,80 +99,62 @@ const useWindowWidth = () => {
   return windowWidth;
 };
 
+const LoadingSpinner: React.FC<{ text: string }> = ({ text }) => (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
+        <svg className="animate-spin -ml-1 mr-3 h-10 w-10 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <p className="mt-4 text-lg font-medium text-slate-600">{text}</p>
+    </div>
+);
+
 
 const App: React.FC = () => {
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth < 640;
+  
+  // --- Auth & Loading States ---
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  
   const [currentView, setCurrentView] = useState<'editor' | 'setup' | 'clients' | 'items' | 'invoices' | 'quotations'>('editor');
   
-  // --- Data States (loaded from localStorage) ---
-  const [companies, setCompanies] = useState<Company[]>(() => {
-    try {
-      const saved = localStorage.getItem('companies');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed as Company[];
+  // --- Data States (from Firestore) ---
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [activeCompanyId, setActiveCompanyId] = useState<number>(1);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [items, setItems] = useState<Item[]>([]);
+  const [savedInvoices, setSavedInvoices] = useState<SavedDocument[]>([]);
+  const [savedQuotations, setSavedQuotations] = useState<SavedDocument[]>([]);
+
+  // --- Auth Effect ---
+  useEffect(() => {
+    const unsubscribe = onAuthChange(async (firebaseUser) => {
+        if (firebaseUser) {
+            setUser(firebaseUser);
+            setIsLoading(true);
+            const userData = await fetchUserData(firebaseUser.uid);
+            setCompanies(userData.companies);
+            setClients(userData.clients);
+            setItems(userData.items);
+            setSavedInvoices(userData.savedInvoices);
+            setSavedQuotations(userData.savedQuotations);
+            setActiveCompanyId(userData.activeCompanyId);
+        } else {
+            setUser(null);
+            // Clear data on logout
+            setCompanies([]);
+            setClients([]);
+            setItems([]);
+            setSavedInvoices([]);
+            setSavedQuotations([]);
         }
-      }
-    } catch (e) {
-      console.error('Failed to load companies from localStorage', e);
-    }
-    return [{
-      id: 1,
-      details: { name: '', address: '', email: '', phone: '', bankName: '', accountNumber: '', website: '', taxId: '' },
-      logo: null,
-      bankQRCode: null,
-      defaultNotes: '',
-      taxRate: 0,
-      currency: '',
-      template: 'classic',
-      accentColor: '#4f46e5',
-    }];
-  });
-
-  const [activeCompanyId, setActiveCompanyId] = useState<number>(() => {
-    try {
-        const savedId = localStorage.getItem('activeCompanyId');
-        const parsedId = savedId ? parseInt(savedId, 10) : null;
-        const availableCompanies = JSON.parse(localStorage.getItem('companies') || '[]');
-        if (parsedId && availableCompanies.some((c: Company) => c.id === parsedId)) {
-            return parsedId;
-        }
-    } catch (e) {
-        console.error('Failed to load active company ID from localStorage', e);
-    }
-    const firstCompany = (JSON.parse(localStorage.getItem('companies') || '[]') as Company[])[0];
-    return firstCompany ? firstCompany.id : 1;
-  });
-
-  const [clients, setClients] = useState<Client[]>(() => {
-    try {
-      const saved = localStorage.getItem('clients');
-      return saved && Array.isArray(JSON.parse(saved)) ? JSON.parse(saved) : [];
-    } catch (e) { console.error(e); return []; }
-  });
-
-  const [items, setItems] = useState<Item[]>(() => {
-    try {
-      const saved = localStorage.getItem('items');
-      return saved && Array.isArray(JSON.parse(saved)) ? JSON.parse(saved) : [];
-    } catch (e) { console.error(e); return []; }
-  });
-
-  const [savedInvoices, setSavedInvoices] = useState<SavedDocument[]>(() => {
-    try {
-      const saved = localStorage.getItem('savedInvoices');
-      return saved && Array.isArray(JSON.parse(saved)) ? JSON.parse(saved) : [];
-    } catch (e) { console.error(e); return []; }
-  });
-
-  const [savedQuotations, setSavedQuotations] = useState<SavedDocument[]>(() => {
-    try {
-      const saved = localStorage.getItem('savedQuotations');
-      return saved && Array.isArray(JSON.parse(saved)) ? JSON.parse(saved) : [];
-    } catch (e) { console.error(e); return []; }
-  });
+        setIsLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
   
   const generateDocumentNumber = useCallback((
     client: Details, 
@@ -217,14 +203,14 @@ const App: React.FC = () => {
   const [documentType, setDocumentType] = useState<DocumentType>(DocumentType.Quotation);
   const activeCompany = useMemo(() => companies.find(c => c.id === activeCompanyId) || companies[0], [companies, activeCompanyId]);
   
-  const [companyDetails, setCompanyDetails] = useState<Details>(activeCompany.details);
-  const [companyLogo, setCompanyLogo] = useState<string | null>(activeCompany.logo);
-  const [bankQRCode, setBankQRCode] = useState<string | null>(activeCompany.bankQRCode);
-  const [notes, setNotes] = useState(activeCompany.defaultNotes);
-  const [taxRate, setTaxRate] = useState(activeCompany.taxRate);
-  const [currency, setCurrency] = useState(activeCompany.currency);
-  const [template, setTemplate] = useState(activeCompany.template);
-  const [accentColor, setAccentColor] = useState(activeCompany.accentColor);
+  const [companyDetails, setCompanyDetails] = useState<Details>({ name: '', address: '', email: '', phone: '' });
+  const [companyLogo, setCompanyLogo] = useState<string | null>(null);
+  const [bankQRCode, setBankQRCode] = useState<string | null>(null);
+  const [notes, setNotes] = useState('');
+  const [taxRate, setTaxRate] = useState(0);
+  const [currency, setCurrency] = useState('');
+  const [template, setTemplate] = useState('classic');
+  const [accentColor, setAccentColor] = useState('#4f46e5');
   const [clientDetails, setClientDetails] = useState<Details>({ name: '', address: '', email: '', phone: '' });
   const [documentNumber, setDocumentNumber] = useState('');
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0]);
@@ -267,12 +253,10 @@ const App: React.FC = () => {
   }, [activeCompany]);
   
   useEffect(() => {
-    try {
-        localStorage.setItem('activeCompanyId', String(activeCompanyId));
-    } catch (e) {
-        console.error('Failed to save active company ID to localStorage', e);
+    if(user && activeCompanyId) {
+        saveActiveCompanyId(user.uid, activeCompanyId);
     }
-  }, [activeCompanyId]);
+  }, [activeCompanyId, user]);
 
   useEffect(() => {
     if (isCreatingNew) {
@@ -282,6 +266,8 @@ const App: React.FC = () => {
 
   // --- Recurring Invoice Generation ---
   useEffect(() => {
+    if (!user) return; // Don't run if not logged in
+    
     const calculateNextIssueDate = (lastDateStr: string, rec: Recurrence): Date => {
       const lastDate = new Date(lastDateStr + 'T00:00:00');
       const { frequency, interval } = rec;
@@ -333,25 +319,19 @@ const App: React.FC = () => {
     });
 
     if (newInvoicesToGenerate.length > 0) {
-      setSavedInvoices(prev => [...prev, ...newInvoicesToGenerate]);
+      const newInvoicesList = [...savedInvoices, ...newInvoicesToGenerate];
+      setSavedInvoices(newInvoicesList);
+      saveInvoices(user.uid, newInvoicesList);
       alert(`Generated ${newInvoicesToGenerate.length} new recurring invoice(s).`);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-
-  // --- LocalStorage Persistence ---
-  useEffect(() => { localStorage.setItem('companies', JSON.stringify(companies)); }, [companies]);
-  useEffect(() => { localStorage.setItem('clients', JSON.stringify(clients)); }, [clients]);
-  useEffect(() => { localStorage.setItem('items', JSON.stringify(items)); }, [items]);
-  useEffect(() => { localStorage.setItem('savedInvoices', JSON.stringify(savedInvoices)); }, [savedInvoices]);
-  useEffect(() => { localStorage.setItem('savedQuotations', JSON.stringify(savedQuotations)); }, [savedQuotations]);
+  }, [user]); // Run only when user logs in
 
   // --- Calculations ---
   const subtotal = useMemo(() => lineItems.reduce((acc, item) => acc + item.quantity * item.price, 0), [lineItems]);
   const taxAmount = useMemo(() => subtotal * (taxRate / 100), [subtotal, taxRate]);
   const total = useMemo(() => subtotal + taxAmount, [subtotal, taxAmount]);
-  const formatCurrency = useCallback((amount: number) => `${activeCompany.currency} ${amount.toFixed(2)}`, [activeCompany.currency]);
+  const formatCurrency = useCallback((amount: number) => `${activeCompany?.currency || '$'} ${amount.toFixed(2)}`, [activeCompany]);
 
   // --- Handlers ---
   const handleLineItemChange = (id: number, field: keyof LineItem, value: string | number) => {
@@ -526,23 +506,30 @@ const App: React.FC = () => {
     );
   }, [clients, clientDetails.name, isClientDropdownOpen]);
 
-  const saveDocument = (docToSave: SavedDocument) => {
-    if (docToSave.documentType === DocumentType.Invoice) {
-        setSavedInvoices(prev => {
-            const existing = prev.find(inv => inv.id === docToSave.id);
-            if (existing) return prev.map(inv => inv.id === docToSave.id ? docToSave : inv);
-            return [docToSave, ...prev];
-        });
-        alert('Invoice saved successfully!');
-    } else {
-        setSavedQuotations(prev => {
-            const existing = prev.find(q => q.id === docToSave.id);
-            if (existing) return prev.map(q => q.id === docToSave.id ? docToSave : q);
-            return [docToSave, ...prev];
-        });
-        alert('Quotation saved successfully!');
-    }
-    handleCreateNew();
+  const saveDocumentAndState = async (docToSave: SavedDocument) => {
+      if (!user) return;
+      setIsSaving(true);
+      if (docToSave.documentType === DocumentType.Invoice) {
+          await saveDocument(user.uid, 'savedInvoices', docToSave);
+          const existing = savedInvoices.find(inv => inv.id === docToSave.id);
+          if (existing) {
+              setSavedInvoices(prev => prev.map(inv => inv.id === docToSave.id ? docToSave : inv));
+          } else {
+              setSavedInvoices(prev => [docToSave, ...prev]);
+          }
+          alert('Invoice saved successfully!');
+      } else {
+          await saveDocument(user.uid, 'savedQuotations', docToSave);
+          const existing = savedQuotations.find(q => q.id === docToSave.id);
+          if (existing) {
+              setSavedQuotations(prev => prev.map(q => q.id === docToSave.id ? docToSave : q));
+          } else {
+              setSavedQuotations(prev => [docToSave, ...prev]);
+          }
+          alert('Quotation saved successfully!');
+      }
+      setIsSaving(false);
+      handleCreateNew();
   };
 
   const checkNewItemsAndSave = (docToSave: SavedDocument) => {
@@ -553,7 +540,7 @@ const App: React.FC = () => {
         setPendingDoc(docToSave);
         setIsSaveItemsModalOpen(true);
     } else {
-        saveDocument(docToSave);
+        saveDocumentAndState(docToSave);
         setPendingDoc(null);
     }
   };
@@ -620,13 +607,15 @@ const App: React.FC = () => {
     }
   };
 
-  const handleConfirmUpdateClient = () => {
-    if (clientUpdateInfo) {
-      setClients(prev => prev.map(c => 
+  const handleConfirmUpdateClient = async () => {
+    if (clientUpdateInfo && user) {
+      const newClients = clients.map(c => 
         c.id === clientUpdateInfo.original.id 
           ? { ...c, address: clientUpdateInfo.updated.address, email: clientUpdateInfo.updated.email, phone: clientUpdateInfo.updated.phone } 
           : c
-      ));
+      );
+      await saveClients(user.uid, newClients);
+      setClients(newClients);
     }
     setIsUpdateClientModalOpen(false);
     setClientUpdateInfo(null);
@@ -645,9 +634,11 @@ const App: React.FC = () => {
     setPendingDoc(null);
   };
 
-  const handleConfirmSaveNewClient = () => {
-    if (potentialNewClient) {
-        setClients(prev => [{ id: Date.now(), ...potentialNewClient }, ...prev]);
+  const handleConfirmSaveNewClient = async () => {
+    if (potentialNewClient && user) {
+        const newClients = [{ id: Date.now(), ...potentialNewClient }, ...clients];
+        await saveClients(user.uid, newClients);
+        setClients(newClients);
     }
     setIsSaveClientModalOpen(false);
     setPotentialNewClient(null);
@@ -666,8 +657,8 @@ const App: React.FC = () => {
     setPendingDoc(null);
   };
 
-  const handleConfirmSaveNewItems = () => {
-    if (potentialNewItems.length > 0) {
+  const handleConfirmSaveNewItems = async () => {
+    if (potentialNewItems.length > 0 && user) {
         const itemsToAdd: Item[] = potentialNewItems.map((li, index) => ({
             id: Date.now() + index,
             description: li.description,
@@ -675,16 +666,18 @@ const App: React.FC = () => {
             price: li.price,
             category: ''
         }));
-        setItems(prev => [...prev, ...itemsToAdd]);
+        const newItems = [...items, ...itemsToAdd];
+        await saveItems(user.uid, newItems);
+        setItems(newItems);
     }
-    if (pendingDoc) saveDocument(pendingDoc);
+    if (pendingDoc) saveDocumentAndState(pendingDoc);
     setIsSaveItemsModalOpen(false);
     setPotentialNewItems([]);
     setPendingDoc(null);
   };
 
   const handleDeclineSaveNewItems = () => {
-    if (pendingDoc) saveDocument(pendingDoc);
+    if (pendingDoc) saveDocumentAndState(pendingDoc);
     setIsSaveItemsModalOpen(false);
     setPotentialNewItems([]);
     setPendingDoc(null);
@@ -711,14 +704,16 @@ const App: React.FC = () => {
     newDueDate.setDate(newDueDate.getDate() + 15);
     setDueDate(newDueDate.toISOString().split('T')[0]);
     setDueDateOption('15days');
-    setCompanyDetails(activeCompany.details);
-    setCompanyLogo(activeCompany.logo);
-    setBankQRCode(activeCompany.bankQRCode);
-    setNotes(activeCompany.defaultNotes);
-    setTaxRate(activeCompany.taxRate);
-    setCurrency(activeCompany.currency);
-    setTemplate(activeCompany.template);
-    setAccentColor(activeCompany.accentColor);
+    if(activeCompany) {
+      setCompanyDetails(activeCompany.details);
+      setCompanyLogo(activeCompany.logo);
+      setBankQRCode(activeCompany.bankQRCode);
+      setNotes(activeCompany.defaultNotes);
+      setTaxRate(activeCompany.taxRate);
+      setCurrency(activeCompany.currency);
+      setTemplate(activeCompany.template);
+      setAccentColor(activeCompany.accentColor);
+    }
   };
 
   const handleLoadDocument = (doc: SavedDocument) => {
@@ -744,7 +739,9 @@ const App: React.FC = () => {
       setCurrentView('editor');
   };
 
-  const handleCreateInvoiceFromQuote = (quotation: SavedDocument) => {
+  const handleCreateInvoiceFromQuote = async (quotation: SavedDocument) => {
+    if(!user) return;
+    setIsSaving(true);
     // Generate new invoice number
     const newInvoiceNumber = generateDocumentNumber(quotation.clientDetails, DocumentType.Invoice, savedInvoices, savedQuotations);
 
@@ -768,17 +765,15 @@ const App: React.FC = () => {
     };
 
     // Save the new invoice
+    await saveDocument(user.uid, 'savedInvoices', newInvoice);
     setSavedInvoices(prev => [newInvoice, ...prev]);
 
     // Update the original quotation's status to 'Agreed'
-    setSavedQuotations(prev => 
-      prev.map(q => 
-        q.id === quotation.id 
-          ? { ...q, quotationStatus: QuotationStatus.Agreed } 
-          : q
-      )
-    );
-
+    const updatedQuotation = { ...quotation, quotationStatus: QuotationStatus.Agreed };
+    await saveDocument(user.uid, 'savedQuotations', updatedQuotation);
+    setSavedQuotations(prev => prev.map(q => q.id === quotation.id ? updatedQuotation : q));
+    
+    setIsSaving(false);
     alert(`Invoice #${newInvoiceNumber} has been created successfully.`);
   };
   
@@ -807,7 +802,6 @@ const App: React.FC = () => {
           while (remainingHeight > 0) {
             const pageCanvas = document.createElement('canvas');
             pageCanvas.width = canvas.width;
-            // FIX: Replaced undefined variable `pageHeight` with `pdfHeight`.
             pageCanvas.height = Math.min(canvasHeight, canvasWidth * pdfHeight / pdfWidth);
             pageCanvas.getContext('2d')?.drawImage(canvas, 0, position, canvasWidth, pageCanvas.height, 0, 0, pageCanvas.width, pageCanvas.height);
             if (position > 0) pdf.addPage();
@@ -849,25 +843,73 @@ const App: React.FC = () => {
   const activeNavButtonClasses = "bg-indigo-100 text-indigo-700";
   const inactiveNavButtonClasses = "text-slate-600 hover:bg-slate-200";
 
+  if (isLoading) {
+    return <LoadingSpinner text="Loading your data..." />;
+  }
+
+  if (!user) {
+      return <AuthPage />;
+  }
+
   const renderCurrentView = () => {
     switch(currentView) {
       case 'setup':
-        return <SetupPage companies={companies} setCompanies={setCompanies} onDone={() => setCurrentView('editor')} activeCompanyId={activeCompanyId} setActiveCompanyId={setActiveCompanyId} />;
+        return <SetupPage
+            companies={companies}
+            setCompanies={async (c) => {
+              // FIX: Resolve the new state before saving, as `c` can be a function (updater).
+              const newCompanies = typeof c === 'function' ? c(companies) : c;
+              await saveCompanies(user.uid, newCompanies);
+              setCompanies(newCompanies);
+            }}
+            onDone={() => setCurrentView('editor')}
+            activeCompanyId={activeCompanyId}
+            setActiveCompanyId={setActiveCompanyId} />;
       case 'clients':
-        return <ClientListPage clients={clients} setClients={setClients} onDone={() => setCurrentView('editor')} />;
+        return <ClientListPage clients={clients} setClients={async (c) => { await saveClients(user.uid, c); setClients(c); }} onDone={() => setCurrentView('editor')} />;
       case 'items':
-        return <ItemListPage items={items} setItems={setItems} formatCurrency={formatCurrency} onDone={() => setCurrentView('editor')} />;
+        return <ItemListPage
+            items={items}
+            setItems={async (i) => {
+              // FIX: Resolve the new state before saving, as `i` can be a function (updater).
+              const newItems = typeof i === 'function' ? i(items) : i;
+              await saveItems(user.uid, newItems);
+              setItems(newItems);
+            }}
+            formatCurrency={formatCurrency}
+            onDone={() => setCurrentView('editor')} />;
       case 'invoices':
-        return <DocumentListPage documents={savedInvoices} setDocuments={setSavedInvoices} formatCurrency={formatCurrency} handleSendReminder={handleSendReminder} handleLoadDocument={handleLoadDocument} />;
+        return <DocumentListPage
+            documents={savedInvoices}
+            setDocuments={async (d) => {
+              // FIX: Resolve the new state before saving, as `d` can be a function (updater).
+              const newDocuments = typeof d === 'function' ? d(savedInvoices) : d;
+              await saveInvoices(user.uid, newDocuments);
+              setSavedInvoices(newDocuments);
+            }}
+            formatCurrency={formatCurrency}
+            handleSendReminder={handleSendReminder}
+            handleLoadDocument={handleLoadDocument} />;
       case 'quotations':
-        return <QuotationListPage documents={savedQuotations} setDocuments={setSavedQuotations} formatCurrency={formatCurrency} handleCreateInvoiceFromQuote={handleCreateInvoiceFromQuote} handleLoadDocument={handleLoadDocument} handleSendQuotationReminder={handleSendQuotationReminder} />;
+        return <QuotationListPage
+            documents={savedQuotations}
+            setDocuments={async (d) => {
+              // FIX: Resolve the new state before saving, as `d` can be a function (updater).
+              const newDocuments = typeof d === 'function' ? d(savedQuotations) : d;
+              await saveQuotations(user.uid, newDocuments);
+              setSavedQuotations(newDocuments);
+            }}
+            formatCurrency={formatCurrency}
+            handleCreateInvoiceFromQuote={handleCreateInvoiceFromQuote}
+            handleLoadDocument={handleLoadDocument}
+            handleSendQuotationReminder={handleSendQuotationReminder} />;
       case 'editor':
       default:
         const inputType = isMobile ? 'text' : 'number';
         const inputMode = isMobile ? 'decimal' : undefined;
         return (
           <>
-            <div className="sticky top-[52px] bg-gray-100/80 backdrop-blur-sm z-10 border-b">
+            <div className="sticky top-[68px] bg-gray-100/80 backdrop-blur-sm z-10 border-b">
                 <div className="container mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex justify-between items-center py-2">
                         {/* Status text */}
@@ -884,8 +926,9 @@ const App: React.FC = () => {
                             <button onClick={handleCreateNew} className="flex items-center gap-1.5 bg-white text-slate-700 font-semibold py-2 px-3 rounded-lg shadow-sm border hover:bg-slate-100 text-sm">
                                 <PlusIcon /> New
                             </button>
-                            <button onClick={handleSaveDocument} className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700">
-                                {isCreatingNew ? 'Save' : 'Update'}
+                            <button onClick={handleSaveDocument} disabled={isSaving} className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-wait flex items-center gap-2">
+                                {isSaving && <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>}
+                                {isSaving ? 'Saving...' : (isCreatingNew ? 'Save' : 'Update')}
                             </button>
                         </div>
                     </div>
@@ -1246,7 +1289,7 @@ const App: React.FC = () => {
 
               {/* Preview and Actions Section */}
               <div className="lg:col-span-2 space-y-6">
-                <div className="bg-white p-6 rounded-lg shadow-md sticky top-28">
+                <div className="bg-white p-6 rounded-lg shadow-md sticky top-[132px]">
                   <div className="flex flex-wrap justify-between items-center gap-4 mb-6 border-b pb-4">
                     <h2 className="text-xl font-bold text-gray-800">Preview</h2>
                     <div className="flex items-center gap-2">
@@ -1309,7 +1352,7 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <header className="bg-white shadow-md sticky top-0 z-20 h-[52px] flex items-center">
+      <header className="bg-white shadow-md sticky top-0 z-20 h-[68px] flex items-center">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center">
              <div className="flex items-center gap-2 sm:gap-4">
@@ -1319,6 +1362,17 @@ const App: React.FC = () => {
                     <button onClick={() => setCurrentView('quotations')} className={`py-1 px-3 rounded-md transition-colors text-sm font-medium ${currentView === 'quotations' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Quotations</button>
                     <button onClick={() => setCurrentView('invoices')} className={`py-1 px-3 rounded-md transition-colors text-sm font-medium ${currentView === 'invoices' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Invoices</button>
                 </nav>
+            </div>
+            <div className="flex items-center gap-3">
+                <span className="text-sm text-slate-600 hidden sm:block">
+                    {user.email}
+                </span>
+                <button
+                    onClick={signOutUser}
+                    className="text-sm font-semibold text-indigo-600 hover:text-indigo-800"
+                >
+                    Sign Out
+                </button>
             </div>
           </div>
         </div>
@@ -1345,7 +1399,7 @@ const App: React.FC = () => {
            </button>
        </nav>
 
-        <div className="hidden sm:block fixed top-0 left-0 h-full bg-white pt-[52px] z-10 shadow-lg">
+        <div className="hidden sm:block fixed top-0 left-0 h-full bg-white pt-[68px] z-10 shadow-lg">
              <nav className="flex flex-col p-2 space-y-1">
                  <DesktopSidebarButton onClick={() => setCurrentView('clients')} isActive={currentView === 'clients'} title="Clients"><UsersIcon /></DesktopSidebarButton>
                  <DesktopSidebarButton onClick={() => setCurrentView('items')} isActive={currentView === 'items'} title="Items"><ListIcon /></DesktopSidebarButton>

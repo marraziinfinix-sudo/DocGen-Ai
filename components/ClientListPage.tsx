@@ -1,12 +1,11 @@
 
-
 import React, { useState, useMemo } from 'react';
 import { Client } from '../types';
 import { TrashIcon } from './Icons';
 
 interface ClientListPageProps {
   clients: Client[];
-  setClients: React.Dispatch<React.SetStateAction<Client[]>>;
+  setClients: (clients: Client[]) => Promise<void>;
   onDone: () => void;
 }
 
@@ -37,19 +36,20 @@ const ClientListPage: React.FC<ClientListPageProps> = ({ clients, setClients, on
     const lowercasedQuery = searchQuery.toLowerCase();
     return clients.filter(client =>
         client.name.toLowerCase().includes(lowercasedQuery) ||
-        client.email.toLowerCase().includes(lowercasedQuery) ||
-        client.phone.toLowerCase().includes(lowercasedQuery)
+        (client.email && client.email.toLowerCase().includes(lowercasedQuery)) ||
+        (client.phone && client.phone.toLowerCase().includes(lowercasedQuery))
     );
   }, [clients, searchQuery]);
 
-  const handleSaveClient = () => {
+  const handleSaveClient = async () => {
     if (!formState.name) return;
-
+    let newClients: Client[];
     if (isEditing && formState.id) {
-      setClients(prev => prev.map(c => c.id === formState.id ? { ...formState, id: c.id } : c));
+      newClients = clients.map(c => c.id === formState.id ? { ...formState, id: c.id } : c);
     } else {
-      setClients(prev => [{ ...formState, id: Date.now() }, ...prev]);
+      newClients = [{ ...formState, id: Date.now() }, ...clients];
     }
+    await setClients(newClients);
     setFormState(emptyFormState);
     setIsEditing(false);
   };
@@ -62,7 +62,7 @@ const ClientListPage: React.FC<ClientListPageProps> = ({ clients, setClients, on
 
   const handleDeleteClient = (id: number) => {
     if (window.confirm('Are you sure you want to delete this client?')) {
-        setClients(prev => prev.filter(c => c.id !== id));
+        setClients(clients.filter(c => c.id !== id));
     }
   };
 
@@ -94,7 +94,7 @@ const ClientListPage: React.FC<ClientListPageProps> = ({ clients, setClients, on
   const handleDeleteSelected = () => {
     if (selectedIds.size === 0) return;
     if (window.confirm(`Are you sure you want to delete ${selectedIds.size} selected client(s)? This action cannot be undone.`)) {
-      setClients(prev => prev.filter(c => !selectedIds.has(c.id)));
+      setClients(clients.filter(c => !selectedIds.has(c.id)));
       setSelectedIds(new Set());
     }
   };
@@ -105,23 +105,35 @@ const ClientListPage: React.FC<ClientListPageProps> = ({ clients, setClients, on
   return (
     <main className="container mx-auto p-4 sm:p-6 lg:p-8">
       <div className="max-w-4xl mx-auto bg-white p-4 sm:p-8 rounded-lg shadow-md">
-        <div className="flex justify-between items-center mb-6 border-b pb-4">
-            <h2 className="text-2xl font-bold text-gray-800">Manage Clients</h2>
-            {selectedIds.size > 0 && (
-                <button onClick={handleDeleteSelected} className="bg-red-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-red-700 flex items-center gap-2 transition-all duration-200">
-                    <TrashIcon />
-                    Delete ({selectedIds.size})
-                </button>
-            )}
+        <div className="flex flex-wrap justify-between items-center gap-4 mb-6 border-b pb-4">
+          <h2 className="text-2xl font-bold text-gray-800">Manage Clients</h2>
+          {selectedIds.size > 0 && (
+            <button onClick={handleDeleteSelected} className="bg-red-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-red-700 flex items-center gap-2 transition-all duration-200">
+                <TrashIcon />
+                Delete ({selectedIds.size})
+            </button>
+          )}
         </div>
 
         <div className="bg-slate-50 p-6 rounded-lg mb-8 border border-slate-200">
             <h3 className="text-lg font-semibold text-gray-700 mb-4">{isEditing ? 'Edit Client' : 'Add New Client'}</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <input type="text" name="name" placeholder="Client Name" value={formState.name} onChange={handleInputChange} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"/>
-                <input type="text" name="address" placeholder="Address" value={formState.address} onChange={handleInputChange} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"/>
-                <input type="email" name="email" placeholder="Email" value={formState.email} onChange={handleInputChange} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"/>
-                <input type="tel" name="phone" placeholder="Phone" value={formState.phone} onChange={handleInputChange} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"/>
+                <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">Name *</label>
+                    <input type="text" name="name" placeholder="Client Name" value={formState.name} onChange={handleInputChange} required className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"/>
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">Email</label>
+                    <input type="email" name="email" placeholder="client@example.com" value={formState.email} onChange={handleInputChange} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"/>
+                </div>
+                 <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-600 mb-1">Address</label>
+                    <input type="text" name="address" placeholder="Client Address" value={formState.address} onChange={handleInputChange} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"/>
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">Phone</label>
+                    <input type="tel" name="phone" placeholder="Client Phone" value={formState.phone} onChange={handleInputChange} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"/>
+                </div>
             </div>
             <div className="mt-4 flex gap-4">
                 <button onClick={handleSaveClient} className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700">
@@ -137,20 +149,33 @@ const ClientListPage: React.FC<ClientListPageProps> = ({ clients, setClients, on
 
         <div>
             <h3 className="text-lg font-semibold text-gray-700 mb-4">Saved Clients</h3>
-            <div className="mb-4">
-                <input
-                    type="text"
-                    placeholder="Search clients by name, email, or phone..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                    aria-label="Search clients"
-                />
-            </div>
-             {clients.length > 0 && (
+            <input
+                type="text"
+                placeholder="Search by name, email, or phone..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 mb-4"
+                aria-label="Search clients"
+            />
+             {(!Array.isArray(clients) || clients.length === 0) ? (
+                <p className="text-slate-500 text-center py-4 bg-slate-50 rounded-lg">No clients saved yet.</p>
+            ) : (
                 <>
-                    <div className="flex items-center p-2 rounded-t-lg bg-slate-50 border-b">
+                    <div className="hidden sm:grid grid-cols-[auto_2fr_2fr_2fr_1fr] gap-4 p-4 bg-slate-50 rounded-t-lg items-center">
                         <input 
+                            type="checkbox" 
+                            className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                            onChange={handleSelectAll}
+                            checked={isAllSelected}
+                            ref={el => { if (el) { el.indeterminate = isIndeterminate; } }}
+                        />
+                        <span className="font-semibold text-slate-600 uppercase text-sm">Name</span>
+                        <span className="font-semibold text-slate-600 uppercase text-sm">Email</span>
+                        <span className="font-semibold text-slate-600 uppercase text-sm">Phone</span>
+                        <span className="font-semibold text-slate-600 uppercase text-sm text-right">Actions</span>
+                    </div>
+                     <div className="sm:hidden flex items-center p-2 rounded-t-lg bg-slate-50 border-b">
+                        <input
                             type="checkbox"
                             className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                             onChange={handleSelectAll}
@@ -160,35 +185,48 @@ const ClientListPage: React.FC<ClientListPageProps> = ({ clients, setClients, on
                         />
                         <label className="ml-3 text-sm font-medium text-gray-600">Select All</label>
                     </div>
-                    <div className="space-y-3">
-                        {filteredClients.length > 0 ? filteredClients.map(client => (
-                            <div key={client.id} className={`p-4 border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-2 ${selectedIds.has(client.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-white'}`}>
-                                <div className="flex items-start w-full sm:w-auto">
-                                    <input
-                                      type="checkbox"
-                                      className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mt-1"
-                                      checked={selectedIds.has(client.id)}
-                                      onChange={() => handleSelect(client.id)}
-                                      aria-labelledby={`client-name-${client.id}`}
-                                    />
-                                    <div className="ml-4">
-                                        <p id={`client-name-${client.id}`} className="font-bold text-slate-800">{client.name}</p>
-                                        <p className="text-sm text-slate-500 break-words">{client.email} &bull; {client.phone}</p>
+                    {filteredClients.length > 0 ? (
+                        filteredClients.map(client => (
+                        <div key={client.id} className={`p-4 border-x border-b sm:border-0 sm:border-b sm:grid sm:grid-cols-[auto_2fr_2fr_2fr_1fr] sm:gap-4 sm:items-center ${selectedIds.has(client.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-white'}`}>
+                            <input
+                                type="checkbox"
+                                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 hidden sm:block"
+                                checked={selectedIds.has(client.id)}
+                                onChange={() => handleSelect(client.id)}
+                            />
+                            {/* Mobile card layout */}
+                            <div className="flex items-start sm:hidden">
+                                <input
+                                    type="checkbox"
+                                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mt-1"
+                                    checked={selectedIds.has(client.id)}
+                                    onChange={() => handleSelect(client.id)}
+                                />
+                                <div className="ml-4 flex-1">
+                                    <p className="font-bold text-slate-800">{client.name}</p>
+                                    <p className="text-sm text-slate-500">{client.email}</p>
+                                    <p className="text-sm text-slate-500">{client.phone}</p>
+                                    <div className="mt-2 flex gap-2">
+                                        <button onClick={() => handleEditClient(client)} className="font-semibold text-indigo-600 text-sm py-1 px-2 rounded-lg hover:bg-indigo-50">Edit</button>
+                                        <button onClick={() => handleDeleteClient(client.id)} className="font-semibold text-red-600 text-sm py-1 px-2 rounded-lg hover:bg-red-50">Delete</button>
                                     </div>
                                 </div>
-                                <div className="flex gap-2 self-end sm:self-center flex-shrink-0">
-                                    <button onClick={() => handleEditClient(client)} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-100">Edit</button>
-                                    <button onClick={() => handleDeleteClient(client.id)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-100">Delete</button>
-                                </div>
                             </div>
-                        )) : (
-                             <p className="text-slate-500 text-center py-4 bg-slate-50 rounded-lg">No clients match your search.</p>
-                        )}
-                    </div>
+                            
+                            {/* Desktop row layout */}
+                            <p className="hidden sm:block font-bold text-slate-800 truncate">{client.name}</p>
+                            <p className="hidden sm:block text-slate-500 truncate">{client.email}</p>
+                            <p className="hidden sm:block text-slate-500 truncate">{client.phone}</p>
+                            <div className="hidden sm:flex gap-2 justify-end">
+                                <button onClick={() => handleEditClient(client)} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-100">Edit</button>
+                                <button onClick={() => handleDeleteClient(client.id)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-100">Delete</button>
+                            </div>
+                        </div>
+                        ))
+                    ) : (
+                        <p className="text-slate-500 text-center py-4 bg-slate-50 rounded-b-lg">No clients match your search.</p>
+                    )}
                 </>
-            )}
-            {clients.length === 0 && (
-                <p className="text-slate-500 text-center py-4 bg-slate-50 rounded-lg">No clients saved yet.</p>
             )}
         </div>
         <div className="mt-8 text-right">

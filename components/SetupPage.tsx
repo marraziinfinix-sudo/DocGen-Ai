@@ -1,7 +1,7 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Company, Details } from '../types';
-import { PlusIcon, UploadIcon, ChevronDownIcon, DownloadIcon } from './Icons';
+import { PlusIcon } from './Icons';
 
 interface SetupPageProps {
   companies: Company[];
@@ -187,7 +187,6 @@ const SetupPage: React.FC<SetupPageProps> = ({
 }) => {
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingCompany, setEditingCompany] = useState<Company | null>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleAddNew = () => {
         setEditingCompany({ ...emptyCompany });
@@ -230,133 +229,6 @@ const SetupPage: React.FC<SetupPageProps> = ({
     const handleFormCancel = () => {
         setIsFormOpen(false);
         setEditingCompany(null);
-    };
-    
-    const handleExportData = async (dataType: 'full' | 'companies' | 'clients' | 'items' | 'invoices' | 'quotations') => {
-        let dataToExport: any;
-        const date = new Date().toISOString().split('T')[0];
-        let fileName = `invquo-ai-backup-${dataType}-${date}.json`;
-
-        const keyMap = {
-            companies: 'companies',
-            clients: 'clients',
-            items: 'items',
-            invoices: 'savedInvoices',
-            quotations: 'savedQuotations'
-        };
-
-        if (dataType === 'full') {
-            const fullData: { [key: string]: any } = {};
-            const keys = ['companies', 'clients', 'items', 'savedInvoices', 'savedQuotations', 'activeCompanyId'];
-            keys.forEach(key => {
-                const item = localStorage.getItem(key);
-                if (item) {
-                    try {
-                        fullData[key] = JSON.parse(item);
-                    } catch (e) {
-                        fullData[key] = item;
-                    }
-                }
-            });
-
-            const hasContent = Object.values(fullData).some(v => (Array.isArray(v) ? v.length > 0 : v !== null));
-            if (!hasContent) {
-                alert('No data to export.');
-                return;
-            }
-            dataToExport = fullData;
-        } else {
-            const storageKey = keyMap[dataType];
-            const item = localStorage.getItem(storageKey);
-            if (!item || (JSON.parse(item) as any[]).length === 0) {
-                alert(`No ${dataType} data to export.`);
-                return;
-            }
-            dataToExport = JSON.parse(item);
-        }
-
-        const jsonString = JSON.stringify(dataToExport, null, 2);
-        const blob = new Blob([jsonString], { type: 'application/json' });
-
-        if ('showSaveFilePicker' in window && window.self === window.top) {
-            try {
-                const handle = await (window as any).showSaveFilePicker({
-                    suggestedName: fileName,
-                    types: [{
-                        description: 'JSON Backup File',
-                        accept: { 'application/json': ['.json'] },
-                    }],
-                });
-                const writable = await handle.createWritable();
-                await writable.write(blob);
-                await writable.close();
-                return;
-            } catch (err: any) {
-                if (err.name === 'AbortError') return;
-                console.error('Error using showSaveFilePicker, trying fallback:', err);
-            }
-        }
-        
-        try {
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = fileName;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-        } catch (error) {
-            console.error('Fallback download method also failed:', error);
-            alert('Could not save the file. Your browser may not support this feature or it may be blocked.');
-        }
-    };
-    
-    const processImportedData = (jsonData: string) => {
-        if (!window.confirm('This will overwrite all existing data. This action cannot be undone. Are you sure you want to proceed?')) {
-            return;
-        }
-        try {
-            const data = JSON.parse(jsonData);
-            const requiredKeys = ['companies', 'clients', 'items', 'savedInvoices', 'savedQuotations'];
-            const importedKeys = Object.keys(data);
-            
-            const isFullBackup = requiredKeys.every(key => importedKeys.includes(key));
-
-            if (!isFullBackup) {
-                alert('Invalid backup file. The file does not appear to contain all the required data for a full restore.');
-                return;
-            }
-            
-            [...requiredKeys, 'activeCompanyId'].forEach(key => {
-                if (data[key]) {
-                    localStorage.setItem(key, JSON.stringify(data[key]));
-                } else {
-                    localStorage.removeItem(key);
-                }
-            });
-
-            alert('Data imported successfully! The application will now reload.');
-            window.location.reload();
-        } catch (error) {
-            console.error('Failed to process imported data:', error);
-            alert('An error occurred while importing data. The file might be corrupted or in the wrong format.');
-        } finally {
-            if (fileInputRef.current) {
-                fileInputRef.current.value = '';
-            }
-        }
-    };
-
-    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const text = e.target?.result as string;
-            processImportedData(text);
-        };
-        reader.readAsText(file);
     };
 
   return (
@@ -408,51 +280,10 @@ const SetupPage: React.FC<SetupPageProps> = ({
                 ))}
             </div>
             
-            <div className="mt-8 pt-6 border-t">
-                <h2 className="text-xl font-bold text-gray-800 mb-4">Data Management</h2>
-                <p className="text-slate-600 mb-4">Backup your application data to a JSON file, or restore from a previous backup. You can export a full backup or specific data types.</p>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="bg-slate-50 p-4 rounded-lg border">
-                        <h3 className="font-semibold text-slate-700 mb-2">Export Data</h3>
-                        <p className="text-sm text-slate-500 mb-4">Save your data to a file. A full backup is recommended.</p>
-                        <div className="space-y-2">
-                             <button onClick={() => handleExportData('full')} className="w-full flex items-center justify-center gap-2 bg-white text-slate-700 font-semibold py-2 px-4 rounded-lg shadow-sm border hover:bg-slate-100">
-                                <DownloadIcon /> Export Full Backup...
-                            </button>
-                            <details className="pt-2">
-                                <summary className="text-sm text-slate-600 hover:text-indigo-600 cursor-pointer select-none">
-                                    Export specific data...
-                                </summary>
-                                <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t">
-                                    <button onClick={() => handleExportData('companies')} className="text-sm bg-white text-slate-700 font-medium py-1.5 px-3 rounded-md shadow-sm border hover:bg-slate-100">Companies</button>
-                                    <button onClick={() => handleExportData('clients')} className="text-sm bg-white text-slate-700 font-medium py-1.5 px-3 rounded-md shadow-sm border hover:bg-slate-100">Clients</button>
-                                    <button onClick={() => handleExportData('items')} className="text-sm bg-white text-slate-700 font-medium py-1.5 px-3 rounded-md shadow-sm border hover:bg-slate-100">Items</button>
-                                    <button onClick={() => handleExportData('invoices')} className="text-sm bg-white text-slate-700 font-medium py-1.5 px-3 rounded-md shadow-sm border hover:bg-slate-100">Invoices</button>
-                                    <button onClick={() => handleExportData('quotations')} className="text-sm bg-white text-slate-700 font-medium py-1.5 px-3 rounded-md shadow-sm border hover:bg-slate-100">Quotations</button>
-                                </div>
-                            </details>
-                        </div>
-                    </div>
-                    
-                    <div className="bg-slate-50 p-4 rounded-lg border">
-                        <h3 className="font-semibold text-slate-700 mb-2">Import Data</h3>
-                        <p className="text-sm text-slate-500 mb-4">Restore from a full backup file. This will <span className="font-bold text-red-600">overwrite</span> all current data.</p>
-                        <button onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-center gap-2 bg-white text-slate-700 font-semibold py-2 px-4 rounded-lg shadow-sm border hover:bg-slate-100">
-                            <UploadIcon /> Choose Backup File...
-                        </button>
-                        <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" className="hidden"/>
-                    </div>
-                </div>
-                 <p className="text-xs text-slate-500 mt-3">
-                    Your browser will prompt you to choose a save/load location. All data remains on your local computer and is not sent to any server.
-                </p>
-
-                <div className="mt-8 text-right">
-                    <button onClick={onDone} className="bg-slate-500 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-slate-600 transition-colors duration-200">
-                        Done
-                    </button>
-                </div>
+            <div className="mt-8 pt-6 border-t text-right">
+                <button onClick={onDone} className="bg-slate-500 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-slate-600 transition-colors duration-200">
+                    Done
+                </button>
             </div>
         </div>
 
