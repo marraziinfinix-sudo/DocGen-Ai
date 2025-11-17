@@ -1,5 +1,7 @@
 
 
+
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { User } from 'firebase/auth';
 import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus, Recurrence } from './types';
@@ -856,36 +858,46 @@ const App: React.FC = () => {
       case 'setup':
         return <SetupPage
             companies={companies}
-            setCompanies={async (c) => {
-              // FIX: Resolve the new state before saving, as `c` can be a function (updater).
-              const newCompanies = typeof c === 'function' ? c(companies) : c;
-              await saveCompanies(user.uid, newCompanies);
-              setCompanies(newCompanies);
+            setCompanies={(c) => {
+              void (async () => {
+                const newCompanies = typeof c === 'function' ? c(companies) : c;
+                await saveCompanies(user.uid, newCompanies);
+                setCompanies(newCompanies);
+              })();
             }}
             onDone={() => setCurrentView('editor')}
             activeCompanyId={activeCompanyId}
             setActiveCompanyId={setActiveCompanyId} />;
       case 'clients':
-        return <ClientListPage clients={clients} setClients={async (c) => { await saveClients(user.uid, c); setClients(c); }} onDone={() => setCurrentView('editor')} />;
+        return <ClientListPage
+            clients={clients}
+            setClients={async (c) => {
+              const newClients = typeof c === 'function' ? c(clients) : c;
+              await saveClients(user.uid, newClients);
+              setClients(newClients);
+            }}
+            onDone={() => setCurrentView('editor')} />;
       case 'items':
         return <ItemListPage
             items={items}
-            setItems={async (i) => {
-              // FIX: Resolve the new state before saving, as `i` can be a function (updater).
-              const newItems = typeof i === 'function' ? i(items) : i;
-              await saveItems(user.uid, newItems);
-              setItems(newItems);
+            setItems={(i) => {
+              void (async () => {
+                const newItems = typeof i === 'function' ? i(items) : i;
+                await saveItems(user.uid, newItems);
+                setItems(newItems);
+              })();
             }}
             formatCurrency={formatCurrency}
             onDone={() => setCurrentView('editor')} />;
       case 'invoices':
         return <DocumentListPage
             documents={savedInvoices}
-            setDocuments={async (d) => {
-              // FIX: Resolve the new state before saving, as `d` can be a function (updater).
-              const newDocuments = typeof d === 'function' ? d(savedInvoices) : d;
-              await saveInvoices(user.uid, newDocuments);
-              setSavedInvoices(newDocuments);
+            setDocuments={(d) => {
+              void (async () => {
+                const newDocuments = typeof d === 'function' ? d(savedInvoices) : d;
+                await saveInvoices(user.uid, newDocuments);
+                setSavedInvoices(newDocuments);
+              })();
             }}
             formatCurrency={formatCurrency}
             handleSendReminder={handleSendReminder}
@@ -893,11 +905,12 @@ const App: React.FC = () => {
       case 'quotations':
         return <QuotationListPage
             documents={savedQuotations}
-            setDocuments={async (d) => {
-              // FIX: Resolve the new state before saving, as `d` can be a function (updater).
-              const newDocuments = typeof d === 'function' ? d(savedQuotations) : d;
-              await saveQuotations(user.uid, newDocuments);
-              setSavedQuotations(newDocuments);
+            setDocuments={(d) => {
+              void (async () => {
+                const newDocuments = typeof d === 'function' ? d(savedQuotations) : d;
+                await saveQuotations(user.uid, newDocuments);
+                setSavedQuotations(newDocuments);
+              })();
             }}
             formatCurrency={formatCurrency}
             handleCreateInvoiceFromQuote={handleCreateInvoiceFromQuote}

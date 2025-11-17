@@ -1,92 +1,117 @@
 
-import { User } from 'firebase/auth';
+import { initializeApp, FirebaseApp } from 'firebase/app';
+import {
+  getAuth,
+  onAuthStateChanged,
+  signInWithPopup,
+  GoogleAuthProvider,
+  signOut,
+  User
+} from 'firebase/auth';
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  setDoc,
+  DocumentData,
+  updateDoc
+} from 'firebase/firestore';
+import { firebaseConfig } from './firebaseConfig';
 import { Company, Client, Item, SavedDocument } from '../types';
 
-// This is a mock service to allow the app to run without a real Firebase backend.
-// It simulates a logged-in user and provides some initial data.
+// Initialize Firebase
+const app: FirebaseApp = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const provider = new GoogleAuthProvider();
 
-const MOCK_USER: User = {
-  uid: 'mock-user-id',
-  email: 'user@example.com',
-  displayName: 'Mock User',
-  photoURL: null,
-  emailVerified: true,
-  phoneNumber: null,
-  isAnonymous: false,
-} as any as User;
-
-let authStateCallback: ((user: User | null) => void) | null = null;
-let currentUser: User | null = MOCK_USER; // Start as logged in to see the main app.
+// --- AUTH FUNCTIONS ---
 
 export const onAuthChange = (callback: (user: User | null) => void): (() => void) => {
-  authStateCallback = callback;
-  // Simulate async nature of auth
-  setTimeout(() => {
-    if (authStateCallback) {
-      authStateCallback(currentUser);
-    }
-  }, 50);
-  
-  return () => { // Return unsubscribe function
-    authStateCallback = null;
-  };
+  return onAuthStateChanged(auth, callback);
 };
 
-export const signInWithGoogle = async (): Promise<void> => {
-  console.log('Mock sign in');
-  currentUser = MOCK_USER;
-  if (authStateCallback) {
-    authStateCallback(currentUser);
-  }
+export const signInWithGoogle = (): Promise<void> => {
+  return signInWithPopup(auth, provider).then(() => {});
 };
 
-export const signOutUser = async (): Promise<void> => {
-  console.log('Mock sign out');
-  currentUser = null;
-  if (authStateCallback) {
-    authStateCallback(currentUser);
-  }
+export const signOutUser = (): Promise<void> => {
+  return signOut(auth);
 };
 
-// --- Mock Data ---
-const MOCK_DATA = {
+
+// --- FIRESTORE FUNCTIONS ---
+
+const defaultUserData = {
     companies: [{
         id: 1,
-        details: { name: 'My Company', address: '123 Innovation Drive', email: 'hello@my.co', phone: '555-0101', bankName: 'First Mock Bank', accountNumber: '987654321', website: 'my.co', taxId: 'TAXID123' },
+        details: { name: 'My First Company', address: '123 Business Rd, Suite 100', email: 'contact@company.com', phone: '555-123-4567', bankName: '', accountNumber: '', website: '', taxId: '' },
         logo: null,
         bankQRCode: null,
-        defaultNotes: 'Thank you for your business. Please pay within 30 days.',
-        taxRate: 8,
+        defaultNotes: 'Thank you for your business.',
+        taxRate: 0,
         currency: '$',
         template: 'modern',
         accentColor: '#4f46e5',
     }],
-    clients: [] as Client[],
-    items: [] as Item[],
-    savedInvoices: [] as SavedDocument[],
-    savedQuotations: [] as SavedDocument[],
+    clients: [],
+    items: [],
+    savedInvoices: [],
+    savedQuotations: [],
     activeCompanyId: 1,
 };
 
 export const fetchUserData = async (userId: string) => {
-  console.log(`Mock fetch user data for: ${userId}`);
-  return Promise.resolve(MOCK_DATA);
+  const userDocRef = doc(db, 'users', userId);
+  const userDocSnap = await getDoc(userDocRef);
+
+  if (userDocSnap.exists()) {
+    // Ensure all fields from defaultUserData exist on the fetched data
+    const fetchedData = userDocSnap.data();
+    return {
+      ...defaultUserData,
+      ...fetchedData
+    };
+  } else {
+    // First time user, create their document
+    await setDoc(userDocRef, defaultUserData);
+    return defaultUserData;
+  }
 };
 
-// Mock save functions - they just log to the console
-const mockSave = (type: string, userId: string, data: any) => {
-  console.log(`Mock save [${type}] for user ${userId}:`, data);
-  return Promise.resolve();
+const saveData = async (userId: string, data: Partial<DocumentData>): Promise<void> => {
+    if (!userId) return;
+    const userDocRef = doc(db, 'users', userId);
+    await setDoc(userDocRef, data, { merge: true });
 };
 
-export const saveCompanies = (userId: string, companies: Company[]) => mockSave('Companies', userId, companies);
-export const saveClients = (userId: string, clients: Client[]) => mockSave('Clients', userId, clients);
-export const saveItems = (userId: string, items: Item[]) => mockSave('Items', userId, items);
-export const saveInvoices = (userId: string, invoices: SavedDocument[]) => mockSave('Invoices', userId, invoices);
-export const saveQuotations = (userId: string, quotations: SavedDocument[]) => mockSave('Quotations', userId, quotations);
-export const saveActiveCompanyId = (userId: string, id: number) => mockSave('ActiveCompanyId', userId, id);
+export const saveCompanies = (userId: string, companies: Company[]) => saveData(userId, { companies });
+export const saveClients = (userId: string, clients: Client[]) => saveData(userId, { clients });
+export const saveItems = (userId: string, items: Item[]) => saveData(userId, { items });
+export const saveInvoices = (userId: string, savedInvoices: SavedDocument[]) => saveData(userId, { savedInvoices });
+export const saveQuotations = (userId: string, savedQuotations: SavedDocument[]) => saveData(userId, { savedQuotations });
+export const saveActiveCompanyId = (userId: string, activeCompanyId: number) => saveData(userId, { activeCompanyId });
 
-export const saveDocument = async (userId: string, collection: 'savedInvoices' | 'savedQuotations', document: SavedDocument) => {
-  console.log(`Mock save document to [${collection}] for user ${userId}:`, document);
-  return Promise.resolve();
+// This function will update a single document within its array in Firestore.
+export const saveDocument = async (userId: string, collection: 'savedInvoices' | 'savedQuotations', documentToSave: SavedDocument) => {
+    if (!userId) return;
+    const userDocRef = doc(db, 'users', userId);
+    const userDocSnap = await getDoc(userDocRef);
+
+    if (userDocSnap.exists()) {
+        const userData = userDocSnap.data();
+        const documentArray: SavedDocument[] = userData[collection] || [];
+        
+        const existingDocIndex = documentArray.findIndex(d => d.id === documentToSave.id);
+
+        if (existingDocIndex > -1) {
+            // Update existing document
+            documentArray[existingDocIndex] = documentToSave;
+        } else {
+            // Add new document
+            documentArray.unshift(documentToSave); // Add to the beginning
+        }
+        
+        await updateDoc(userDocRef, { [collection]: documentArray });
+    }
 };
