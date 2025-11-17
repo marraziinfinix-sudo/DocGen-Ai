@@ -5,7 +5,7 @@ import { TrashIcon } from './Icons';
 
 interface ClientListPageProps {
   clients: Client[];
-  setClients: (clients: Client[]) => Promise<void>;
+  setClients: React.Dispatch<React.SetStateAction<Client[]>>;
   onDone: () => void;
 }
 
@@ -41,15 +41,13 @@ const ClientListPage: React.FC<ClientListPageProps> = ({ clients, setClients, on
     );
   }, [clients, searchQuery]);
 
-  const handleSaveClient = async () => {
+  const handleSaveClient = () => {
     if (!formState.name) return;
-    let newClients: Client[];
     if (isEditing && formState.id) {
-      newClients = clients.map(c => c.id === formState.id ? { ...formState, id: c.id } : c);
+      setClients(prevClients => prevClients.map(c => c.id === formState.id ? { ...formState, id: c.id } : c));
     } else {
-      newClients = [{ ...formState, id: Date.now() }, ...clients];
+      setClients(prevClients => [{ ...formState, id: Date.now() }, ...prevClients]);
     }
-    await setClients(newClients);
     setFormState(emptyFormState);
     setIsEditing(false);
   };
@@ -62,7 +60,7 @@ const ClientListPage: React.FC<ClientListPageProps> = ({ clients, setClients, on
 
   const handleDeleteClient = (id: number) => {
     if (window.confirm('Are you sure you want to delete this client?')) {
-        setClients(clients.filter(c => c.id !== id));
+        setClients(prev => prev.filter(c => c.id !== id));
     }
   };
 
@@ -94,7 +92,7 @@ const ClientListPage: React.FC<ClientListPageProps> = ({ clients, setClients, on
   const handleDeleteSelected = () => {
     if (selectedIds.size === 0) return;
     if (window.confirm(`Are you sure you want to delete ${selectedIds.size} selected client(s)? This action cannot be undone.`)) {
-      setClients(clients.filter(c => !selectedIds.has(c.id)));
+      setClients(prev => prev.filter(c => !selectedIds.has(c.id)));
       setSelectedIds(new Set());
     }
   };
