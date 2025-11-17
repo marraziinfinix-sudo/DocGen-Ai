@@ -1,7 +1,4 @@
 
-
-
-
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { User } from 'firebase/auth';
 import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus, Recurrence } from './types';
@@ -860,7 +857,8 @@ const App: React.FC = () => {
             companies={companies}
             setCompanies={(c) => {
               void (async () => {
-                const newCompanies = typeof c === 'function' ? c(companies) : c;
+                // FIX: Added explicit type casting to resolve a type inference issue that caused a "not callable" error.
+                const newCompanies = typeof c === 'function' ? (c as (prevState: Company[]) => Company[])(companies) : c;
                 await saveCompanies(user.uid, newCompanies);
                 setCompanies(newCompanies);
               })();
@@ -882,7 +880,8 @@ const App: React.FC = () => {
             items={items}
             setItems={(i) => {
               void (async () => {
-                const newItems = typeof i === 'function' ? i(items) : i;
+                // FIX: Added explicit type casting to resolve a type inference issue that caused a "not callable" error.
+                const newItems = typeof i === 'function' ? (i as (prevState: Item[]) => Item[])(items) : i;
                 await saveItems(user.uid, newItems);
                 setItems(newItems);
               })();
@@ -894,7 +893,8 @@ const App: React.FC = () => {
             documents={savedInvoices}
             setDocuments={(d) => {
               void (async () => {
-                const newDocuments = typeof d === 'function' ? d(savedInvoices) : d;
+                // FIX: Added explicit type casting to resolve a type inference issue that caused a "not callable" error.
+                const newDocuments = typeof d === 'function' ? (d as (prevState: SavedDocument[]) => SavedDocument[])(savedInvoices) : d;
                 await saveInvoices(user.uid, newDocuments);
                 setSavedInvoices(newDocuments);
               })();
@@ -907,7 +907,8 @@ const App: React.FC = () => {
             documents={savedQuotations}
             setDocuments={(d) => {
               void (async () => {
-                const newDocuments = typeof d === 'function' ? d(savedQuotations) : d;
+                // FIX: Added explicit type casting to resolve a type inference issue that caused a "not callable" error.
+                const newDocuments = typeof d === 'function' ? (d as (prevState: SavedDocument[]) => SavedDocument[])(savedQuotations) : d;
                 await saveQuotations(user.uid, newDocuments);
                 setSavedQuotations(newDocuments);
               })();
