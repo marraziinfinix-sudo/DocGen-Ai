@@ -1,6 +1,7 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Item } from '../types';
-import { TrashIcon, PlusIcon, PencilIcon } from './Icons';
+import { TrashIcon, PlusIcon } from './Icons';
 
 interface ItemListPageProps {
   items: Item[];
@@ -9,12 +10,11 @@ interface ItemListPageProps {
   onDone: () => void;
 }
 
-const emptyFormState: Omit<Item, 'id' | 'price' | 'costPrice'> & { id: number | null; price: string; costPrice: string; markup: string; category: string } = {
+const emptyFormState: Omit<Item, 'id' | 'price' | 'costPrice'> & { id: number | null; price: string; costPrice: string; category: string } = {
   id: null,
   description: '',
   costPrice: '',
   price: '',
-  markup: '',
   category: '',
 };
 
@@ -231,36 +231,10 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
     }
   }, [categories]);
 
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    
-    setFormState(prev => {
-        const updatedState = { ...prev, [name]: value };
-        
-        const cost = parseFloat(updatedState.costPrice);
-        const sell = parseFloat(updatedState.price);
-        const markup = parseFloat(updatedState.markup);
-
-        if (name === 'costPrice' || name === 'markup') {
-            if (!isNaN(cost) && !isNaN(markup)) {
-                const newPrice = cost * (1 + markup / 100);
-                if (!isNaN(newPrice)) {
-                    updatedState.price = newPrice.toFixed(2);
-                }
-            }
-        } else if (name === 'price') {
-            if (!isNaN(cost) && !isNaN(sell)) {
-                if (cost > 0) {
-                    const newMarkup = ((sell / cost) - 1) * 100;
-                    updatedState.markup = newMarkup.toFixed(2);
-                } else {
-                    updatedState.markup = '0.00';
-                }
-            }
-        }
-
-        return updatedState;
-    });
+    setFormState(prev => ({ ...prev, [name]: value }));
   };
 
   const filteredItems = useMemo(() => {
@@ -324,16 +298,7 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
   };
   
   const handleEditItem = (item: Item) => {
-    const cost = item.costPrice || 0;
-    const sell = item.price || 0;
-    const markup = cost > 0 ? (((sell - cost) / cost) * 100).toFixed(2) : '0.00';
-    setFormState({
-      ...item, 
-      price: String(item.price), 
-      costPrice: String(item.costPrice), 
-      markup: String(markup),
-      category: item.category || ''
-    });
+    setFormState({...item, price: String(item.price), costPrice: String(item.costPrice), category: item.category || ''});
     setIsEditing(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -423,31 +388,20 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
 
         <div className="bg-slate-50 p-6 rounded-lg mb-8 border border-slate-200">
             <h3 className="text-lg font-semibold text-gray-700 mb-4">{isEditing ? 'Edit Item' : 'Add New Item'}</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="md:col-span-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-600 mb-1">Description</label>
                     <textarea name="description" placeholder="Item Description" value={formState.description} onChange={handleInputChange} rows={3} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"/>
                 </div>
                 <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-1">Cost</label>
-                    <input type="number" name="costPrice" placeholder="Cost" value={formState.costPrice} onChange={handleInputChange} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"/>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">Cost Price</label>
+                    <input type="number" name="costPrice" placeholder="Cost Price" value={formState.costPrice} onChange={handleInputChange} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"/>
                 </div>
                 <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-1">Markup (%)</label>
-                    <input
-                      type="number"
-                      name="markup"
-                      placeholder="Markup %"
-                      value={formState.markup}
-                      onChange={handleInputChange}
-                      className={`w-full p-2 bg-white font-medium border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${parseFloat(formState.markup) >= 0 ? 'text-green-700' : 'text-red-700'}`}
-                    />
+                    <label className="block text-sm font-medium text-gray-600 mb-1">Selling Price</label>
+                    <input type="number" name="price" placeholder="Selling Price" value={formState.price} onChange={handleInputChange} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"/>
                 </div>
-                <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-1">Sell</label>
-                    <input type="number" name="price" placeholder="Sell Price" value={formState.price} onChange={handleInputChange} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"/>
-                </div>
-                <div className="relative md:col-span-3">
+                <div className="relative md:col-span-2">
                   <label className="block text-sm font-medium text-gray-600 mb-1">Category</label>
                   <input
                     type="text"
@@ -516,6 +470,7 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
                     {categoryFilterOptions.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                 </select>
             </div>
+            {/* FIX: Added an Array.isArray check for `items` before accessing its `length` property to prevent potential runtime errors if `items` is not an array. */}
             {(!Array.isArray(items) || items.length === 0) ? (
                 <p className="text-slate-500 text-center py-4 bg-slate-50 rounded-lg">No items saved yet.</p>
             ) : (
@@ -535,40 +490,27 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
                           Object.entries(groupedItems).sort(([a], [b]) => a.localeCompare(b)).map(([category, itemsInCategory]) => (
                             <div key={category}>
                               <h4 className="font-bold text-sm uppercase text-slate-500 bg-slate-100 p-2 rounded-t-md mt-4">{category}</h4>
-                              {Array.isArray(itemsInCategory) && itemsInCategory.map(item => {
-                                const cost = item.costPrice || 0;
-                                const sell = item.price || 0;
-                                const markup = cost > 0 ? ((sell - cost) / cost) * 100 : 0;
-                                return (
-                                <div key={item.id} className={`p-4 border-x border-b flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 ${selectedIds.has(item.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-white'}`}>
-                                    <div className="flex items-start w-full sm:flex-1">
+                              {/* FIX: Add an Array.isArray check before mapping over itemsInCategory to prevent runtime errors if the value is not an array. */}
+                              {Array.isArray(itemsInCategory) && itemsInCategory.map(item => (
+                                <div key={item.id} className={`p-4 border-x border-b flex flex-wrap justify-between items-center gap-x-4 gap-y-2 ${selectedIds.has(item.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-white'}`}>
+                                    <div className="flex items-start">
                                         <input
                                           type="checkbox"
                                           className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mt-1"
                                           checked={selectedIds.has(item.id)}
                                           onChange={() => handleSelect(item.id)}
                                         />
-                                        <div className="ml-4 flex-1">
-                                            <p className="font-bold text-slate-800 break-words">{item.description}</p>
-                                            <p className="text-sm text-slate-500">
-                                                Cost: {formatCurrency(cost)} &bull; Sell: {formatCurrency(sell)} &bull; <span className={`font-medium ${markup >= 0 ? 'text-green-700' : 'text-red-700'}`}>Markup: {markup.toFixed(2)}%</span>
-                                            </p>
+                                        <div className="ml-4">
+                                            <p className="font-bold text-slate-800">{item.description}</p>
+                                            <p className="text-sm text-slate-500">Cost: {formatCurrency(item.costPrice)} &bull; Sell: {formatCurrency(item.price)}</p>
                                         </div>
                                     </div>
-                                    <div className="hidden sm:flex gap-2 flex-shrink-0 self-end sm:self-auto">
+                                    <div className="flex gap-2 flex-shrink-0 ml-auto sm:ml-0">
                                         <button onClick={() => handleEditItem(item)} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-100">Edit</button>
                                         <button onClick={() => handleDeleteItem(item.id)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-100">Delete</button>
                                     </div>
-                                    <div className="flex sm:hidden gap-2 flex-shrink-0 self-end sm:self-auto">
-                                        <button onClick={() => handleEditItem(item)} className="p-2 rounded-full text-indigo-600 hover:bg-indigo-100" title="Edit Item">
-                                            <PencilIcon />
-                                        </button>
-                                        <button onClick={() => handleDeleteItem(item.id)} className="p-2 rounded-full text-red-600 hover:bg-red-100" title="Delete Item">
-                                            <TrashIcon />
-                                        </button>
-                                    </div>
                                 </div>
-                              )})}
+                              ))}
                             </div>
                           ))
                         ) : (
@@ -577,11 +519,6 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
                     </div>
                 </>
             )}
-        </div>
-         <div className="mt-8 text-right">
-            <button onClick={onDone} className="bg-slate-500 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-slate-600 transition-colors duration-200">
-                Done
-            </button>
         </div>
       </div>
        {isBulkEditModalOpen && (

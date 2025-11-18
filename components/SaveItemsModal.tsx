@@ -33,7 +33,7 @@ const SaveItemsModal: React.FC<SaveItemsModalProps> = ({
             {newItems.map((item, index) => (
               <div key={index} className="text-sm p-2 bg-white rounded-md border">
                 <p className="font-semibold text-slate-800">{item.description}</p>
-                <p className="text-slate-500">Cost: {formatCurrency(item.costPrice)} &bull; Sell: {formatCurrency(item.price)}</p>
+                <p className="text-slate-500">Cost: {formatCurrency(item.costPrice)} &bull; Selling Price: {formatCurrency(item.price)}</p>
               </div>
             ))}
           </div>
