@@ -47,6 +47,16 @@ export const fetchUserData = (): UserData => {
         const today = new Date().toISOString().split('T')[0];
         const defaultCompanyDetails = defaultUserData.companies[0].details;
 
+        const sanitizeUser = (user: Partial<User>): User | null => {
+            if (user && typeof user.username === 'string' && user.username && typeof user.password === 'string') {
+                return {
+                    username: user.username,
+                    password: user.password,
+                };
+            }
+            return null;
+        }
+
         const sanitizeCompany = (comp: Partial<Company>): Company => {
             const companyId = typeof comp.id === 'number' ? comp.id : Date.now();
             return {
@@ -123,12 +133,16 @@ export const fetchUserData = (): UserData => {
             };
         };
         
+        const loadedUsers = Array.isArray(parsedData.users)
+          ? parsedData.users.map(sanitizeUser).filter(Boolean) as User[]
+          : [];
+
         const loadedCompanies = Array.isArray(parsedData.companies) ? parsedData.companies.filter(Boolean).map(sanitizeCompany) : [];
 
         const completeData: Partial<UserData> = {
           ...defaultUserData,
           ...parsedData,
-          users: Array.isArray(parsedData.users) ? parsedData.users.filter(Boolean) : defaultUserData.users,
+          users: loadedUsers.length > 0 ? loadedUsers : defaultUserData.users,
           companies: loadedCompanies.length > 0 ? loadedCompanies : defaultUserData.companies.map(sanitizeCompany),
           clients: Array.isArray(parsedData.clients) ? parsedData.clients.filter(Boolean).map(sanitizeClient) : defaultUserData.clients,
           items: Array.isArray(parsedData.items) ? parsedData.items.filter(Boolean).map(sanitizeItem) : defaultUserData.items,

@@ -1268,41 +1268,43 @@ const App: React.FC = () => {
               </div>
 
               {/* Preview and Actions Section */}
-              <div className="lg:col-span-2 space-y-6">
-                <div className="bg-white p-6 rounded-lg shadow-md sticky top-[132px]">
-                  <div className="flex flex-wrap justify-between items-center gap-4 mb-6 border-b pb-4">
-                    <h2 className="text-xl font-bold text-gray-800">Preview</h2>
-                    <div className="flex items-center gap-2">
-                        <button onClick={handlePrint} className="flex items-center gap-2 bg-white text-slate-700 font-semibold py-2 px-3 rounded-lg shadow-sm border hover:bg-slate-100 text-sm">
-                            <PrinterIcon /> <span className="hidden sm:inline">Print</span>
-                        </button>
-                        <button onClick={handleDownloadPdf} className="flex items-center gap-2 bg-white text-slate-700 font-semibold py-2 px-3 rounded-lg shadow-sm border hover:bg-slate-100 text-sm">
-                            <DownloadIcon /> <span className="hidden sm:inline">Download PDF</span>
-                        </button>
+              <div className="lg:col-span-2">
+                <div>
+                  <div className="bg-white p-6 rounded-lg shadow-md sticky top-[132px]">
+                    <div className="flex flex-wrap justify-between items-center gap-4 mb-6 border-b pb-4">
+                      <h2 className="text-xl font-bold text-gray-800">Preview</h2>
+                      <div className="flex items-center gap-2">
+                          <button onClick={handlePrint} className="flex items-center gap-2 bg-white text-slate-700 font-semibold py-2 px-3 rounded-lg shadow-sm border hover:bg-slate-100 text-sm">
+                              <PrinterIcon /> <span className="hidden sm:inline">Print</span>
+                          </button>
+                          <button onClick={handleDownloadPdf} className="flex items-center gap-2 bg-white text-slate-700 font-semibold py-2 px-3 rounded-lg shadow-sm border hover:bg-slate-100 text-sm">
+                              <DownloadIcon /> <span className="hidden sm:inline">Download PDF</span>
+                          </button>
+                      </div>
                     </div>
-                  </div>
-                  <div className="max-h-[70vh] overflow-y-auto pr-2">
-                    <DocumentPreview
-                      documentType={documentType}
-                      companyDetails={companyDetails}
-                      clientDetails={clientDetails}
-                      documentNumber={documentNumber}
-                      issueDate={issueDate}
-                      dueDate={dueDate}
-                      lineItems={lineItems}
-                      notes={notes}
-                      subtotal={subtotal}
-                      taxAmount={taxAmount}
-                      taxRate={taxRate}
-                      total={total}
-                      companyLogo={companyLogo}
-                      bankQRCode={bankQRCode}
-                      formatCurrency={formatCurrency}
-                      payments={payments}
-                      status={status}
-                      template={template}
-                      accentColor={accentColor}
-                    />
+                    <div className="max-h-[70vh] overflow-y-auto pr-2">
+                      <DocumentPreview
+                        documentType={documentType}
+                        companyDetails={companyDetails}
+                        clientDetails={clientDetails}
+                        documentNumber={documentNumber}
+                        issueDate={issueDate}
+                        dueDate={dueDate}
+                        lineItems={lineItems}
+                        notes={notes}
+                        subtotal={subtotal}
+                        taxAmount={taxAmount}
+                        taxRate={taxRate}
+                        total={total}
+                        companyLogo={companyLogo}
+                        bankQRCode={bankQRCode}
+                        formatCurrency={formatCurrency}
+                        payments={payments}
+                        status={status}
+                        template={template}
+                        accentColor={accentColor}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
