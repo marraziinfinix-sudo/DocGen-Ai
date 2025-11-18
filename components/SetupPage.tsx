@@ -1,8 +1,6 @@
-
 import React, { useState } from 'react';
 import { Company, Details, User } from '../types';
 import { PlusIcon, TrashIcon } from './Icons';
-import { saveUsers, saveCompanies } from '../services/firebaseService';
 
 interface SetupPageProps {
   currentUser: string | null;
@@ -182,84 +180,17 @@ const CompanyForm: React.FC<{
   );
 };
 
-const AdminChangePasswordModal: React.FC<{
-    user: User;
-    isOpen: boolean;
-    onSave: (password: string) => void;
-    onCancel: () => void;
-}> = ({ user, isOpen, onSave, onCancel }) => {
-    const [newPassword, setNewPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
-
-    if (!isOpen) return null;
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!newPassword || newPassword !== confirmPassword) {
-            alert("Passwords do not match or are empty.");
-            return;
-        }
-        if (newPassword.length < 6) {
-            alert("Password must be at least 6 characters long.");
-            return;
-        }
-        onSave(newPassword);
-    };
-
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
-            <div className="bg-white rounded-lg shadow-2xl max-w-md w-full">
-                <form onSubmit={handleSubmit}>
-                    <div className="p-6">
-                        <h2 className="text-xl font-bold text-gray-800 mb-4">Reset Password for <span className="text-indigo-600">{user.username}</span></h2>
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-600 mb-1">New Password</label>
-                                <input
-                                    type="password"
-                                    value={newPassword}
-                                    onChange={e => setNewPassword(e.target.value)}
-                                    className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
-                                    required
-                                    autoFocus
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-600 mb-1">Confirm New Password</label>
-                                <input
-                                    type="password"
-                                    value={confirmPassword}
-                                    onChange={e => setConfirmPassword(e.target.value)}
-                                    className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
-                                    required
-                                />
-                            </div>
-                        </div>
-                    </div>
-                    <div className="bg-slate-50 p-4 flex justify-end gap-4 border-t">
-                        <button type="button" onClick={onCancel} className="bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300">Cancel</button>
-                        <button type="submit" className="bg-indigo-600 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-indigo-700">Set Password</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    );
-};
-
 const UserManagement: React.FC<{
-    currentUser: string | null;
     users: User[];
     setUsers: React.Dispatch<React.SetStateAction<User[]>>;
-}> = ({ currentUser, users, setUsers }) => {
+}> = ({ users, setUsers }) => {
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     
     const [newUsername, setNewUsername] = useState('');
     const [newUserPassword, setNewUserPassword] = useState('');
-    
-    const [editingUserPassword, setEditingUserPassword] = useState<User | null>(null);
 
-    const handleChangePassword = (e: React.FormEvent) => {
+    const handleChangeAdminPassword = (e: React.FormEvent) => {
         e.preventDefault();
         if (!newPassword || newPassword !== confirmPassword) {
             alert("Passwords do not match or are empty.");
@@ -269,16 +200,12 @@ const UserManagement: React.FC<{
             alert("Password must be at least 6 characters long.");
             return;
         }
-        setUsers(prevUsers => {
-            const newUsers = prevUsers.map(user => 
-                user.username === currentUser ? { ...user, password: newPassword } : user
-            );
-            saveUsers(newUsers);
-            return newUsers;
-        });
+        setUsers(prevUsers => prevUsers.map(user => 
+            user.username === 'admin' ? { ...user, password: newPassword } : user
+        ));
         setNewPassword('');
         setConfirmPassword('');
-        alert("Your password has been updated successfully.");
+        alert("Admin password updated successfully.");
     };
 
     const handleAddUser = (e: React.FormEvent) => {
@@ -297,14 +224,10 @@ const UserManagement: React.FC<{
             alert("Password must be at least 6 characters long.");
             return;
         }
-        setUsers(prevUsers => {
-            const newUsers = [
-                ...prevUsers,
-                { username: trimmedUsername, password: trimmedPassword }
-            ];
-            saveUsers(newUsers);
-            return newUsers;
-        });
+        setUsers(prevUsers => [
+            ...prevUsers,
+            { username: trimmedUsername, password: trimmedPassword }
+        ]);
         setNewUsername('');
         setNewUserPassword('');
         alert(`User "${trimmedUsername}" added successfully.`);
@@ -312,39 +235,16 @@ const UserManagement: React.FC<{
 
     const handleDeleteUser = (usernameToDelete: string) => {
         if (window.confirm(`Are you sure you want to delete the user "${usernameToDelete}"?`)) {
-            setUsers(prevUsers => {
-                const newUsers = prevUsers.filter(user => user.username !== usernameToDelete);
-                saveUsers(newUsers);
-                return newUsers;
-            });
+            setUsers(prevUsers => prevUsers.filter(user => user.username !== usernameToDelete));
         }
-    };
-    
-    const handleOpenPasswordModal = (user: User) => {
-        setEditingUserPassword(user);
-    };
-
-    const handleAdminUpdatePassword = (password: string) => {
-        if (!editingUserPassword) return;
-
-        setUsers(prevUsers => {
-            const newUsers = prevUsers.map(user => 
-                user.username === editingUserPassword.username ? { ...user, password: password } : user
-            );
-            saveUsers(newUsers);
-            return newUsers;
-        });
-
-        alert(`Password for user "${editingUserPassword.username}" has been updated.`);
-        setEditingUserPassword(null);
     };
     
     return (
         <div className="mb-8 p-6 bg-slate-50 rounded-lg border border-slate-200">
-            <h2 className="text-xl font-bold text-gray-800 mb-6 border-b pb-4">User Settings</h2>
+            <h2 className="text-xl font-bold text-gray-800 mb-6 border-b pb-4">User Management</h2>
             
-            <form onSubmit={handleChangePassword} className="mb-8">
-                <h3 className="text-lg font-semibold text-gray-700 mb-4">Change Your Password</h3>
+            <form onSubmit={handleChangeAdminPassword} className="mb-8">
+                <h3 className="text-lg font-semibold text-gray-700 mb-4">Change Admin Password</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
                     <div>
                         <label className="block text-sm font-medium text-gray-600 mb-1">New Password</label>
@@ -358,54 +258,37 @@ const UserManagement: React.FC<{
                 </div>
             </form>
 
-            {currentUser === 'admin' && (
-                <>
-                    <h2 className="text-xl font-bold text-gray-800 mb-6 border-b pb-4 mt-12">Admin: User Management</h2>
-                    <form onSubmit={handleAddUser} className="mb-8">
-                        <h3 className="text-lg font-semibold text-gray-700 mb-4">Add New User</h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-600 mb-1">Username</label>
-                                <input type="text" value={newUsername} onChange={e => setNewUsername(e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500" />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-600 mb-1">Password</label>
-                                <input type="password" value={newUserPassword} onChange={e => setNewUserPassword(e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500" />
-                            </div>
-                            <button type="submit" className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 flex items-center justify-center gap-2">
-                                <PlusIcon /> Add User
+            <form onSubmit={handleAddUser} className="mb-8">
+                <h3 className="text-lg font-semibold text-gray-700 mb-4">Add New User</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-600 mb-1">Username</label>
+                        <input type="text" value={newUsername} onChange={e => setNewUsername(e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-600 mb-1">Password</label>
+                        <input type="password" value={newUserPassword} onChange={e => setNewUserPassword(e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500" />
+                    </div>
+                    <button type="submit" className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 flex items-center justify-center gap-2">
+                        <PlusIcon /> Add User
+                    </button>
+                </div>
+            </form>
+
+            <div>
+                <h3 className="text-lg font-semibold text-gray-700 mb-4">Existing Users</h3>
+                <div className="space-y-2">
+                    {users.filter(u => u.username !== 'admin').map(user => (
+                        <div key={user.username} className="bg-white p-3 rounded-lg border flex justify-between items-center">
+                            <p className="font-medium text-slate-800">{user.username}</p>
+                            <button onClick={() => handleDeleteUser(user.username)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-50 flex items-center gap-1">
+                                <TrashIcon /> Delete
                             </button>
                         </div>
-                    </form>
-
-                    <div>
-                        <h3 className="text-lg font-semibold text-gray-700 mb-4">Existing Users</h3>
-                        <div className="space-y-2">
-                            {users.filter(u => u.username !== 'admin').map(user => (
-                                <div key={user.username} className="bg-white p-3 rounded-lg border flex justify-between items-center flex-wrap gap-2">
-                                    <p className="font-medium text-slate-800">{user.username}</p>
-                                    <div className="flex gap-2">
-                                        <button onClick={() => handleOpenPasswordModal(user)} className="font-semibold text-slate-600 py-1 px-3 rounded-lg hover:bg-slate-100 text-sm">Reset Password</button>
-                                        <button onClick={() => handleDeleteUser(user.username)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-50 flex items-center gap-1 text-sm">
-                                            <TrashIcon /> Delete
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
-                            {users.length <= 1 && <p className="text-slate-500 text-sm">No other users have been added.</p>}
-                        </div>
-                    </div>
-                </>
-            )}
-
-            {editingUserPassword && (
-                <AdminChangePasswordModal
-                    isOpen={!!editingUserPassword}
-                    user={editingUserPassword}
-                    onSave={handleAdminUpdatePassword}
-                    onCancel={() => setEditingUserPassword(null)}
-                />
-            )}
+                    ))}
+                    {users.length <= 1 && <p className="text-slate-500 text-sm">No other users have been added.</p>}
+                </div>
+            </div>
         </div>
     );
 };
@@ -441,7 +324,6 @@ const SetupPage: React.FC<SetupPageProps> = ({
                 if (id === activeCompanyId) {
                     setActiveCompanyId(newCompanies[0].id);
                 }
-                saveCompanies(newCompanies);
                 return newCompanies;
             });
         }
@@ -450,18 +332,10 @@ const SetupPage: React.FC<SetupPageProps> = ({
     const handleFormSave = (updatedCompany: Company) => {
         if (updatedCompany.id === 0) { // New company
             const newCompany = { ...updatedCompany, id: Date.now() };
-            setCompanies(prev => {
-                const newCompanies = [...prev, newCompany];
-                saveCompanies(newCompanies);
-                return newCompanies;
-            });
+            setCompanies(prev => [...prev, newCompany]);
             setActiveCompanyId(newCompany.id); // Set new company as active
         } else { // Existing company
-            setCompanies(prev => {
-                const newCompanies = prev.map(c => c.id === updatedCompany.id ? updatedCompany : c);
-                saveCompanies(newCompanies);
-                return newCompanies;
-            });
+            setCompanies(prev => prev.map(c => c.id === updatedCompany.id ? updatedCompany : c));
         }
         setIsFormOpen(false);
         setEditingCompany(null);
@@ -476,8 +350,8 @@ const SetupPage: React.FC<SetupPageProps> = ({
     <>
       <main className="container mx-auto p-4 sm:p-6 lg:p-8">
         <div className="max-w-4xl mx-auto bg-white p-4 sm:p-8 rounded-lg shadow-md">
-            {currentUser && (
-                <UserManagement currentUser={currentUser} users={users} setUsers={setUsers} />
+            {currentUser === 'admin' && (
+                <UserManagement users={users} setUsers={setUsers} />
             )}
             <div className="mb-8 p-6 bg-slate-50 rounded-lg border border-slate-200">
                 <h2 className="text-xl font-bold text-gray-800 mb-2">Active Company Profile</h2>

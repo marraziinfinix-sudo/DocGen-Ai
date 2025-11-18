@@ -1,8 +1,6 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { Item } from '../types';
 import { TrashIcon, PlusIcon, PencilIcon } from './Icons';
-import { saveItems } from '../services/firebaseService';
 
 interface ItemListPageProps {
   items: Item[];
@@ -56,11 +54,7 @@ const CategoryManager: React.FC<{
         setCategories(prev => prev.map(c => c === oldName ? newName : c).sort());
         
         // Update items with the old category
-        setItems(prevItems => {
-            const newItems = prevItems.map(item => item.category === oldName ? { ...item, category: newName } : item);
-            saveItems(newItems);
-            return newItems;
-        });
+        setItems(prevItems => prevItems.map(item => item.category === oldName ? { ...item, category: newName } : item));
 
         setEditingCategory(null);
     };
@@ -71,11 +65,7 @@ const CategoryManager: React.FC<{
             setCategories(prev => prev.filter(c => c !== categoryToDelete));
             
             // Un-categorize items
-            setItems(prevItems => {
-                const newItems = prevItems.map(item => item.category === categoryToDelete ? { ...item, category: '' } : item);
-                saveItems(newItems);
-                return newItems;
-            });
+            setItems(prevItems => prevItems.map(item => item.category === categoryToDelete ? { ...item, category: '' } : item));
         }
     };
 
@@ -325,17 +315,9 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
         price: price,
         category: newCategory,
       };
-      setItems(prev => {
-        const newItems = prev.map(i => (i.id === updatedItem.id ? updatedItem : i));
-        saveItems(newItems);
-        return newItems;
-      });
+      setItems(prev => prev.map(i => (i.id === updatedItem.id ? updatedItem : i)));
     } else {
-      setItems(prev => {
-        const newItems = [{ id: Date.now(), description: trimmedDescription, costPrice, price, category: newCategory }, ...prev];
-        saveItems(newItems);
-        return newItems;
-      });
+      setItems(prev => [{ id: Date.now(), description: trimmedDescription, costPrice, price, category: newCategory }, ...prev]);
     }
     setFormState(emptyFormState);
     setIsEditing(false);
@@ -358,11 +340,7 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
 
   const handleDeleteItem = (id: number) => {
     if (window.confirm('Are you sure you want to delete this item?')) {
-        setItems(prev => {
-            const newItems = prev.filter(i => i.id !== id);
-            saveItems(newItems);
-            return newItems;
-        });
+        setItems(prev => prev.filter(i => i.id !== id));
     }
   };
 
@@ -394,23 +372,15 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
   const handleDeleteSelected = () => {
     if (selectedIds.size === 0) return;
     if (window.confirm(`Are you sure you want to delete ${selectedIds.size} selected item(s)? This action cannot be undone.`)) {
-      setItems(prev => {
-        const newItems = prev.filter(i => !selectedIds.has(i.id));
-        saveItems(newItems);
-        return newItems;
-      });
+      setItems(prev => prev.filter(i => !selectedIds.has(i.id)));
       setSelectedIds(new Set());
     }
   };
   
   const handleBulkAssignCategory = (newCategory: string) => {
-      setItems(prevItems => {
-          const newItems = prevItems.map(item =>
-              selectedIds.has(item.id) ? { ...item, category: newCategory } : item
-          );
-          saveItems(newItems);
-          return newItems;
-      });
+      setItems(prevItems => prevItems.map(item =>
+          selectedIds.has(item.id) ? { ...item, category: newCategory } : item
+      ));
 
       if (newCategory && !categories.includes(newCategory)) {
           setCategories(prev => [...prev, newCategory].sort());

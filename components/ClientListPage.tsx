@@ -1,8 +1,6 @@
-
 import React, { useState, useMemo } from 'react';
 import { Client } from '../types';
 import { TrashIcon, PencilIcon } from './Icons';
-import { saveClients } from '../services/firebaseService';
 
 interface ClientListPageProps {
   clients: Client[];
@@ -45,17 +43,9 @@ const ClientListPage: React.FC<ClientListPageProps> = ({ clients, setClients, on
   const handleSaveClient = () => {
     if (!formState.name) return;
     if (isEditing && formState.id) {
-      setClients(prevClients => {
-        const newClients = prevClients.map(c => c.id === formState.id ? { ...formState, id: c.id } : c);
-        saveClients(newClients);
-        return newClients;
-      });
+      setClients(prevClients => prevClients.map(c => c.id === formState.id ? { ...formState, id: c.id } : c));
     } else {
-      setClients(prevClients => {
-        const newClients = [{ ...formState, id: Date.now() }, ...prevClients];
-        saveClients(newClients);
-        return newClients;
-      });
+      setClients(prevClients => [{ ...formState, id: Date.now() }, ...prevClients]);
     }
     setFormState(emptyFormState);
     setIsEditing(false);
@@ -69,11 +59,7 @@ const ClientListPage: React.FC<ClientListPageProps> = ({ clients, setClients, on
 
   const handleDeleteClient = (id: number) => {
     if (window.confirm('Are you sure you want to delete this client?')) {
-        setClients(prev => {
-            const newClients = prev.filter(c => c.id !== id);
-            saveClients(newClients);
-            return newClients;
-        });
+        setClients(prev => prev.filter(c => c.id !== id));
     }
   };
 
@@ -105,11 +91,7 @@ const ClientListPage: React.FC<ClientListPageProps> = ({ clients, setClients, on
   const handleDeleteSelected = () => {
     if (selectedIds.size === 0) return;
     if (window.confirm(`Are you sure you want to delete ${selectedIds.size} selected client(s)? This action cannot be undone.`)) {
-      setClients(prev => {
-        const newClients = prev.filter(c => !selectedIds.has(c.id));
-        saveClients(newClients);
-        return newClients;
-      });
+      setClients(prev => prev.filter(c => !selectedIds.has(c.id)));
       setSelectedIds(new Set());
     }
   };
