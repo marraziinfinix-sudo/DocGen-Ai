@@ -1,20 +1,23 @@
 import React, { useState } from 'react';
 import { ViewIcon, EyeSlashIcon } from './Icons';
 import { auth } from '../services/firebaseConfig';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { createNewUserDocument } from '../services/firebaseService';
 
 const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
 
   const handleAuthAction = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setMessage('');
     setIsLoading(true);
 
     if (password.length < 6) {
@@ -52,6 +55,75 @@ const LoginPage: React.FC = () => {
         setIsLoading(false);
     }
   };
+
+  const handlePasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setMessage('');
+    setIsLoading(true);
+
+    try {
+      await sendPasswordResetEmail(auth, email);
+      setMessage("A password reset link has been sent to your email address. Please check your inbox.");
+    } catch (error: any) {
+      switch (error.code) {
+        case 'auth/invalid-email':
+          setError('Please enter a valid email address.');
+          break;
+        default:
+          setError('An error occurred. Please try again.');
+          break;
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (isResettingPassword) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-100">
+        <div className="w-full max-w-sm p-8 space-y-8 bg-white shadow-lg rounded-xl">
+          <div>
+            <h1 className="text-3xl font-bold text-center text-indigo-600">InvQuo</h1>
+            <p className="mt-2 text-sm text-center text-slate-600">Reset Your Password</p>
+          </div>
+          <form className="space-y-6" onSubmit={handlePasswordReset}>
+            <p className="text-sm text-slate-600 text-center">Enter your email address and we'll send you a link to get back into your account.</p>
+            <div>
+              <label htmlFor="email-address-reset" className="sr-only">Email address</label>
+              <input
+                id="email-address-reset"
+                name="email"
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                placeholder="Email address"
+              />
+            </div>
+            {error && <p className="text-center text-sm text-red-600">{error}</p>}
+            {message && <p className="text-center text-sm text-green-600">{message}</p>}
+            <div>
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-400 disabled:cursor-wait"
+              >
+                {isLoading ? 'Sending...' : 'Send Reset Email'}
+              </button>
+            </div>
+          </form>
+          <p className="text-center text-sm text-slate-600">
+            <button onClick={() => { setIsResettingPassword(false); setError(''); setMessage(''); }} className="font-medium text-indigo-600 hover:text-indigo-500">
+              Back to Sign In
+            </button>
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100">
@@ -101,6 +173,18 @@ const LoginPage: React.FC = () => {
               </button>
             </div>
           </div>
+
+          {!isSignUp && (
+            <div className="text-right text-sm">
+              <button
+                type="button"
+                onClick={() => { setIsResettingPassword(true); setError(''); setMessage(''); }}
+                className="font-medium text-indigo-600 hover:text-indigo-500"
+              >
+                Forgot your password?
+              </button>
+            </div>
+          )}
 
           {error && (
             <p className="text-center text-sm text-red-600">{error}</p>
