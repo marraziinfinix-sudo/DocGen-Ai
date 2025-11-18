@@ -122,14 +122,30 @@ const CategoryManager: React.FC<{
     );
 };
 
-const BulkEditModal: React.FC<{
+// New BulkEditItemsModal component
+interface BulkEditItemsModalProps {
     itemCount: number;
     categories: string[];
-    onSave: (category: string) => void;
+    formatCurrency: (amount: number) => string;
+    onSaveCategory: (category: string) => void;
+    onSavePricing: (action: 'markup' | 'percent' | 'amount', value: number) => void;
     onCancel: () => void;
-}> = ({ itemCount, categories, onSave, onCancel }) => {
+}
+
+const BulkEditItemsModal: React.FC<BulkEditItemsModalProps> = ({
+    itemCount,
+    categories,
+    formatCurrency,
+    onSaveCategory,
+    onSavePricing,
+    onCancel,
+}) => {
+    const [activeTab, setActiveTab] = useState<'category' | 'pricing'>('category');
     const [targetCategory, setTargetCategory] = useState('');
-    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+
+    const [pricingAction, setPricingAction] = useState<'markup' | 'percent' | 'amount'>('markup');
+    const [pricingValue, setPricingValue] = useState<string>('');
 
     const filteredCategories = useMemo(() => {
         if (!categories) return [];
@@ -138,58 +154,146 @@ const BulkEditModal: React.FC<{
         return categories.filter(cat => cat.toLowerCase().includes(searchTerm));
     }, [categories, targetCategory]);
 
+    const handleApplyCategory = () => {
+        onSaveCategory(targetCategory.trim());
+    };
 
-    const handleSave = () => {
-        onSave(targetCategory.trim());
+    const handleApplyPricing = () => {
+        const value = parseFloat(pricingValue);
+        if (isNaN(value)) {
+            alert("Please enter a valid number for pricing adjustment.");
+            return;
+        }
+        onSavePricing(pricingAction, value);
     };
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex justify-center items-center p-4">
             <div className="bg-white rounded-lg shadow-2xl max-w-md w-full">
                 <div className="p-6">
-                    <h3 className="text-lg font-bold text-gray-800 mb-4">Assign Category to {itemCount} items</h3>
-                    <p className="text-sm text-gray-600 mb-4">Select an existing category from the list or type a new one to create it.</p>
-                    <div className="relative">
-                        <label className="block text-sm font-medium text-gray-600 mb-1">Category</label>
-                        <input
-                            type="text"
-                            placeholder="Select or type category"
-                            value={targetCategory}
-                            onChange={e => setTargetCategory(e.target.value)}
-                            onFocus={() => setIsDropdownOpen(true)}
-                            onBlur={() => setTimeout(() => setIsDropdownOpen(false), 200)}
-                            className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
-                            autoFocus
-                            autoComplete="off"
-                        />
-                        {isDropdownOpen && (
-                             <div className="absolute z-50 w-full bg-white border border-slate-300 rounded-md shadow-lg mt-1 max-h-40 overflow-y-auto">
-                               {filteredCategories.length > 0 ? (
-                                 filteredCategories.map(cat => (
-                                   <button
-                                     key={cat}
-                                     type="button"
-                                     onClick={() => {
-                                         setTargetCategory(cat);
-                                         setIsDropdownOpen(false);
-                                     }}
-                                     className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
-                                   >
-                                     {cat}
-                                   </button>
-                                 ))
-                               ) : (
-                                 <div className="px-4 py-2 text-sm text-slate-500">
-                                   {targetCategory.trim() ? `Create new category: "${targetCategory.trim()}"` : (categories.length > 0 ? "No match found." : "No categories yet.")}
-                                 </div>
-                               )}
-                             </div>
-                        )}
+                    <h3 className="text-lg font-bold text-gray-800 mb-4">Bulk Edit {itemCount} items</h3>
+                    
+                    <div className="flex gap-2 bg-slate-100 p-1 rounded-lg mb-6">
+                        <button 
+                            onClick={() => setActiveTab('category')} 
+                            className={`flex-1 text-center font-semibold py-2 px-3 rounded-md transition-all duration-200 ${activeTab === 'category' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}
+                        >
+                            Category
+                        </button>
+                        <button 
+                            onClick={() => setActiveTab('pricing')} 
+                            className={`flex-1 text-center font-semibold py-2 px-3 rounded-md transition-all duration-200 ${activeTab === 'pricing' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}
+                        >
+                            Pricing
+                        </button>
                     </div>
+
+                    {activeTab === 'category' && (
+                        <div>
+                            <p className="text-sm text-gray-600 mb-4">Select an existing category from the list or type a new one to create it.</p>
+                            <div className="relative">
+                                <label className="block text-sm font-medium text-gray-600 mb-1">Category</label>
+                                <input
+                                    type="text"
+                                    placeholder="Select or type category"
+                                    value={targetCategory}
+                                    onChange={e => setTargetCategory(e.target.value)}
+                                    onFocus={() => setIsCategoryDropdownOpen(true)}
+                                    onBlur={() => setTimeout(() => setIsCategoryDropdownOpen(false), 200)}
+                                    className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                                    autoFocus
+                                    autoComplete="off"
+                                />
+                                {isCategoryDropdownOpen && (
+                                    <div className="absolute z-50 w-full bg-white border border-slate-300 rounded-md shadow-lg mt-1 max-h-40 overflow-y-auto">
+                                    {filteredCategories.length > 0 ? (
+                                        filteredCategories.map(cat => (
+                                        <button
+                                            key={cat}
+                                            type="button"
+                                            onClick={() => {
+                                                setTargetCategory(cat);
+                                                setIsCategoryDropdownOpen(false);
+                                            }}
+                                            className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                                        >
+                                            {cat}
+                                        </button>
+                                        ))
+                                    ) : (
+                                        <div className="px-4 py-2 text-sm text-slate-500">
+                                            {targetCategory.trim() ? `Create new category: "${targetCategory.trim()}"` : (categories.length > 0 ? "No match found." : "No categories yet.")}
+                                        </div>
+                                    )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'pricing' && (
+                        <div>
+                            <p className="text-sm text-gray-600 mb-4">Choose an action to adjust pricing for the selected items.</p>
+                            <div className="space-y-3">
+                                <label className="flex items-center space-x-2">
+                                    <input
+                                        type="radio"
+                                        name="pricingAction"
+                                        value="markup"
+                                        checked={pricingAction === 'markup'}
+                                        onChange={() => setPricingAction('markup')}
+                                        className="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
+                                    />
+                                    <span className="text-sm font-medium text-gray-700">Set Markup (%) to</span>
+                                </label>
+                                <label className="flex items-center space-x-2">
+                                    <input
+                                        type="radio"
+                                        name="pricingAction"
+                                        value="percent"
+                                        checked={pricingAction === 'percent'}
+                                        onChange={() => setPricingAction('percent')}
+                                        className="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
+                                    />
+                                    <span className="text-sm font-medium text-gray-700">Adjust Sell Price by %</span>
+                                </label>
+                                <label className="flex items-center space-x-2">
+                                    <input
+                                        type="radio"
+                                        name="pricingAction"
+                                        value="amount"
+                                        checked={pricingAction === 'amount'}
+                                        onChange={() => setPricingAction('amount')}
+                                        className="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
+                                    />
+                                    <span className="text-sm font-medium text-gray-700">Adjust Sell Price by Amount ({formatCurrency(0).replace('0.00', '±Amount')})</span>
+                                </label>
+
+                                <div className="mt-4">
+                                    <label htmlFor="pricing-value" className="sr-only">Value</label>
+                                    <input
+                                        id="pricing-value"
+                                        type="number"
+                                        step="0.01"
+                                        placeholder={pricingAction === 'markup' ? "e.g., 50" : (pricingAction === 'percent' ? "e.g., 10 (for +10%) or -5 (for -5%)" : "e.g., 5 (for +5) or -2.5 (for -2.5)")}
+                                        value={pricingValue}
+                                        onChange={e => setPricingValue(e.target.value)}
+                                        className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
                 <div className="bg-slate-50 p-4 flex justify-end gap-4 border-t">
                     <button type="button" onClick={onCancel} className="bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300">Cancel</button>
-                    <button type="button" onClick={handleSave} className="bg-indigo-600 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-indigo-700">Apply</button>
+                    <button 
+                        type="button" 
+                        onClick={activeTab === 'category' ? handleApplyCategory : handleApplyPricing} 
+                        className="bg-indigo-600 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-indigo-700"
+                    >
+                        Apply
+                    </button>
                 </div>
             </div>
         </div>
@@ -203,7 +307,7 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
-  const [isBulkEditModalOpen, setIsBulkEditModalOpen] = useState(false);
+  const [isBulkEditModalOpen, setIsBulkEditModalOpen] = useState(false); // Renamed from isBulkEditModalOpen
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -367,7 +471,7 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories
     }
   };
   
-  const handleBulkAssignCategory = (newCategory: string) => {
+  const handleBulkEditCategory = (newCategory: string) => {
       setItems(prevItems => {
           const newItems = prevItems.map(item =>
               selectedIds.has(item.id) ? { ...item, category: newCategory } : item
@@ -384,6 +488,45 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories
       setIsBulkEditModalOpen(false);
   };
 
+    const handleBulkEditPricing = (action: 'markup' | 'percent' | 'amount', value: number) => {
+        setItems(prevItems => {
+            const newItems = prevItems.map(item => {
+                if (selectedIds.has(item.id)) {
+                    let updatedItem = { ...item };
+                    let newPrice = updatedItem.price;
+
+                    switch (action) {
+                        case 'markup':
+                            newPrice = updatedItem.costPrice * (1 + value / 100);
+                            break;
+                        case 'percent':
+                            newPrice = updatedItem.price * (1 + value / 100);
+                            break;
+                        case 'amount':
+                            newPrice = updatedItem.price + value;
+                            break;
+                    }
+                    
+                    updatedItem.price = parseFloat(newPrice.toFixed(2));
+
+                    // Recalculate markup based on new price and costPrice
+                    if (updatedItem.costPrice > 0) {
+                        updatedItem.markup = parseFloat((((updatedItem.price / updatedItem.costPrice) - 1) * 100).toFixed(2));
+                    } else {
+                        updatedItem.markup = 0; // If costPrice is 0, markup is irrelevant or 0
+                    }
+                    return updatedItem;
+                }
+                return item;
+            });
+            saveItems(newItems);
+            return newItems;
+        });
+        setSelectedIds(new Set());
+        setIsBulkEditModalOpen(false);
+    };
+
+
   const isAllSelected = filteredItems.length > 0 && selectedIds.size === filteredItems.length;
   const isIndeterminate = selectedIds.size > 0 && selectedIds.size < filteredItems.length;
   
@@ -397,8 +540,8 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories
           {selectedIds.size > 0 && (
             <div className="flex items-center gap-2">
                 <span className="text-sm font-medium text-slate-600">{selectedIds.size} selected</span>
-                <button onClick={() => setIsBulkEditModalOpen(true)} className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-blue-700 transition-colors">
-                    Assign Category
+                <button onClick={() => setIsBulkEditModalOpen(true)} className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 transition-colors">
+                    Bulk Edit
                 </button>
                 <button onClick={handleDeleteSelected} className="bg-red-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-red-700 flex items-center gap-2 transition-all duration-200">
                     <TrashIcon />
@@ -579,10 +722,12 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories
         </div>
       </div>
        {isBulkEditModalOpen && (
-            <BulkEditModal
+            <BulkEditItemsModal
                 itemCount={selectedIds.size}
                 categories={categories}
-                onSave={handleBulkAssignCategory}
+                formatCurrency={formatCurrency}
+                onSaveCategory={handleBulkEditCategory}
+                onSavePricing={handleBulkEditPricing}
                 onCancel={() => setIsBulkEditModalOpen(false)}
             />
         )}
