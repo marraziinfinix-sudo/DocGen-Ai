@@ -1,7 +1,3 @@
-import type { User } from 'firebase/auth';
-
-export type { User };
-
 export enum DocumentType {
   Invoice = 'Invoice',
   Quotation = 'Quotation',

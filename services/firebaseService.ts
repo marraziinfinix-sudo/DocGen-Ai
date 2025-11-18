@@ -1,26 +1,13 @@
-import { initializeApp } from 'firebase/app';
-import {
-  getAuth,
-  signInWithPopup,
-  GoogleAuthProvider,
-  onAuthStateChanged as firebaseOnAuthStateChanged,
-  signOut,
-} from 'firebase/auth';
-import {
-  getFirestore,
-  doc,
-  getDoc,
-  setDoc,
-  updateDoc,
-} from 'firebase/firestore';
-import { firebaseConfig } from './firebaseConfig';
-import { Company, Client, Item, SavedDocument, User } from '../types';
+import { Company, Client, Item, SavedDocument } from '../types';
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const provider = new GoogleAuthProvider();
+// Fix: Add a placeholder for the missing `signInWithGoogle` function to resolve an import error.
+export const signInWithGoogle = async () => {
+  console.error("signInWithGoogle is not implemented.");
+  // The UI in AuthPage.tsx has a try/catch that will handle this error gracefully.
+  throw new Error("Sign-in functionality is not implemented yet.");
+};
+
+const LOCAL_STORAGE_KEY = 'invquo_ai_data';
 
 interface UserData {
     companies: Company[];
@@ -50,62 +37,68 @@ const defaultUserData: UserData = {
     activeCompanyId: 1,
 };
 
-export const signInWithGoogle = async () => {
+// Fetches all data from local storage.
+export const fetchUserData = (): UserData => {
   try {
-    const result = await signInWithPopup(auth, provider);
-    const user = result.user;
-    // Check if user document exists, if not, create it
-    const userDocRef = doc(db, 'users', user.uid);
-    const userDocSnap = await getDoc(userDocRef);
-    if (!userDocSnap.exists()) {
-      await setDoc(userDocRef, defaultUserData);
+    const savedData = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (savedData) {
+      // Basic validation to ensure the loaded data has the expected structure
+      const parsedData = JSON.parse(savedData);
+      if (parsedData && typeof parsedData === 'object' && 'companies' in parsedData) {
+        return parsedData;
+      }
     }
   } catch (error) {
-    console.error("Error during sign-in:", error);
-    throw error;
+    console.error("Error fetching data from local storage:", error);
   }
+  // If no data or data is corrupt, return default and save it
+  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(defaultUserData));
+  return defaultUserData;
 };
 
-export const signOutUser = async () => {
+// A generic save function that overwrites all data.
+const saveAllUserData = (data: UserData): void => {
   try {
-    await signOut(auth);
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
   } catch (error) {
-    console.error("Error signing out:", error);
+    console.error("Error saving data to local storage:", error);
   }
 };
 
-export const onAuthStateChanged = (callback: (user: User | null) => void) => {
-  return firebaseOnAuthStateChanged(auth, callback);
+// The following functions get the current data, update a part of it, and save it back.
+export const saveCompanies = (companies: Company[]) => {
+    const data = fetchUserData();
+    saveAllUserData({ ...data, companies });
 };
 
-export const fetchUserData = async (uid: string): Promise<UserData> => {
-  const userDocRef = doc(db, 'users', uid);
-  const userDocSnap = await getDoc(userDocRef);
-  if (userDocSnap.exists()) {
-    return userDocSnap.data() as UserData;
-  } else {
-    // This case should ideally be handled at sign-in, but as a fallback:
-    await setDoc(userDocRef, defaultUserData);
-    return defaultUserData;
-  }
+export const saveClients = (clients: Client[]) => {
+    const data = fetchUserData();
+    saveAllUserData({ ...data, clients });
 };
 
-const saveUserData = async (uid: string, data: Partial<UserData>): Promise<void> => {
-  const userDocRef = doc(db, 'users', uid);
-  await updateDoc(userDocRef, data);
+export const saveItems = (items: Item[]) => {
+    const data = fetchUserData();
+    saveAllUserData({ ...data, items });
 };
 
+export const saveInvoices = (savedInvoices: SavedDocument[]) => {
+    const data = fetchUserData();
+    saveAllUserData({ ...data, savedInvoices });
+};
 
-export const saveCompanies = (uid: string, companies: Company[]) => saveUserData(uid, { companies });
-export const saveClients = (uid: string, clients: Client[]) => saveUserData(uid, { clients });
-export const saveItems = (uid: string, items: Item[]) => saveUserData(uid, { items });
-export const saveInvoices = (uid: string, savedInvoices: SavedDocument[]) => saveUserData(uid, { savedInvoices });
-export const saveQuotations = (uid: string, savedQuotations: SavedDocument[]) => saveUserData(uid, { savedQuotations });
-export const saveActiveCompanyId = (uid: string, activeCompanyId: number) => saveUserData(uid, { activeCompanyId });
+export const saveQuotations = (savedQuotations: SavedDocument[]) => {
+    const data = fetchUserData();
+    saveAllUserData({ ...data, savedQuotations });
+};
 
-export const saveDocument = async (uid: string, collection: 'savedInvoices' | 'savedQuotations', documentToSave: SavedDocument) => {
-    const userData = await fetchUserData(uid);
-    const documentArray: SavedDocument[] = userData[collection] || [];
+export const saveActiveCompanyId = (activeCompanyId: number) => {
+    const data = fetchUserData();
+    saveAllUserData({ ...data, activeCompanyId });
+};
+
+export const saveDocument = (collection: 'savedInvoices' | 'savedQuotations', documentToSave: SavedDocument) => {
+    const data = fetchUserData();
+    const documentArray: SavedDocument[] = data[collection] || [];
     
     const existingDocIndex = documentArray.findIndex(d => d.id === documentToSave.id);
 
@@ -115,5 +108,5 @@ export const saveDocument = async (uid: string, collection: 'savedInvoices' | 's
         documentArray.unshift(documentToSave);
     }
     
-    await saveUserData(uid, { [collection]: documentArray });
+    saveAllUserData({ ...data, [collection]: documentArray });
 };
