@@ -1,11 +1,17 @@
+import { initializeApp } from 'firebase/app';
+import { getAuth, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { firebaseConfig } from './firebaseConfig';
 import { Company, Client, Item, SavedDocument } from '../types';
 
-// Fix: Add a placeholder for the missing `signInWithGoogle` function to resolve an import error.
-export const signInWithGoogle = async () => {
-  console.error("signInWithGoogle is not implemented.");
-  // The UI in AuthPage.tsx has a try/catch that will handle this error gracefully.
-  throw new Error("Sign-in functionality is not implemented yet.");
+// FIX: Initialize Firebase and add the missing signInWithGoogle function to resolve the import error in AuthPage.tsx.
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const provider = new GoogleAuthProvider();
+
+export const signInWithGoogle = () => {
+  return signInWithPopup(auth, provider);
 };
+
 
 const LOCAL_STORAGE_KEY = 'invquo_ai_data';
 

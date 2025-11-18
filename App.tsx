@@ -11,6 +11,7 @@ import DocumentListPage from './components/DocumentListPage';
 import QuotationListPage from './components/QuotationListPage';
 import SaveItemsModal from './components/SaveItemsModal';
 import SaveClientModal from './components/SaveClientModal';
+import LoginPage from './components/LoginPage';
 
 
 declare const jspdf: any;
@@ -103,7 +104,8 @@ const App: React.FC = () => {
   // --- States ---
   const [isSaving, setIsSaving] = useState(false);
   const [currentView, setCurrentView] = useState<'editor' | 'setup' | 'clients' | 'items' | 'invoices' | 'quotations'>('editor');
-  
+  const [currentUser, setCurrentUser] = useState<string | null>(null);
+
   // --- Data States (from localStorage) ---
   const [companies, setCompanies] = useState<Company[]>([]);
   const [activeCompanyId, setActiveCompanyId] = useState<number>(1);
@@ -112,8 +114,24 @@ const App: React.FC = () => {
   const [savedInvoices, setSavedInvoices] = useState<SavedDocument[]>([]);
   const [savedQuotations, setSavedQuotations] = useState<SavedDocument[]>([]);
   
-  // --- Data loading from localStorage ---
+  // --- Authentication and Data loading ---
   useEffect(() => {
+    const loggedInUser = localStorage.getItem('currentUser');
+    if (loggedInUser) {
+        setCurrentUser(loggedInUser);
+        const userData = fetchUserData();
+        setCompanies(userData.companies);
+        setClients(userData.clients);
+        setItems(userData.items);
+        setSavedInvoices(userData.savedInvoices);
+        setSavedQuotations(userData.savedQuotations);
+        setActiveCompanyId(userData.activeCompanyId);
+    }
+  }, []);
+
+  const handleLogin = (username: string) => {
+    localStorage.setItem('currentUser', username);
+    setCurrentUser(username);
     const userData = fetchUserData();
     setCompanies(userData.companies);
     setClients(userData.clients);
@@ -121,7 +139,12 @@ const App: React.FC = () => {
     setSavedInvoices(userData.savedInvoices);
     setSavedQuotations(userData.savedQuotations);
     setActiveCompanyId(userData.activeCompanyId);
-  }, []);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('currentUser');
+    setCurrentUser(null);
+  };
 
   const generateDocumentNumber = useCallback((
     client: Details, 
@@ -234,7 +257,7 @@ const App: React.FC = () => {
   // --- Recurring Invoice Generation ---
   const recurringChecked = React.useRef(false);
   useEffect(() => {
-    if (recurringChecked.current || savedInvoices.length === 0) return;
+    if (!currentUser || recurringChecked.current || savedInvoices.length === 0) return;
     recurringChecked.current = true;
 
     const calculateNextIssueDate = (lastDateStr: string, rec: Recurrence): Date => {
@@ -293,7 +316,7 @@ const App: React.FC = () => {
       saveInvoices(newInvoicesList);
       alert(`Generated ${newInvoicesToGenerate.length} new recurring invoice(s).`);
     }
-  }, [savedInvoices, generateDocumentNumber]);
+  }, [savedInvoices, generateDocumentNumber, currentUser]);
 
   // --- Calculations ---
   const subtotal = useMemo(() => lineItems.reduce((acc, item) => acc + item.quantity * item.price, 0), [lineItems]);
@@ -808,6 +831,10 @@ const App: React.FC = () => {
   const navButtonClasses = "flex flex-col sm:flex-row items-center justify-center sm:justify-start gap-2 py-2 px-3 rounded-md transition-colors text-sm font-medium";
   const activeNavButtonClasses = "bg-indigo-100 text-indigo-700";
   const inactiveNavButtonClasses = "text-slate-600 hover:bg-slate-200";
+
+  if (!currentUser) {
+    return <LoginPage onLoginSuccess={handleLogin} />;
+  }
 
   const renderCurrentView = () => {
     switch(currentView) {
@@ -1324,7 +1351,12 @@ const App: React.FC = () => {
                     <button onClick={() => setCurrentView('invoices')} className={`py-1 px-3 rounded-md transition-colors text-sm font-medium ${currentView === 'invoices' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Invoices</button>
                 </nav>
             </div>
-            {/* User info removed */}
+            <div className="flex items-center gap-4">
+                <span className="text-slate-600 text-sm hidden sm:block">Welcome, <span className="font-bold">{currentUser}</span></span>
+                <button onClick={handleLogout} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-50 text-sm">
+                    Logout
+                </button>
+            </div>
           </div>
         </div>
       </header>
