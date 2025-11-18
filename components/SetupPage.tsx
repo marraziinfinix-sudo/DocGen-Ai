@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Company, Details, User } from '../types';
 import { PlusIcon, TrashIcon } from './Icons';
-import { saveUsers } from '../services/firebaseService';
+import { saveUsers, saveCompanies } from '../services/firebaseService';
 
 interface SetupPageProps {
   currentUser: string | null;
@@ -441,6 +441,7 @@ const SetupPage: React.FC<SetupPageProps> = ({
                 if (id === activeCompanyId) {
                     setActiveCompanyId(newCompanies[0].id);
                 }
+                saveCompanies(newCompanies);
                 return newCompanies;
             });
         }
@@ -449,10 +450,18 @@ const SetupPage: React.FC<SetupPageProps> = ({
     const handleFormSave = (updatedCompany: Company) => {
         if (updatedCompany.id === 0) { // New company
             const newCompany = { ...updatedCompany, id: Date.now() };
-            setCompanies(prev => [...prev, newCompany]);
+            setCompanies(prev => {
+                const newCompanies = [...prev, newCompany];
+                saveCompanies(newCompanies);
+                return newCompanies;
+            });
             setActiveCompanyId(newCompany.id); // Set new company as active
         } else { // Existing company
-            setCompanies(prev => prev.map(c => c.id === updatedCompany.id ? updatedCompany : c));
+            setCompanies(prev => {
+                const newCompanies = prev.map(c => c.id === updatedCompany.id ? updatedCompany : c);
+                saveCompanies(newCompanies);
+                return newCompanies;
+            });
         }
         setIsFormOpen(false);
         setEditingCompany(null);

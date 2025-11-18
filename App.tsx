@@ -849,72 +849,32 @@ const App: React.FC = () => {
             users={users}
             setUsers={setUsers}
             companies={companies}
-            setCompanies={(updater) => {
-                setCompanies(currentCompanies => {
-                    const newCompanies = typeof updater === 'function' 
-                        ? (updater as (prevState: Company[]) => Company[])(currentCompanies) 
-                        : updater;
-                    saveCompanies(newCompanies);
-                    return newCompanies;
-                });
-            }}
+            setCompanies={setCompanies}
             onDone={() => setCurrentView('editor')}
             activeCompanyId={activeCompanyId}
             setActiveCompanyId={setActiveCompanyId} />;
       case 'clients':
         return <ClientListPage
             clients={clients}
-            setClients={(updater) => {
-                setClients(currentClients => {
-                    const newClients = typeof updater === 'function' 
-                        ? (updater as (prevState: Client[]) => Client[])(currentClients) 
-                        : updater;
-                    saveClients(newClients);
-                    return newClients;
-                });
-            }}
+            setClients={setClients}
             onDone={() => setCurrentView('editor')} />;
       case 'items':
         return <ItemListPage
             items={items}
-            setItems={(updater) => {
-                setItems(currentItems => {
-                    const newItems = typeof updater === 'function' 
-                        ? (updater as (prevState: Item[]) => Item[])(currentItems) 
-                        : updater;
-                    saveItems(newItems);
-                    return newItems;
-                });
-            }}
+            setItems={setItems}
             formatCurrency={formatCurrency}
             onDone={() => setCurrentView('editor')} />;
       case 'invoices':
         return <DocumentListPage
             documents={savedInvoices}
-            setDocuments={(updater) => {
-                setSavedInvoices(currentInvoices => {
-                    const newDocuments = typeof updater === 'function' 
-                        ? (updater as (prevState: SavedDocument[]) => SavedDocument[])(currentInvoices) 
-                        : updater;
-                    saveInvoices(newDocuments);
-                    return newDocuments;
-                });
-            }}
+            setDocuments={setSavedInvoices}
             formatCurrency={formatCurrency}
             handleSendReminder={handleSendReminder}
             handleLoadDocument={handleLoadDocument} />;
       case 'quotations':
         return <QuotationListPage
             documents={savedQuotations}
-            setDocuments={(updater) => {
-                setSavedQuotations(currentQuotations => {
-                    const newDocuments = typeof updater === 'function' 
-                        ? (updater as (prevState: SavedDocument[]) => SavedDocument[])(currentQuotations) 
-                        : updater;
-                    saveQuotations(newDocuments);
-                    return newDocuments;
-                });
-            }}
+            setDocuments={setSavedQuotations}
             formatCurrency={formatCurrency}
             handleCreateInvoiceFromQuote={handleCreateInvoiceFromQuote}
             handleLoadDocument={handleLoadDocument}
