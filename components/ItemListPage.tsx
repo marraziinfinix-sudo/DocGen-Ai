@@ -305,7 +305,7 @@ const BulkEditItemsModal: React.FC<BulkEditItemsModalProps> = ({
 const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories, setCategories, formatCurrency, onDone }) => {
   const [formState, setFormState] = useState(emptyFormState);
   const [isEditing, setIsEditing] = useState(false);
-  const [selectedIds, setSelectedIds] = new useState<Set<number>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [isBulkEditModalOpen, setIsBulkEditModalOpen] = useState(false);
@@ -514,13 +514,6 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories
                     }
                     
                     updatedItem.price = parseFloat(newPrice.toFixed(2));
-
-                    // Recalculate markup based on new price and costPrice
-                    if (updatedItem.costPrice > 0) {
-                        updatedItem.markup = parseFloat((((updatedItem.price / updatedItem.costPrice) - 1) * 100).toFixed(2));
-                    } else {
-                        updatedItem.markup = 0; // If costPrice is 0, markup is irrelevant or 0
-                    }
                     return updatedItem;
                 }
                 return item;
