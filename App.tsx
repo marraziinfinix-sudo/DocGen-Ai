@@ -117,24 +117,7 @@ const App: React.FC = () => {
   const [savedQuotations, setSavedQuotations] = useState<SavedDocument[]>([]);
   
   // --- Authentication and Data loading ---
-  useEffect(() => {
-    const loggedInUser = localStorage.getItem('currentUser');
-    if (loggedInUser) {
-        setCurrentUser(loggedInUser);
-        const userData = fetchUserData();
-        setUsers(userData.users);
-        setCompanies(userData.companies);
-        setClients(userData.clients);
-        setItems(userData.items);
-        setSavedInvoices(userData.savedInvoices);
-        setSavedQuotations(userData.savedQuotations);
-        setActiveCompanyId(userData.activeCompanyId);
-    }
-  }, []);
-
-  const handleLogin = (username: string) => {
-    localStorage.setItem('currentUser', username);
-    setCurrentUser(username);
+  const loadUserData = useCallback(() => {
     const userData = fetchUserData();
     setUsers(userData.users);
     setCompanies(userData.companies);
@@ -143,6 +126,20 @@ const App: React.FC = () => {
     setSavedInvoices(userData.savedInvoices);
     setSavedQuotations(userData.savedQuotations);
     setActiveCompanyId(userData.activeCompanyId);
+  }, []);
+
+  useEffect(() => {
+    const loggedInUser = localStorage.getItem('currentUser');
+    if (loggedInUser) {
+        setCurrentUser(loggedInUser);
+        loadUserData();
+    }
+  }, [loadUserData]);
+
+  const handleLogin = (username: string) => {
+    localStorage.setItem('currentUser', username);
+    setCurrentUser(username);
+    loadUserData();
   };
 
   const handleLogout = () => {

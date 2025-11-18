@@ -1,11 +1,15 @@
 import React from 'react';
-import { signInWithGoogle } from '../services/firebaseService';
+// FIX: The imported `signInWithGoogle` function does not exist in `firebaseService`.
+// The import is commented out and the function call is replaced with an alert
+// as this component is part of an unimplemented feature.
+// import { signInWithGoogle } from '../services/firebaseService';
 
 const AuthPage: React.FC = () => {
 
   const handleSignIn = async () => {
     try {
-      await signInWithGoogle();
+      // await signInWithGoogle();
+      alert("Google Sign-In is not implemented.");
     } catch (error) {
       console.error("Error signing in with Google", error);
       alert("There was an issue signing in. Please try again.");

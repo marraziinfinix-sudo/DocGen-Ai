@@ -1,3 +1,4 @@
+
 import { Company, Client, Item, SavedDocument, User, DocumentType, LineItem, Details } from '../types';
 
 const LOCAL_STORAGE_KEY = 'invquo_data';
@@ -207,11 +208,4 @@ export const saveDocument = (collection: 'savedInvoices' | 'savedQuotations', do
     }
     
     saveAllUserData({ ...data, [collection]: documentArray });
-};
-
-export const signInWithGoogle = async (): Promise<void> => {
-  // This function is not fully implemented as the app currently uses local username/password authentication via LoginPage.tsx.
-  // AuthPage.tsx, which uses this function, is not currently used in the application.
-  console.warn("signInWithGoogle is a placeholder and has no effect.");
-  return Promise.resolve();
 };
