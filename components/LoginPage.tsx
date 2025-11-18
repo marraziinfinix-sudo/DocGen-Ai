@@ -26,7 +26,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     <div className="flex items-center justify-center min-h-screen bg-gray-100">
       <div className="w-full max-w-sm p-8 space-y-8 bg-white shadow-lg rounded-xl">
         <div>
-          <h1 className="text-3xl font-bold text-center text-indigo-600">InvQuo AI</h1>
+          <h1 className="text-3xl font-bold text-center text-indigo-600">InvQuo</h1>
           <p className="mt-2 text-sm text-center text-slate-600">Please sign in to continue</p>
         </div>
         <form className="space-y-6" onSubmit={handleLogin}>

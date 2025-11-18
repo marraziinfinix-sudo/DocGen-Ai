@@ -1355,7 +1355,7 @@ const App: React.FC = () => {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center">
              <div className="flex items-center gap-2 sm:gap-4">
-                <h1 className="text-xl sm:text-2xl font-bold text-indigo-600">InvQuo AI</h1>
+                <h1 className="text-xl sm:text-2xl font-bold text-indigo-600">InvQuo</h1>
                 <nav className="hidden sm:flex items-center gap-2 bg-slate-100 p-1 rounded-lg">
                     <button onClick={() => setCurrentView('editor')} className={`py-1 px-3 rounded-md transition-colors text-sm font-medium ${currentView === 'editor' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Editor</button>
                     <button onClick={() => setCurrentView('quotations')} className={`py-1 px-3 rounded-md transition-colors text-sm font-medium ${currentView === 'quotations' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Quotations</button>

@@ -1,6 +1,6 @@
 import { Company, Client, Item, SavedDocument, User } from '../types';
 
-const LOCAL_STORAGE_KEY = 'invquo_ai_data';
+const LOCAL_STORAGE_KEY = 'invquo_data';
 
 interface UserData {
     users: User[];

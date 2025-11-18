@@ -15,7 +15,7 @@ const AuthPage: React.FC = () => {
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100">
       <div className="text-center p-8 bg-white shadow-lg rounded-xl max-w-md w-full mx-4">
-        <h1 className="text-3xl font-bold text-indigo-600 mb-2">Welcome to InvQuo AI</h1>
+        <h1 className="text-3xl font-bold text-indigo-600 mb-2">Welcome to InvQuo</h1>
         <p className="text-slate-600 mb-6">Your intelligent Quotation & Invoice generator.</p>
         <p className="text-slate-500 mb-8">Sign in to securely save and sync your clients, items, and documents across all your devices.</p>
         <button
