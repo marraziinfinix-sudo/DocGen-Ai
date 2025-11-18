@@ -341,7 +341,7 @@ const UserManagement: React.FC<{
     
     return (
         <div className="mb-8 p-6 bg-slate-50 rounded-lg border border-slate-200">
-            <h2 className="text-xl font-bold text-gray-800 mb-6 border-b pb-4">User Settings</h2>
+            <h2 className="text-xl font-bold text-gray-800 mb-6 border-b pb-4">{currentUser === 'admin' ? 'Admin Settings' : 'User Settings'}</h2>
             
             <form onSubmit={handleChangePassword} className="mb-8">
                 <h3 className="text-lg font-semibold text-gray-700 mb-4">Change Your Password</h3>
