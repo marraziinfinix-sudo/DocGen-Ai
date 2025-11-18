@@ -82,9 +82,20 @@ const sanitizeClient = (cli: any): Client | null => {
 
 const sanitizeItem = (item: any): Item | null => {
     if (typeof item !== 'object' || item === null) return null;
+    let itemName = typeof item.name === 'string' ? item.name : '';
+    let itemDescription = typeof item.description === 'string' ? item.description : '';
+
+    // Migration logic: If only 'description' exists from old data, use it as 'name'
+    // and clear 'description'. If both exist, keep both.
+    if (!itemName && typeof item.description === 'string') {
+        itemName = item.description;
+        itemDescription = ''; // Clear old description as it's now the name
+    }
+
     return {
         id: typeof item.id === 'number' ? item.id : Date.now(),
-        description: typeof item.description === 'string' ? item.description : '',
+        name: itemName,
+        description: itemDescription,
         costPrice: typeof item.costPrice === 'number' ? item.costPrice : 0,
         price: typeof item.price === 'number' ? item.price : 0,
         category: typeof item.category === 'string' ? item.category : '',
@@ -104,9 +115,19 @@ const sanitizePayment = (p: any): Payment | null => {
 
 const sanitizeLineItem = (li: any): LineItem | null => {
     if (typeof li !== 'object' || li === null) return null;
+    let lineItemName = typeof li.name === 'string' ? li.name : '';
+    let lineItemDescription = typeof li.description === 'string' ? li.description : '';
+
+    // Migration logic for line items too
+    if (!lineItemName && typeof li.description === 'string') {
+        lineItemName = li.description;
+        lineItemDescription = ''; // Clear old description as it's now the name
+    }
+
     return {
         id: typeof li.id === 'number' ? li.id : Date.now(),
-        description: typeof li.description === 'string' ? li.description : '',
+        name: lineItemName,
+        description: lineItemDescription,
         quantity: typeof li.quantity === 'number' ? li.quantity : 1,
         costPrice: typeof li.costPrice === 'number' ? li.costPrice : 0,
         markup: typeof li.markup === 'number' ? li.markup : 0,

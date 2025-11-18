@@ -241,7 +241,7 @@ const App: React.FC = () => {
   const [pendingDoc, setPendingDoc] = useState<SavedDocument | null>(null);
   const [isSaveClientModalOpen, setIsSaveClientModalOpen] = useState(false);
   const [potentialNewClient, setPotentialNewClient] = useState<Details | null>(null);
-  const [newLineItem, setNewLineItem] = useState<Omit<LineItem, 'id'>>({ description: '', quantity: isMobile ? 0 : 1, costPrice: 0, markup: 0, price: 0 });
+  const [newLineItem, setNewLineItem] = useState<Omit<LineItem, 'id'>>({ name: '', description: '', quantity: isMobile ? 0 : 1, costPrice: 0, markup: 0, price: 0 });
   const [isItemDropdownOpen, setIsItemDropdownOpen] = useState(false);
   const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
   const [isUpdateClientModalOpen, setIsUpdateClientModalOpen] = useState(false);
@@ -375,22 +375,22 @@ const App: React.FC = () => {
   };
 
   const handleAddLineItem = () => {
-    if (!newLineItem.description.trim() || newLineItem.price < 0 || newLineItem.quantity <= 0) {
-        alert('Please provide a valid description, quantity, and price for the item.');
+    if (!newLineItem.name.trim() || newLineItem.price < 0 || newLineItem.quantity <= 0) {
+        alert('Please provide a valid item name, quantity, and price for the item.');
         return;
     }
     setLineItems(prev => [...prev, { id: Date.now(), ...newLineItem }]);
-    setNewLineItem({ description: '', quantity: isMobile ? 0 : 1, costPrice: 0, markup: 0, price: 0 });
+    setNewLineItem({ name: '', description: '', quantity: isMobile ? 0 : 1, costPrice: 0, markup: 0, price: 0 });
   };
 
   const handleDeleteLineItem = (id: number) => {
     setLineItems(prev => prev.filter(item => item.id !== id));
   };
   
-  const handleGenerateDescription = async (id: number, currentDescription: string) => {
+  const handleGenerateDescription = async (id: number, itemName: string, currentDescription: string) => {
     setGeneratingStates(prev => ({ ...prev, [id]: true }));
     try {
-      const newDescription = await generateDescription(currentDescription);
+      const newDescription = await generateDescription(itemName); // Pass item name to AI
       handleLineItemChange(id, 'description', newDescription);
     } catch (error) {
       console.error(error);
@@ -404,7 +404,7 @@ const App: React.FC = () => {
   };
 
   const handleClearNewLineItem = () => {
-    setNewLineItem({ description: '', quantity: isMobile ? 0 : 1, costPrice: 0, markup: 0, price: 0 });
+    setNewLineItem({ name: '', description: '', quantity: isMobile ? 0 : 1, costPrice: 0, markup: 0, price: 0 });
   };
 
   const handleClientDetailChange = (field: keyof Details, value: string) => {
@@ -469,7 +469,7 @@ const App: React.FC = () => {
         return updatedItem;
     });
 
-    if (field === 'description') {
+    if (field === 'name') {
         setIsItemDropdownOpen(true);
     }
   };
@@ -480,6 +480,7 @@ const App: React.FC = () => {
     const markup = costPrice > 0 ? ((price / costPrice) - 1) * 100 : 0;
     
     setNewLineItem({
+      name: item.name,
       description: item.description,
       quantity: isMobile ? 0 : 1,
       costPrice: costPrice,
@@ -499,10 +500,10 @@ const App: React.FC = () => {
   
   const filteredSavedItems = useMemo(() => {
     if (!isItemDropdownOpen || !Array.isArray(items)) return [];
-    const searchTerm = newLineItem.description.trim().toLowerCase();
+    const searchTerm = newLineItem.name.trim().toLowerCase(); // Filter by item name
     if (!searchTerm) return items;
-    return items.filter(item => item.description.toLowerCase().includes(searchTerm));
-  }, [items, newLineItem.description, isItemDropdownOpen]);
+    return items.filter(item => item.name.toLowerCase().includes(searchTerm));
+  }, [items, newLineItem.name, isItemDropdownOpen]);
 
   const filteredSavedClients = useMemo(() => {
     if (!isClientDropdownOpen || !Array.isArray(clients)) return [];
@@ -541,8 +542,8 @@ const App: React.FC = () => {
   };
 
   const checkNewItemsAndSave = (docToSave: SavedDocument) => {
-    const savedItemDescriptions = new Set(items.map(i => i.description.trim().toLowerCase()));
-    const newItemsInDoc = docToSave.lineItems.filter(li => li.description.trim() && !savedItemDescriptions.has(li.description.trim().toLowerCase()));
+    const savedItemNames = new Set(items.map(i => i.name.trim().toLowerCase())); // Check by item name
+    const newItemsInDoc = docToSave.lineItems.filter(li => li.name.trim() && !savedItemNames.has(li.name.trim().toLowerCase())); // Filter by item name
     if (newItemsInDoc.length > 0) {
         setPotentialNewItems(newItemsInDoc);
         setPendingDoc(docToSave);
@@ -666,7 +667,8 @@ const App: React.FC = () => {
     if (potentialNewItems.length > 0) {
         const itemsToAdd: Item[] = potentialNewItems.map((li, index) => ({
             id: Date.now() + index,
-            description: li.description,
+            name: li.name, // Save item name
+            description: li.description, // Save item description
             costPrice: li.costPrice,
             price: li.price,
             category: ''
@@ -1123,15 +1125,16 @@ const App: React.FC = () => {
                     </div>
                     
                     <div className="relative">
-                      <label className="block text-sm font-medium text-gray-600 mb-1">Description</label>
-                      <textarea
-                        rows={2}
+                      <label className="block text-sm font-medium text-gray-600 mb-1">Item Name</label>
+                      <input
+                        type="text"
                         placeholder="Start typing to search or add a new item..."
-                        value={newLineItem.description}
-                        onChange={e => handleNewLineItemChange('description', e.target.value)}
+                        value={newLineItem.name}
+                        onChange={e => handleNewLineItemChange('name', e.target.value)}
                         onFocus={() => setIsItemDropdownOpen(true)}
                         onBlur={() => setTimeout(() => setIsItemDropdownOpen(false), 200)}
-                        className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 resize-none"
+                        className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                        autoComplete="off"
                       />
                       {isItemDropdownOpen && (
                         <div className="absolute z-20 w-full bg-white border border-slate-300 rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto">
@@ -1143,7 +1146,8 @@ const App: React.FC = () => {
                                 onClick={() => handleSavedItemSelected(item)}
                                 className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
                               >
-                                <p className="font-semibold">{item.description}</p>
+                                <p className="font-semibold">{item.name}</p>
+                                {item.description && <p className="text-xs text-slate-500">{item.description} &bull; </p>} 
                                 <p className="text-xs text-slate-500">Cost: {formatCurrency(item.costPrice)} &bull; Sell: {formatCurrency(item.price)}</p>
                               </button>
                             ))
@@ -1154,6 +1158,16 @@ const App: React.FC = () => {
                           )}
                         </div>
                       )}
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-600 mb-1">Description (Optional)</label>
+                        <textarea
+                            rows={2}
+                            placeholder="Additional details for this item..."
+                            value={newLineItem.description}
+                            onChange={e => handleNewLineItemChange('description', e.target.value)}
+                            className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 resize-none"
+                        />
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-600 mb-1">Quantity</label>
@@ -1206,7 +1220,16 @@ const App: React.FC = () => {
                     {lineItems.map((item) => (
                       <div key={item.id} className="p-3 bg-slate-50 rounded-lg border space-y-2">
                           <div className="col-span-12">
-                              <label className="block text-sm font-medium text-gray-600 mb-1">Description</label>
+                              <label className="block text-sm font-medium text-gray-600 mb-1">Item Name</label>
+                              <input
+                                  type="text"
+                                  value={item.name}
+                                  onChange={e => handleLineItemChange(item.id, 'name', e.target.value)}
+                                  className="flex-grow w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                              />
+                          </div>
+                          <div className="col-span-12">
+                              <label className="block text-sm font-medium text-gray-600 mb-1">Description (Optional)</label>
                               <div className="flex gap-1">
                                   <textarea
                                       rows={2}
@@ -1215,7 +1238,7 @@ const App: React.FC = () => {
                                       className="flex-grow w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 resize-none"
                                   />
                                   <button
-                                      onClick={() => handleGenerateDescription(item.id, item.description)}
+                                      onClick={() => handleGenerateDescription(item.id, item.name, item.description)}
                                       className="flex-shrink-0 p-2 bg-indigo-100 text-indigo-600 rounded-md hover:bg-indigo-200"
                                       title="Generate description with AI"
                                       disabled={generatingStates[item.id]}

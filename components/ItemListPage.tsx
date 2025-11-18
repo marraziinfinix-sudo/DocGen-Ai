@@ -12,9 +12,10 @@ interface ItemListPageProps {
   onDone: () => void;
 }
 
-const emptyFormState: Omit<Item, 'id' | 'price' | 'costPrice'> & { id: number | null; price: string; costPrice: string; markup: string; category: string } = {
+const emptyFormState: Omit<Item, 'id' | 'price' | 'costPrice'> & { id: number | null; name: string; description: string; price: string; costPrice: string; markup: string; category: string } = {
   id: null,
-  description: '',
+  name: '', // New field
+  description: '', // Updated to be separate from name
   costPrice: '',
   price: '',
   markup: '',
@@ -304,11 +305,11 @@ const BulkEditItemsModal: React.FC<BulkEditItemsModalProps> = ({
 const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories, setCategories, formatCurrency, onDone }) => {
   const [formState, setFormState] = useState(emptyFormState);
   const [isEditing, setIsEditing] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [selectedIds, setSelectedIds] = new useState<Set<number>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
-  const [isBulkEditModalOpen, setIsBulkEditModalOpen] = useState(false); // Renamed from isBulkEditModalOpen
-  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+  const [isBulkEditModalOpen, setIsBulkEditModalOpen] = useState(false);
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false); // For item add/edit category dropdown
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -345,7 +346,8 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories
   const filteredItems = useMemo(() => {
     if (!Array.isArray(items)) return [];
     return items.filter(item => {
-        const matchesSearch = searchQuery ? item.description.toLowerCase().includes(searchQuery.toLowerCase()) : true;
+        // Search by item name
+        const matchesSearch = searchQuery ? item.name.toLowerCase().includes(searchQuery.toLowerCase()) : true;
         const matchesCategory = categoryFilter !== 'All' ? ((item.category || 'Uncategorized') === categoryFilter) : true;
         return matchesSearch && matchesCategory;
     });
@@ -373,12 +375,13 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories
   const handleSaveItem = () => {
     const price = parseFloat(formState.price);
     const costPrice = parseFloat(formState.costPrice);
-    if (!formState.description || isNaN(price) || isNaN(costPrice)) {
-        alert("Please enter a valid description, cost price, and selling price.");
+    if (!formState.name.trim() || isNaN(price) || isNaN(costPrice)) {
+        alert("Please enter a valid item name, cost price, and selling price.");
         return;
     }
     
-    const trimmedDescription = formState.description.trim();
+    const trimmedName = formState.name.trim(); // Use name field
+    const trimmedDescription = formState.description.trim(); // Use description field
     const newCategory = formState.category.trim();
 
     if (newCategory && !categories.includes(newCategory)) {
@@ -388,6 +391,7 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories
     if (isEditing && formState.id) {
       const updatedItem: Item = {
         id: formState.id,
+        name: trimmedName,
         description: trimmedDescription,
         costPrice: costPrice,
         price: price,
@@ -400,7 +404,7 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories
       });
     } else {
       setItems(prev => {
-        const newItems = [{ id: Date.now(), description: trimmedDescription, costPrice, price, category: newCategory }, ...prev];
+        const newItems = [{ id: Date.now(), name: trimmedName, description: trimmedDescription, costPrice, price, category: newCategory }, ...prev];
         saveItems(newItems);
         return newItems;
       });
@@ -415,6 +419,8 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories
     const markup = cost > 0 ? (((sell - cost) / cost) * 100).toFixed(2) : '0.00';
     setFormState({
       ...item, 
+      name: item.name, // Populate name
+      description: item.description, // Populate description
       price: String(item.price), 
       costPrice: String(item.costPrice), 
       markup: String(markup),
@@ -562,8 +568,12 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories
             <h3 className="text-lg font-semibold text-gray-700 mb-4">{isEditing ? 'Edit Item' : 'Add New Item'}</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="md:col-span-3">
-                    <label className="block text-sm font-medium text-gray-600 mb-1">Description</label>
-                    <textarea name="description" placeholder="Item Description" value={formState.description} onChange={handleInputChange} rows={3} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"/>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">Item Name *</label>
+                    <input type="text" name="name" placeholder="E.g., Web Design Services" value={formState.name} onChange={handleInputChange} required className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"/>
+                </div>
+                <div className="md:col-span-3">
+                    <label className="block text-sm font-medium text-gray-600 mb-1">Description (Optional)</label>
+                    <textarea name="description" placeholder="Provide additional details or features of the item (e.g., 'Includes UI/UX, development, and deployment')." value={formState.description} onChange={handleInputChange} rows={2} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"/>
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-gray-600 mb-1">Cost</label>
@@ -639,7 +649,7 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                 <input
                     type="text"
-                    placeholder="Search items by description..."
+                    placeholder="Search items by name..." // Updated search placeholder
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
                     className="md:col-span-2 w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
@@ -686,7 +696,8 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories
                                           onChange={() => handleSelect(item.id)}
                                         />
                                         <div className="ml-4 flex-1">
-                                            <p className="font-bold text-slate-800 break-words">{item.description}</p>
+                                            <p className="font-bold text-slate-800 break-words">{item.name}</p> {/* Display item name */}
+                                            {item.description && <p className="text-sm text-slate-600">{item.description}</p>} {/* Display item description if present */}
                                             <p className="text-sm text-slate-500">
                                                 Cost: {formatCurrency(cost)} &bull; Sell: {formatCurrency(sell)} &bull; <span className={`font-medium ${markup >= 0 ? 'text-green-700' : 'text-red-700'}`}>Markup: {markup.toFixed(2)}%</span>
                                             </p>
