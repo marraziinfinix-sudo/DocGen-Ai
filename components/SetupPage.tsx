@@ -1,6 +1,8 @@
+
 import React, { useState } from 'react';
 import { Company, Details, User } from '../types';
 import { PlusIcon, TrashIcon } from './Icons';
+import { saveUsers } from '../services/firebaseService';
 
 interface SetupPageProps {
   currentUser: string | null;
@@ -267,9 +269,13 @@ const UserManagement: React.FC<{
             alert("Password must be at least 6 characters long.");
             return;
         }
-        setUsers(prevUsers => prevUsers.map(user => 
-            user.username === currentUser ? { ...user, password: newPassword } : user
-        ));
+        setUsers(prevUsers => {
+            const newUsers = prevUsers.map(user => 
+                user.username === currentUser ? { ...user, password: newPassword } : user
+            );
+            saveUsers(newUsers);
+            return newUsers;
+        });
         setNewPassword('');
         setConfirmPassword('');
         alert("Your password has been updated successfully.");
@@ -291,10 +297,14 @@ const UserManagement: React.FC<{
             alert("Password must be at least 6 characters long.");
             return;
         }
-        setUsers(prevUsers => [
-            ...prevUsers,
-            { username: trimmedUsername, password: trimmedPassword }
-        ]);
+        setUsers(prevUsers => {
+            const newUsers = [
+                ...prevUsers,
+                { username: trimmedUsername, password: trimmedPassword }
+            ];
+            saveUsers(newUsers);
+            return newUsers;
+        });
         setNewUsername('');
         setNewUserPassword('');
         alert(`User "${trimmedUsername}" added successfully.`);
@@ -302,7 +312,11 @@ const UserManagement: React.FC<{
 
     const handleDeleteUser = (usernameToDelete: string) => {
         if (window.confirm(`Are you sure you want to delete the user "${usernameToDelete}"?`)) {
-            setUsers(prevUsers => prevUsers.filter(user => user.username !== usernameToDelete));
+            setUsers(prevUsers => {
+                const newUsers = prevUsers.filter(user => user.username !== usernameToDelete);
+                saveUsers(newUsers);
+                return newUsers;
+            });
         }
     };
     
@@ -313,9 +327,13 @@ const UserManagement: React.FC<{
     const handleAdminUpdatePassword = (password: string) => {
         if (!editingUserPassword) return;
 
-        setUsers(prevUsers => prevUsers.map(user => 
-            user.username === editingUserPassword.username ? { ...user, password: password } : user
-        ));
+        setUsers(prevUsers => {
+            const newUsers = prevUsers.map(user => 
+                user.username === editingUserPassword.username ? { ...user, password: password } : user
+            );
+            saveUsers(newUsers);
+            return newUsers;
+        });
 
         alert(`Password for user "${editingUserPassword.username}" has been updated.`);
         setEditingUserPassword(null);

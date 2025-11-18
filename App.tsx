@@ -847,15 +847,7 @@ const App: React.FC = () => {
         return <SetupPage
             currentUser={currentUser}
             users={users}
-            setUsers={(updater) => {
-                setUsers(currentUsers => {
-                    const newUsers = typeof updater === 'function' 
-                        ? (updater as (prevState: User[]) => User[])(currentUsers) 
-                        : updater;
-                    saveUsers(newUsers);
-                    return newUsers;
-                });
-            }}
+            setUsers={setUsers}
             companies={companies}
             setCompanies={(updater) => {
                 setCompanies(currentCompanies => {
