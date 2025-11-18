@@ -1,7 +1,8 @@
 
+
 import React, { useState } from 'react';
 import { Company, Details, User } from '../types';
-import { PlusIcon, TrashIcon } from './Icons';
+import { PlusIcon, TrashIcon, ViewIcon, EyeSlashIcon } from './Icons';
 import { saveUsers, saveCompanies } from '../services/firebaseService';
 
 interface SetupPageProps {
@@ -190,6 +191,8 @@ const AdminChangePasswordModal: React.FC<{
 }> = ({ user, isOpen, onSave, onCancel }) => {
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
+    const [showNewPassword, setShowNewPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
     if (!isOpen) return null;
 
@@ -215,24 +218,44 @@ const AdminChangePasswordModal: React.FC<{
                         <div className="space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-600 mb-1">New Password</label>
-                                <input
-                                    type="password"
-                                    value={newPassword}
-                                    onChange={e => setNewPassword(e.target.value)}
-                                    className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
-                                    required
-                                    autoFocus
-                                />
+                                <div className="relative">
+                                    <input
+                                        type={showNewPassword ? 'text' : 'password'}
+                                        value={newPassword}
+                                        onChange={e => setNewPassword(e.target.value)}
+                                        className="w-full p-2 pr-10 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                                        required
+                                        autoFocus
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowNewPassword(!showNewPassword)}
+                                        className="absolute inset-y-0 right-0 z-20 pr-3 flex items-center text-sm leading-5 text-gray-500 hover:text-gray-700 focus:outline-none"
+                                        aria-label={showNewPassword ? "Hide password" : "Show password"}
+                                    >
+                                        {showNewPassword ? <EyeSlashIcon /> : <ViewIcon />}
+                                    </button>
+                                </div>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-600 mb-1">Confirm New Password</label>
-                                <input
-                                    type="password"
-                                    value={confirmPassword}
-                                    onChange={e => setConfirmPassword(e.target.value)}
-                                    className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
-                                    required
-                                />
+                                <div className="relative">
+                                    <input
+                                        type={showConfirmPassword ? 'text' : 'password'}
+                                        value={confirmPassword}
+                                        onChange={e => setConfirmPassword(e.target.value)}
+                                        className="w-full p-2 pr-10 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                                        required
+                                    />
+                                     <button
+                                        type="button"
+                                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                        className="absolute inset-y-0 right-0 z-20 pr-3 flex items-center text-sm leading-5 text-gray-500 hover:text-gray-700 focus:outline-none"
+                                        aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                                    >
+                                        {showConfirmPassword ? <EyeSlashIcon /> : <ViewIcon />}
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -253,9 +276,12 @@ const UserManagement: React.FC<{
 }> = ({ currentUser, users, setUsers }) => {
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
+    const [showNewPassword, setShowNewPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     
     const [newUsername, setNewUsername] = useState('');
     const [newUserPassword, setNewUserPassword] = useState('');
+    const [showNewUserPassword, setShowNewUserPassword] = useState(false);
     
     const [editingUserPassword, setEditingUserPassword] = useState<User | null>(null);
 
@@ -278,6 +304,8 @@ const UserManagement: React.FC<{
         });
         setNewPassword('');
         setConfirmPassword('');
+        setShowNewPassword(false);
+        setShowConfirmPassword(false);
         alert("Your password has been updated successfully.");
     };
 
@@ -307,6 +335,7 @@ const UserManagement: React.FC<{
         });
         setNewUsername('');
         setNewUserPassword('');
+        setShowNewUserPassword(false);
         alert(`User "${trimmedUsername}" added successfully.`);
     };
 
@@ -348,11 +377,31 @@ const UserManagement: React.FC<{
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
                     <div>
                         <label className="block text-sm font-medium text-gray-600 mb-1">New Password</label>
-                        <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500" />
+                        <div className="relative">
+                            <input type={showNewPassword ? 'text' : 'password'} value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full p-2 pr-10 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500" />
+                            <button
+                                type="button"
+                                onClick={() => setShowNewPassword(!showNewPassword)}
+                                className="absolute inset-y-0 right-0 z-20 pr-3 flex items-center text-sm leading-5 text-gray-500 hover:text-gray-700 focus:outline-none"
+                                aria-label={showNewPassword ? "Hide password" : "Show password"}
+                            >
+                                {showNewPassword ? <EyeSlashIcon /> : <ViewIcon />}
+                            </button>
+                        </div>
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-600 mb-1">Confirm New Password</label>
-                        <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500" />
+                         <div className="relative">
+                            <input type={showConfirmPassword ? 'text' : 'password'} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="w-full p-2 pr-10 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500" />
+                            <button
+                                type="button"
+                                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                className="absolute inset-y-0 right-0 z-20 pr-3 flex items-center text-sm leading-5 text-gray-500 hover:text-gray-700 focus:outline-none"
+                                aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                            >
+                                {showConfirmPassword ? <EyeSlashIcon /> : <ViewIcon />}
+                            </button>
+                        </div>
                     </div>
                     <button type="submit" className="bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg shadow-sm hover:bg-slate-700">Update Password</button>
                 </div>
@@ -370,7 +419,17 @@ const UserManagement: React.FC<{
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-600 mb-1">Password</label>
-                                <input type="password" value={newUserPassword} onChange={e => setNewUserPassword(e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500" />
+                                <div className="relative">
+                                    <input type={showNewUserPassword ? 'text' : 'password'} value={newUserPassword} onChange={e => setNewUserPassword(e.target.value)} className="w-full p-2 pr-10 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500" />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowNewUserPassword(!showNewUserPassword)}
+                                        className="absolute inset-y-0 right-0 z-20 pr-3 flex items-center text-sm leading-5 text-gray-500 hover:text-gray-700 focus:outline-none"
+                                        aria-label={showNewUserPassword ? "Hide password" : "Show password"}
+                                    >
+                                        {showNewUserPassword ? <EyeSlashIcon /> : <ViewIcon />}
+                                    </button>
+                                </div>
                             </div>
                             <button type="submit" className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 flex items-center justify-center gap-2">
                                 <PlusIcon /> Add User
