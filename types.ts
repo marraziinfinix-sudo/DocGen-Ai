@@ -97,3 +97,8 @@ export interface SavedDocument {
   recurrence?: Recurrence | null;
   recurrenceParentId?: number | null;
 }
+
+export interface User {
+  username: string;
+  password: string;
+}

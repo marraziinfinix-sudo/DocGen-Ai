@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus, Recurrence } from './types';
+import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus, Recurrence, User } from './types';
 import { generateDescription } from './services/geminiService';
-import { fetchUserData, saveCompanies, saveClients, saveItems, saveInvoices, saveQuotations, saveDocument, saveActiveCompanyId } from './services/firebaseService';
+import { fetchUserData, saveCompanies, saveClients, saveItems, saveInvoices, saveQuotations, saveDocument, saveActiveCompanyId, saveUsers } from './services/firebaseService';
 import { SparklesIcon, PlusIcon, TrashIcon, CogIcon, UsersIcon, ListIcon, DocumentIcon, MailIcon, WhatsAppIcon, FileTextIcon, DownloadIcon, MoreVerticalIcon, PrinterIcon, ChevronDownIcon, CashIcon } from './components/Icons';
 import DocumentPreview from './components/DocumentPreview';
 import SetupPage from './components/SetupPage';
@@ -107,6 +107,7 @@ const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<string | null>(null);
 
   // --- Data States (from localStorage) ---
+  const [users, setUsers] = useState<User[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [activeCompanyId, setActiveCompanyId] = useState<number>(1);
   const [clients, setClients] = useState<Client[]>([]);
@@ -120,6 +121,7 @@ const App: React.FC = () => {
     if (loggedInUser) {
         setCurrentUser(loggedInUser);
         const userData = fetchUserData();
+        setUsers(userData.users);
         setCompanies(userData.companies);
         setClients(userData.clients);
         setItems(userData.items);
@@ -133,6 +135,7 @@ const App: React.FC = () => {
     localStorage.setItem('currentUser', username);
     setCurrentUser(username);
     const userData = fetchUserData();
+    setUsers(userData.users);
     setCompanies(userData.companies);
     setClients(userData.clients);
     setItems(userData.items);
@@ -144,6 +147,7 @@ const App: React.FC = () => {
   const handleLogout = () => {
     localStorage.removeItem('currentUser');
     setCurrentUser(null);
+    setUsers([]);
   };
 
   const generateDocumentNumber = useCallback((
@@ -840,6 +844,13 @@ const App: React.FC = () => {
     switch(currentView) {
       case 'setup':
         return <SetupPage
+            currentUser={currentUser}
+            users={users}
+            setUsers={(u) => {
+                const newUsers = typeof u === 'function' ? (u as (prevState: User[]) => User[])(users) : u;
+                saveUsers(newUsers);
+                setUsers(newUsers);
+            }}
             companies={companies}
             setCompanies={(c) => {
                 const newCompanies = typeof c === 'function' ? (c as (prevState: Company[]) => Company[])(companies) : c;

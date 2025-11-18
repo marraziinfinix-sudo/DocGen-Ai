@@ -1,12 +1,9 @@
 import React, { useState } from 'react';
+import { fetchUsers } from '../services/firebaseService';
 
 interface LoginPageProps {
   onLoginSuccess: (username: string) => void;
 }
-
-const users = [
-  { username: 'admin', password: 'password123' },
-];
 
 const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const [username, setUsername] = useState('');
@@ -15,6 +12,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
+    const users = fetchUsers();
     const user = users.find(u => u.username === username && u.password === password);
     if (user) {
       setError('');

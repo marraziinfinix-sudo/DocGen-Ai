@@ -1,21 +1,9 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { firebaseConfig } from './firebaseConfig';
-import { Company, Client, Item, SavedDocument } from '../types';
-
-// FIX: Initialize Firebase and add the missing signInWithGoogle function to resolve the import error in AuthPage.tsx.
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const provider = new GoogleAuthProvider();
-
-export const signInWithGoogle = () => {
-  return signInWithPopup(auth, provider);
-};
-
+import { Company, Client, Item, SavedDocument, User } from '../types';
 
 const LOCAL_STORAGE_KEY = 'invquo_ai_data';
 
 interface UserData {
+    users: User[];
     companies: Company[];
     clients: Client[];
     items: Item[];
@@ -25,6 +13,7 @@ interface UserData {
 }
 
 const defaultUserData: UserData = {
+    users: [{ username: 'admin', password: 'password123' }],
     companies: [{
         id: 1,
         details: { name: 'My First Company', address: '123 Business Rd, Suite 100', email: 'contact@company.com', phone: '555-123-4567', bankName: '', accountNumber: '', website: '', taxId: '' },
@@ -48,16 +37,18 @@ export const fetchUserData = (): UserData => {
   try {
     const savedData = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (savedData) {
-      // Basic validation to ensure the loaded data has the expected structure
       const parsedData = JSON.parse(savedData);
       if (parsedData && typeof parsedData === 'object' && 'companies' in parsedData) {
+        // Ensure users array exists
+        if (!parsedData.users) {
+            parsedData.users = defaultUserData.users;
+        }
         return parsedData;
       }
     }
   } catch (error) {
     console.error("Error fetching data from local storage:", error);
   }
-  // If no data or data is corrupt, return default and save it
   localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(defaultUserData));
   return defaultUserData;
 };
@@ -71,7 +62,16 @@ const saveAllUserData = (data: UserData): void => {
   }
 };
 
-// The following functions get the current data, update a part of it, and save it back.
+export const fetchUsers = (): User[] => {
+    const data = fetchUserData();
+    return data.users;
+};
+
+export const saveUsers = (users: User[]) => {
+    const data = fetchUserData();
+    saveAllUserData({ ...data, users });
+};
+
 export const saveCompanies = (companies: Company[]) => {
     const data = fetchUserData();
     saveAllUserData({ ...data, companies });
@@ -115,4 +115,12 @@ export const saveDocument = (collection: 'savedInvoices' | 'savedQuotations', do
     }
     
     saveAllUserData({ ...data, [collection]: documentArray });
+};
+
+// FIX: Add placeholder for missing signInWithGoogle function to resolve compilation error.
+export const signInWithGoogle = async (): Promise<void> => {
+  // This function is not fully implemented as the app currently uses local username/password authentication via LoginPage.tsx.
+  // AuthPage.tsx, which uses this function, is not currently used in the application.
+  console.warn("signInWithGoogle is a placeholder and has no effect.");
+  return Promise.resolve();
 };
