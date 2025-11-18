@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import { Company, Details } from '../types';
-import { PlusIcon, TrashIcon } from './Icons';
-import { saveCompanies } from '../services/firebaseService';
-import { auth } from '../services/firebaseConfig';
+import { Company, Details, Client, Item, SavedDocument } from '../types';
+import { PlusIcon, TrashIcon, ViewIcon, EyeSlashIcon } from './Icons';
+import { saveCompanies, resetUserData, deleteAccount, defaultUserData as importedDefaultUserData } from '../services/firebaseService';
 import { sendPasswordResetEmail, User as FirebaseUser } from 'firebase/auth';
 
 interface SetupPageProps {
@@ -12,6 +11,13 @@ interface SetupPageProps {
   onDone: () => void;
   activeCompanyId: number;
   setActiveCompanyId: React.Dispatch<React.SetStateAction<number>>;
+  // Props for reset app functionality
+  setClients: React.Dispatch<React.SetStateAction<Client[]>>;
+  setItems: React.Dispatch<React.SetStateAction<Item[]>>;
+  setItemCategories: React.Dispatch<React.SetStateAction<string[]>>;
+  setSavedInvoices: React.Dispatch<React.SetStateAction<SavedDocument[]>>;
+  setSavedQuotations: React.Dispatch<React.SetStateAction<SavedDocument[]>>;
+  defaultUserData: typeof importedDefaultUserData;
 }
 
 const emptyCompany: Company = {
@@ -181,6 +187,51 @@ const CompanyForm: React.FC<{
   );
 };
 
+interface PasswordInputProps {
+    value: string;
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    placeholder: string;
+    id: string;
+    name: string;
+    autoComplete?: string;
+    required?: boolean;
+}
+
+const PasswordInput: React.FC<PasswordInputProps> = ({
+    value,
+    onChange,
+    placeholder,
+    id,
+    name,
+    autoComplete,
+    required = false
+}) => {
+    const [showPassword, setShowPassword] = useState(false);
+    return (
+        <div className="relative">
+            <input
+                id={id}
+                name={name}
+                type={showPassword ? 'text' : 'password'}
+                autoComplete={autoComplete}
+                required={required}
+                value={value}
+                onChange={onChange}
+                className="w-full p-2 pr-10 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                placeholder={placeholder}
+            />
+            <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute inset-y-0 right-0 z-10 pr-3 flex items-center text-sm leading-5 text-gray-500 hover:text-gray-700 focus:outline-none"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+            >
+                {showPassword ? <EyeSlashIcon /> : <ViewIcon />}
+            </button>
+        </div>
+    );
+};
+
 const AccountSettings: React.FC<{ user: FirebaseUser }> = ({ user }) => {
     const [resetSent, setResetSent] = useState(false);
     const [isSending, setIsSending] = useState(false);
@@ -192,9 +243,9 @@ const AccountSettings: React.FC<{ user: FirebaseUser }> = ({ user }) => {
         }
         setIsSending(true);
         try {
-            await sendPasswordResetEmail(auth, user.email);
+            await sendPasswordResetEmail(user.auth, user.email);
             setResetSent(true);
-            alert("A password reset link has been sent to your email address.");
+            alert("A password reset link has been sent to your email address. Please check your inbox.");
         } catch (error: any) {
             alert("Error sending email: " + error.message);
         } finally {
@@ -224,15 +275,85 @@ const AccountSettings: React.FC<{ user: FirebaseUser }> = ({ user }) => {
     );
 };
 
+interface ConfirmationModalProps {
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmText: string;
+    onConfirm: () => void;
+    onCancel: () => void;
+    buttonColor: string;
+}
+
+const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
+    isOpen,
+    title,
+    message,
+    confirmText,
+    onConfirm,
+    onCancel,
+    buttonColor,
+}) => {
+    const [input, setInput] = useState('');
+
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4" onClick={onCancel}>
+            <div className="bg-white rounded-lg shadow-2xl max-w-lg w-full" onClick={e => e.stopPropagation()}>
+                <div className="p-6">
+                    <h2 className="text-xl font-bold text-gray-800 mb-4">{title}</h2>
+                    <p className="text-gray-600 mb-4">{message}</p>
+                    <p className="font-semibold text-gray-700 mb-2">
+                        Type "<span className="font-mono text-red-600">{confirmText}</span>" to confirm:
+                    </p>
+                    <input
+                        type="text"
+                        value={input}
+                        onChange={e => setInput(e.target.value)}
+                        className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                        placeholder={confirmText}
+                    />
+                </div>
+                <div className="bg-slate-50 p-4 flex justify-end gap-4 border-t">
+                    <button
+                        type="button"
+                        onClick={onCancel}
+                        className="bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="button"
+                        onClick={onConfirm}
+                        disabled={input !== confirmText}
+                        className={`${buttonColor} text-white font-semibold py-2 px-6 rounded-lg shadow-md disabled:opacity-50 disabled:cursor-not-allowed`}
+                    >
+                        {title.includes('Reset') ? 'Reset' : 'Delete'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const SetupPage: React.FC<SetupPageProps> = ({ 
     user,
     companies, setCompanies, 
     onDone,
     activeCompanyId,
-    setActiveCompanyId
+    setActiveCompanyId,
+    setClients,
+    setItems,
+    setItemCategories,
+    setSavedInvoices,
+    setSavedQuotations,
+    defaultUserData,
 }) => {
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingCompany, setEditingCompany] = useState<Company | null>(null);
+    const [isResetAppModalOpen, setIsResetAppModalOpen] = useState(false);
+    const [isDeleteAccountModalOpen, setIsDeleteAccountModalOpen] = useState(false);
 
     const handleAddNew = () => {
         setEditingCompany({ ...emptyCompany });
@@ -284,6 +405,42 @@ const SetupPage: React.FC<SetupPageProps> = ({
     const handleFormCancel = () => {
         setIsFormOpen(false);
         setEditingCompany(null);
+    };
+
+    const handleResetAppData = async () => {
+        if (!user) return;
+        try {
+            await resetUserData(user.uid);
+            alert("Application data reset successfully!");
+            // Reset local states to default
+            setCompanies(defaultUserData.companies);
+            setClients(defaultUserData.clients);
+            setItems(defaultUserData.items);
+            setItemCategories(defaultUserData.itemCategories);
+            setSavedInvoices(defaultUserData.savedInvoices);
+            setSavedQuotations(defaultUserData.savedQuotations);
+            setActiveCompanyId(defaultUserData.activeCompanyId);
+            setIsResetAppModalOpen(false);
+        } catch (error: any) {
+            alert("Error resetting application data: " + error.message);
+        }
+    };
+
+    const handleDeleteAccount = async () => {
+        if (!user) return;
+        try {
+            await deleteAccount(user); // Call the Firebase service function
+            // onAuthStateChanged in App.tsx will handle clearing states and redirecting to login
+        } catch (error: any) {
+            // Firebase deleteUser can require recent login, inform user
+            if (error.code === 'auth/requires-recent-login') {
+                alert("Please log out and log in again to re-authenticate before deleting your account.");
+            } else {
+                alert("Error deleting account: " + error.message);
+            }
+        } finally {
+            setIsDeleteAccountModalOpen(false);
+        }
     };
 
   return (
@@ -338,7 +495,36 @@ const SetupPage: React.FC<SetupPageProps> = ({
                 ))}
             </div>
             
-            <div className="mt-8 pt-6 border-t text-right">
+            {/* Danger Zone */}
+            <div className="mt-8 pt-6 border-t border-red-200 bg-red-50 p-6 rounded-lg">
+                <h2 className="text-xl font-bold text-red-800 mb-4">Danger Zone</h2>
+                <p className="text-sm text-red-700 mb-6">These actions are permanent and cannot be undone.</p>
+                
+                <div className="space-y-4">
+                    <div>
+                        <h3 className="font-semibold text-red-700 mb-2">Reset Application Data</h3>
+                        <p className="text-sm text-red-600 mb-3">This will delete ALL your companies, clients, items, invoices, and quotations. Your account will remain active.</p>
+                        <button
+                            onClick={() => setIsResetAppModalOpen(true)}
+                            className="bg-red-600 text-white font-semibold py-2 px-4 rounded-lg shadow-sm hover:bg-red-700"
+                        >
+                            Reset All Data
+                        </button>
+                    </div>
+                    <div className="border-t border-red-100 pt-4">
+                        <h3 className="font-semibold text-red-700 mb-2">Delete Account Permanently</h3>
+                        <p className="text-sm text-red-600 mb-3">This will permanently delete your account and ALL associated data. This action cannot be undone.</p>
+                        <button
+                            onClick={() => setIsDeleteAccountModalOpen(true)}
+                            className="bg-red-600 text-white font-semibold py-2 px-4 rounded-lg shadow-sm hover:bg-red-700"
+                        >
+                            Delete My Account
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div className="mt-8 text-right">
                 <button onClick={onDone} className="bg-slate-500 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-slate-600 transition-colors duration-200">
                     Done
                 </button>
@@ -350,6 +536,30 @@ const SetupPage: React.FC<SetupPageProps> = ({
                 company={editingCompany}
                 onSave={handleFormSave}
                 onCancel={handleFormCancel}
+            />
+        )}
+
+        {isResetAppModalOpen && (
+            <ConfirmationModal
+                isOpen={isResetAppModalOpen}
+                title="Confirm Reset Application Data"
+                message="Are you absolutely sure you want to reset all your application data? This action will delete ALL your companies, clients, items, invoices, and quotations. This is irreversible."
+                confirmText="RESET"
+                onConfirm={handleResetAppData}
+                onCancel={() => setIsResetAppModalOpen(false)}
+                buttonColor="bg-red-600 hover:bg-red-700"
+            />
+        )}
+
+        {isDeleteAccountModalOpen && (
+            <ConfirmationModal
+                isOpen={isDeleteAccountModalOpen}
+                title="Confirm Delete Account"
+                message="Are you absolutely sure you want to permanently delete your account? This action will delete your account and ALL associated data from our system. This is irreversible."
+                confirmText="DELETE"
+                onConfirm={handleDeleteAccount}
+                onCancel={() => setIsDeleteAccountModalOpen(false)}
+                buttonColor="bg-red-600 hover:bg-red-700"
             />
         )}
       </main>

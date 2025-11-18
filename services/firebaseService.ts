@@ -1,6 +1,7 @@
-import { Company, Client, Item, SavedDocument, DocumentType, LineItem, Details, Payment } from '../types';
+import { Company, Client, Item, SavedDocument, DocumentType, LineItem, Details, Payment, Recurrence } from '../types';
 import { db, auth } from './firebaseConfig';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { deleteUser, User as FirebaseUser } from 'firebase/auth';
 
 interface UserData {
     email?: string;
@@ -13,7 +14,7 @@ interface UserData {
     itemCategories: string[];
 }
 
-const defaultUserData: Omit<UserData, 'email'> = {
+export const defaultUserData: Omit<UserData, 'email'> = {
     companies: [{
         id: 1,
         details: { name: 'My First Company', address: '123 Business Rd, Suite 100', email: 'contact@company.com', phone: '555-123-4567', bankName: '', accountNumber: '', website: '', taxId: '' },
@@ -135,6 +136,16 @@ const sanitizeLineItem = (li: any): LineItem | null => {
     };
 };
 
+const sanitizeRecurrence = (rec: any): Recurrence | null => {
+    if (typeof rec !== 'object' || rec === null) return null;
+    const validFrequencies = ['daily', 'weekly', 'monthly', 'yearly'];
+    return {
+        frequency: validFrequencies.includes(rec.frequency) ? rec.frequency : 'monthly',
+        interval: typeof rec.interval === 'number' && rec.interval >= 1 ? rec.interval : 1,
+        endDate: typeof rec.endDate === 'string' ? rec.endDate : null,
+    };
+};
+
 const sanitizeDocument = (docData: any): SavedDocument | null => {
     if (typeof docData !== 'object' || docData === null) return null;
     const today = new Date().toISOString().split('T')[0];
@@ -159,8 +170,8 @@ const sanitizeDocument = (docData: any): SavedDocument | null => {
         payments: Array.isArray(docData.payments) ? docData.payments.map(sanitizePayment).filter(Boolean) as Payment[] : [],
         template: typeof docData.template === 'string' ? docData.template : 'classic',
         accentColor: typeof docData.accentColor === 'string' ? docData.accentColor : '#4f46e5',
-        recurrence: docData.recurrence || null,
-        recurrenceParentId: docData.recurrenceParentId || null,
+        recurrence: docData.recurrence ? sanitizeRecurrence(docData.recurrence) : null,
+        recurrenceParentId: typeof docData.recurrenceParentId === 'number' ? docData.recurrenceParentId : null,
     };
 };
 
@@ -177,7 +188,7 @@ export const fetchUserData = async (uid: string): Promise<UserData> => {
         clients: Array.isArray(parsedData.clients) ? parsedData.clients.map(sanitizeClient).filter(Boolean) as Client[] : defaultUserData.clients,
         items: Array.isArray(parsedData.items) ? parsedData.items.map(sanitizeItem).filter(Boolean) as Item[] : defaultUserData.items,
         savedInvoices: Array.isArray(parsedData.savedInvoices) ? parsedData.savedInvoices.map(sanitizeDocument).filter(Boolean) as SavedDocument[] : defaultUserData.savedInvoices,
-        savedQuotations: Array.isArray(parsedData.savedQuotations) ? parsedData.savedQuotations.map(sanitizeDocument).filter(Boolean) as SavedDocument[] : defaultUserData.savedQuotations,
+        savedQuotations: Array.isArray(parsedData.quotations) ? parsedData.quotations.map(sanitizeDocument).filter(Boolean) as SavedDocument[] : defaultUserData.savedQuotations,
         activeCompanyId: typeof parsedData.activeCompanyId === 'number' ? parsedData.activeCompanyId : defaultUserData.activeCompanyId,
         itemCategories: Array.isArray(parsedData.itemCategories) ? parsedData.itemCategories.filter((cat): cat is string => typeof cat === 'string') : defaultUserData.itemCategories,
       };
@@ -265,4 +276,37 @@ export const saveDocument = async (collection: 'savedInvoices' | 'savedQuotation
     }
     
     await updateUserData({ [collection]: documentArray });
+};
+
+export const resetUserData = async (uid: string) => {
+    const userRef = doc(db, 'users', uid);
+    await updateDoc(userRef, {
+        companies: defaultUserData.companies,
+        clients: defaultUserData.clients,
+        items: defaultUserData.items,
+        savedInvoices: defaultUserData.savedInvoices,
+        savedQuotations: defaultUserData.savedQuotations,
+        activeCompanyId: defaultUserData.activeCompanyId,
+        itemCategories: defaultUserData.itemCategories,
+    });
+};
+
+export const deleteAccount = async (firebaseUser: FirebaseUser) => {
+    if (!firebaseUser) throw new Error("No user provided for deletion.");
+
+    try {
+        // 1. Delete user data document from Firestore
+        const userDocRef = doc(db, 'users', firebaseUser.uid);
+        await deleteDoc(userDocRef);
+        console.log("User data deleted from Firestore.");
+
+        // 2. Delete the user account from Firebase Authentication
+        await deleteUser(firebaseUser);
+        console.log("User account deleted from Firebase Auth.");
+
+        // The onAuthStateChanged listener in App.tsx will handle the logout
+    } catch (error) {
+        console.error("Error deleting user account:", error);
+        throw error; // Re-throw to be caught by UI
+    }
 };

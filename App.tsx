@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus, Recurrence } from './types';
 import { generateDescription } from './services/geminiService';
-import { fetchUserData, saveCompanies, saveClients, saveItems, saveInvoices, saveQuotations, saveDocument, saveActiveCompanyId, saveItemCategories } from './services/firebaseService';
+import { fetchUserData, saveCompanies, saveClients, saveItems, saveInvoices, saveQuotations, saveDocument, saveActiveCompanyId, saveItemCategories, defaultUserData } from './services/firebaseService';
 import { SparklesIcon, PlusIcon, TrashIcon, CogIcon, UsersIcon, ListIcon, DocumentIcon, MailIcon, WhatsAppIcon, FileTextIcon, DownloadIcon, MoreVerticalIcon, PrinterIcon, ChevronDownIcon, CashIcon } from './components/Icons';
 import DocumentPreview from './components/DocumentPreview';
 import SetupPage from './components/SetupPage';
@@ -263,7 +263,7 @@ const App: React.FC = () => {
   }, [activeCompany]);
   
   useEffect(() => {
-    if(activeCompanyId && firebaseUser) {
+    if (activeCompanyId && firebaseUser) {
         saveActiveCompanyId(activeCompanyId);
     }
   }, [activeCompanyId, firebaseUser]);
@@ -711,7 +711,7 @@ const App: React.FC = () => {
     newDueDate.setDate(newDueDate.getDate() + 15);
     setDueDate(newDueDate.toISOString().split('T')[0]);
     setDueDateOption('15days');
-    if(activeCompany) {
+    if (activeCompany) {
       setCompanyDetails(activeCompany.details);
       setCompanyLogo(activeCompany.logo);
       setBankQRCode(activeCompany.bankQRCode);
@@ -870,7 +870,14 @@ const App: React.FC = () => {
             setCompanies={setCompanies}
             onDone={() => setCurrentView('editor')}
             activeCompanyId={activeCompanyId}
-            setActiveCompanyId={setActiveCompanyId} />;
+            setActiveCompanyId={setActiveCompanyId}
+            setClients={setClients} // Passed for reset app
+            setItems={setItems} // Passed for reset app
+            setItemCategories={setItemCategories} // Passed for reset app
+            setSavedInvoices={setSavedInvoices} // Passed for reset app
+            setSavedQuotations={setSavedQuotations} // Passed for reset app
+            defaultUserData={defaultUserData} // Passed for reset app
+            />;
       case 'clients':
         return <ClientListPage
             clients={clients}
