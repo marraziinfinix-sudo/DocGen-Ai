@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { Item } from '../types';
 import { TrashIcon, PlusIcon, PencilIcon } from './Icons';
@@ -223,7 +222,6 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
   useEffect(() => {
     // One-time migration for users who have categories on items but not the new managed list
     if (localStorage.getItem('itemCategories') === null) {
-        // FIX: Add a guard to ensure `items` is an array before calling `.map`.
         if (Array.isArray(items)) {
             const initialCategories = Array.from(new Set(items.map(i => i.category).filter(Boolean))) as string[];
             if (initialCategories.length > 0) {
@@ -274,7 +272,6 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
   };
 
   const filteredItems = useMemo(() => {
-    // FIX: Ensure `items` is an array before filtering to prevent runtime errors.
     if (!Array.isArray(items)) return [];
     return items.filter(item => {
         const matchesSearch = searchQuery ? item.description.toLowerCase().includes(searchQuery.toLowerCase()) : true;

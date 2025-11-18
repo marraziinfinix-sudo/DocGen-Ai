@@ -39,11 +39,30 @@ export const fetchUserData = (): UserData => {
     if (savedData) {
       const parsedData = JSON.parse(savedData);
       if (parsedData && typeof parsedData === 'object' && 'companies' in parsedData) {
-        // Ensure users array exists
-        if (!parsedData.users) {
-            parsedData.users = defaultUserData.users;
+        // Merge with defaults to ensure all fields are present and have correct types, especially arrays.
+        const completeData = {
+          ...defaultUserData,
+          ...parsedData,
+          users: Array.isArray(parsedData.users) ? parsedData.users : defaultUserData.users,
+          companies: Array.isArray(parsedData.companies) ? parsedData.companies : defaultUserData.companies,
+          clients: Array.isArray(parsedData.clients) ? parsedData.clients : defaultUserData.clients,
+          items: Array.isArray(parsedData.items) ? parsedData.items : defaultUserData.items,
+          savedInvoices: Array.isArray(parsedData.savedInvoices) ? parsedData.savedInvoices : defaultUserData.savedInvoices,
+          savedQuotations: Array.isArray(parsedData.savedQuotations) ? parsedData.savedQuotations : defaultUserData.savedQuotations,
+          activeCompanyId: typeof parsedData.activeCompanyId === 'number' ? parsedData.activeCompanyId : defaultUserData.activeCompanyId,
+        };
+        
+        // Ensure there's at least one company and the active ID is valid.
+        if (completeData.companies.length === 0) {
+            completeData.companies = defaultUserData.companies;
+            completeData.activeCompanyId = defaultUserData.activeCompanyId;
+        } else {
+            const activeCompanyExists = completeData.companies.some(c => c.id === completeData.activeCompanyId);
+            if (!activeCompanyExists) {
+                completeData.activeCompanyId = completeData.companies[0].id;
+            }
         }
-        return parsedData;
+        return completeData;
       }
     }
   } catch (error) {
@@ -52,6 +71,7 @@ export const fetchUserData = (): UserData => {
   localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(defaultUserData));
   return defaultUserData;
 };
+
 
 // A generic save function that overwrites all data.
 const saveAllUserData = (data: UserData): void => {
@@ -117,7 +137,6 @@ export const saveDocument = (collection: 'savedInvoices' | 'savedQuotations', do
     saveAllUserData({ ...data, [collection]: documentArray });
 };
 
-// FIX: Add placeholder for missing signInWithGoogle function to resolve compilation error.
 export const signInWithGoogle = async (): Promise<void> => {
   // This function is not fully implemented as the app currently uses local username/password authentication via LoginPage.tsx.
   // AuthPage.tsx, which uses this function, is not currently used in the application.

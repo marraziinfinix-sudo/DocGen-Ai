@@ -360,7 +360,7 @@ const UserManagement: React.FC<{
 
             {currentUser === 'admin' && (
                 <>
-                    <h2 className="text-xl font-bold text-gray-800 mb-6 border-b pb-4 mt-12">Admin: User Management</h2>
+                    <h2 className="text-xl font-bold text-gray-800 mb-6 border-b pb-4 mt-12">User Management</h2>
                     <form onSubmit={handleAddUser} className="mb-8">
                         <h3 className="text-lg font-semibold text-gray-700 mb-4">Add New User</h3>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
