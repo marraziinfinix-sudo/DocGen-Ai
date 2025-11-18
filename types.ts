@@ -1,4 +1,3 @@
-
 export enum DocumentType {
   Invoice = 'Invoice',
   Quotation = 'Quotation',
@@ -97,9 +96,4 @@ export interface SavedDocument {
   accentColor: string;
   recurrence?: Recurrence | null;
   recurrenceParentId?: number | null;
-}
-
-export interface User {
-  username: string;
-  password: string;
 }

@@ -1,14 +1,12 @@
-
-
 import React, { useState } from 'react';
-import { Company, Details, User } from '../types';
-import { PlusIcon, TrashIcon, ViewIcon, EyeSlashIcon } from './Icons';
-import { saveUsers, saveCompanies } from '../services/firebaseService';
+import { Company, Details } from '../types';
+import { PlusIcon, TrashIcon } from './Icons';
+import { saveCompanies } from '../services/firebaseService';
+import { auth } from '../services/firebaseConfig';
+import { sendPasswordResetEmail, User as FirebaseUser } from 'firebase/auth';
 
 interface SetupPageProps {
-  currentUser: string | null;
-  users: User[];
-  setUsers: React.Dispatch<React.SetStateAction<User[]>>;
+  user: FirebaseUser;
   companies: Company[];
   setCompanies: React.Dispatch<React.SetStateAction<Company[]>>;
   onDone: () => void;
@@ -183,294 +181,51 @@ const CompanyForm: React.FC<{
   );
 };
 
-const AdminChangePasswordModal: React.FC<{
-    user: User;
-    isOpen: boolean;
-    onSave: (password: string) => void;
-    onCancel: () => void;
-}> = ({ user, isOpen, onSave, onCancel }) => {
-    const [newPassword, setNewPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
-    const [showNewPassword, setShowNewPassword] = useState(false);
-    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+const AccountSettings: React.FC<{ user: FirebaseUser }> = ({ user }) => {
+    const [resetSent, setResetSent] = useState(false);
+    const [isSending, setIsSending] = useState(false);
 
-    if (!isOpen) return null;
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!newPassword || newPassword !== confirmPassword) {
-            alert("Passwords do not match or are empty.");
+    const handlePasswordReset = async () => {
+        if (!user.email) {
+            alert("Cannot send reset email to an account without an email address.");
             return;
         }
-        if (newPassword.length < 6) {
-            alert("Password must be at least 6 characters long.");
-            return;
+        setIsSending(true);
+        try {
+            await sendPasswordResetEmail(auth, user.email);
+            setResetSent(true);
+            alert("A password reset link has been sent to your email address.");
+        } catch (error: any) {
+            alert("Error sending email: " + error.message);
+        } finally {
+            setIsSending(false);
         }
-        onSave(newPassword);
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
-            <div className="bg-white rounded-lg shadow-2xl max-w-md w-full">
-                <form onSubmit={handleSubmit}>
-                    <div className="p-6">
-                        <h2 className="text-xl font-bold text-gray-800 mb-4">Reset Password for <span className="text-indigo-600">{user.username}</span></h2>
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-600 mb-1">New Password</label>
-                                <div className="relative">
-                                    <input
-                                        type={showNewPassword ? 'text' : 'password'}
-                                        value={newPassword}
-                                        onChange={e => setNewPassword(e.target.value)}
-                                        className="w-full p-2 pr-10 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
-                                        required
-                                        autoFocus
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowNewPassword(!showNewPassword)}
-                                        className="absolute inset-y-0 right-0 z-20 pr-3 flex items-center text-sm leading-5 text-gray-500 hover:text-gray-700 focus:outline-none"
-                                        aria-label={showNewPassword ? "Hide password" : "Show password"}
-                                    >
-                                        {showNewPassword ? <EyeSlashIcon /> : <ViewIcon />}
-                                    </button>
-                                </div>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-600 mb-1">Confirm New Password</label>
-                                <div className="relative">
-                                    <input
-                                        type={showConfirmPassword ? 'text' : 'password'}
-                                        value={confirmPassword}
-                                        onChange={e => setConfirmPassword(e.target.value)}
-                                        className="w-full p-2 pr-10 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
-                                        required
-                                    />
-                                     <button
-                                        type="button"
-                                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                        className="absolute inset-y-0 right-0 z-20 pr-3 flex items-center text-sm leading-5 text-gray-500 hover:text-gray-700 focus:outline-none"
-                                        aria-label={showConfirmPassword ? "Hide password" : "Show password"}
-                                    >
-                                        {showConfirmPassword ? <EyeSlashIcon /> : <ViewIcon />}
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="bg-slate-50 p-4 flex justify-end gap-4 border-t">
-                        <button type="button" onClick={onCancel} className="bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300">Cancel</button>
-                        <button type="submit" className="bg-indigo-600 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-indigo-700">Set Password</button>
-                    </div>
-                </form>
+        <div className="mb-8 p-6 bg-slate-50 rounded-lg border border-slate-200">
+            <h2 className="text-xl font-bold text-gray-800 mb-6 border-b pb-4">Account Settings</h2>
+            
+            <div className="mb-8">
+                <h3 className="text-lg font-semibold text-gray-700 mb-2">Change Your Password</h3>
+                <p className="text-sm text-slate-600 mb-4">Click the button below to send a password reset link to <span className="font-medium">{user.email}</span>.</p>
+                {resetSent ? (
+                    <p className="text-sm text-green-700 font-medium">Reset email sent. Please check your inbox.</p>
+                ) : (
+                    <button 
+                        onClick={handlePasswordReset} 
+                        disabled={isSending}
+                        className="bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg shadow-sm hover:bg-slate-700 disabled:bg-slate-400 disabled:cursor-wait">
+                        {isSending ? 'Sending...' : 'Send Password Reset Email'}
+                    </button>
+                )}
             </div>
         </div>
     );
 };
 
-const UserManagement: React.FC<{
-    currentUser: string | null;
-    users: User[];
-    setUsers: React.Dispatch<React.SetStateAction<User[]>>;
-}> = ({ currentUser, users, setUsers }) => {
-    const [newPassword, setNewPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
-    const [showNewPassword, setShowNewPassword] = useState(false);
-    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-    
-    const [newUsername, setNewUsername] = useState('');
-    const [newUserPassword, setNewUserPassword] = useState('');
-    const [showNewUserPassword, setShowNewUserPassword] = useState(false);
-    
-    const [editingUserPassword, setEditingUserPassword] = useState<User | null>(null);
-
-    const handleChangePassword = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!newPassword || newPassword !== confirmPassword) {
-            alert("Passwords do not match or are empty.");
-            return;
-        }
-        if (newPassword.length < 6) {
-            alert("Password must be at least 6 characters long.");
-            return;
-        }
-        setUsers(prevUsers => {
-            const newUsers = prevUsers.map(user => 
-                user.username === currentUser ? { ...user, password: newPassword } : user
-            );
-            saveUsers(newUsers);
-            return newUsers;
-        });
-        setNewPassword('');
-        setConfirmPassword('');
-        setShowNewPassword(false);
-        setShowConfirmPassword(false);
-        alert("Your password has been updated successfully.");
-    };
-
-    const handleAddUser = (e: React.FormEvent) => {
-        e.preventDefault();
-        const trimmedUsername = newUsername.trim();
-        const trimmedPassword = newUserPassword.trim();
-        if (!trimmedUsername || !trimmedPassword) {
-            alert("Username and password cannot be empty.");
-            return;
-        }
-        if (users.some(user => user.username === trimmedUsername)) {
-            alert("Username already exists.");
-            return;
-        }
-         if (trimmedPassword.length < 6) {
-            alert("Password must be at least 6 characters long.");
-            return;
-        }
-        setUsers(prevUsers => {
-            const newUsers = [
-                ...prevUsers,
-                { username: trimmedUsername, password: trimmedPassword }
-            ];
-            saveUsers(newUsers);
-            return newUsers;
-        });
-        setNewUsername('');
-        setNewUserPassword('');
-        setShowNewUserPassword(false);
-        alert(`User "${trimmedUsername}" added successfully.`);
-    };
-
-    const handleDeleteUser = (usernameToDelete: string) => {
-        if (window.confirm(`Are you sure you want to delete the user "${usernameToDelete}"?`)) {
-            setUsers(prevUsers => {
-                const newUsers = prevUsers.filter(user => user.username !== usernameToDelete);
-                saveUsers(newUsers);
-                return newUsers;
-            });
-        }
-    };
-    
-    const handleOpenPasswordModal = (user: User) => {
-        setEditingUserPassword(user);
-    };
-
-    const handleAdminUpdatePassword = (password: string) => {
-        if (!editingUserPassword) return;
-
-        setUsers(prevUsers => {
-            const newUsers = prevUsers.map(user => 
-                user.username === editingUserPassword.username ? { ...user, password: password } : user
-            );
-            saveUsers(newUsers);
-            return newUsers;
-        });
-
-        alert(`Password for user "${editingUserPassword.username}" has been updated.`);
-        setEditingUserPassword(null);
-    };
-    
-    return (
-        <div className="mb-8 p-6 bg-slate-50 rounded-lg border border-slate-200">
-            <h2 className="text-xl font-bold text-gray-800 mb-6 border-b pb-4">{currentUser === 'admin' ? 'Admin Settings' : 'User Settings'}</h2>
-            
-            <form onSubmit={handleChangePassword} className="mb-8">
-                <h3 className="text-lg font-semibold text-gray-700 mb-4">Change Your Password</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-600 mb-1">New Password</label>
-                        <div className="relative">
-                            <input type={showNewPassword ? 'text' : 'password'} value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full p-2 pr-10 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500" />
-                            <button
-                                type="button"
-                                onClick={() => setShowNewPassword(!showNewPassword)}
-                                className="absolute inset-y-0 right-0 z-20 pr-3 flex items-center text-sm leading-5 text-gray-500 hover:text-gray-700 focus:outline-none"
-                                aria-label={showNewPassword ? "Hide password" : "Show password"}
-                            >
-                                {showNewPassword ? <EyeSlashIcon /> : <ViewIcon />}
-                            </button>
-                        </div>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-600 mb-1">Confirm New Password</label>
-                         <div className="relative">
-                            <input type={showConfirmPassword ? 'text' : 'password'} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="w-full p-2 pr-10 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500" />
-                            <button
-                                type="button"
-                                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                className="absolute inset-y-0 right-0 z-20 pr-3 flex items-center text-sm leading-5 text-gray-500 hover:text-gray-700 focus:outline-none"
-                                aria-label={showConfirmPassword ? "Hide password" : "Show password"}
-                            >
-                                {showConfirmPassword ? <EyeSlashIcon /> : <ViewIcon />}
-                            </button>
-                        </div>
-                    </div>
-                    <button type="submit" className="bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg shadow-sm hover:bg-slate-700">Update Password</button>
-                </div>
-            </form>
-
-            {currentUser === 'admin' && (
-                <>
-                    <h2 className="text-xl font-bold text-gray-800 mb-6 border-b pb-4 mt-12">User Management</h2>
-                    <form onSubmit={handleAddUser} className="mb-8">
-                        <h3 className="text-lg font-semibold text-gray-700 mb-4">Add New User</h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-600 mb-1">Username</label>
-                                <input type="text" value={newUsername} onChange={e => setNewUsername(e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500" />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-600 mb-1">Password</label>
-                                <div className="relative">
-                                    <input type={showNewUserPassword ? 'text' : 'password'} value={newUserPassword} onChange={e => setNewUserPassword(e.target.value)} className="w-full p-2 pr-10 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500" />
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowNewUserPassword(!showNewUserPassword)}
-                                        className="absolute inset-y-0 right-0 z-20 pr-3 flex items-center text-sm leading-5 text-gray-500 hover:text-gray-700 focus:outline-none"
-                                        aria-label={showNewUserPassword ? "Hide password" : "Show password"}
-                                    >
-                                        {showNewUserPassword ? <EyeSlashIcon /> : <ViewIcon />}
-                                    </button>
-                                </div>
-                            </div>
-                            <button type="submit" className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 flex items-center justify-center gap-2">
-                                <PlusIcon /> Add User
-                            </button>
-                        </div>
-                    </form>
-
-                    <div>
-                        <h3 className="text-lg font-semibold text-gray-700 mb-4">Existing Users</h3>
-                        <div className="space-y-2">
-                            {users.filter(u => u.username !== 'admin').map(user => (
-                                <div key={user.username} className="bg-white p-3 rounded-lg border flex justify-between items-center flex-wrap gap-2">
-                                    <p className="font-medium text-slate-800">{user.username}</p>
-                                    <div className="flex gap-2">
-                                        <button onClick={() => handleOpenPasswordModal(user)} className="font-semibold text-slate-600 py-1 px-3 rounded-lg hover:bg-slate-100 text-sm">Reset Password</button>
-                                        <button onClick={() => handleDeleteUser(user.username)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-50 flex items-center gap-1 text-sm">
-                                            <TrashIcon /> Delete
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
-                            {users.length <= 1 && <p className="text-slate-500 text-sm">No other users have been added.</p>}
-                        </div>
-                    </div>
-                </>
-            )}
-
-            {editingUserPassword && (
-                <AdminChangePasswordModal
-                    isOpen={!!editingUserPassword}
-                    user={editingUserPassword}
-                    onSave={handleAdminUpdatePassword}
-                    onCancel={() => setEditingUserPassword(null)}
-                />
-            )}
-        </div>
-    );
-};
-
 const SetupPage: React.FC<SetupPageProps> = ({ 
-    currentUser, users, setUsers,
+    user,
     companies, setCompanies, 
     onDone,
     activeCompanyId,
@@ -535,8 +290,8 @@ const SetupPage: React.FC<SetupPageProps> = ({
     <>
       <main className="container mx-auto p-4 sm:p-6 lg:p-8">
         <div className="max-w-4xl mx-auto bg-white p-4 sm:p-8 rounded-lg shadow-md">
-            {currentUser && (
-                <UserManagement currentUser={currentUser} users={users} setUsers={setUsers} />
+            {user && (
+                <AccountSettings user={user} />
             )}
             <div className="mb-8 p-6 bg-slate-50 rounded-lg border border-slate-200">
                 <h2 className="text-xl font-bold text-gray-800 mb-2">Active Company Profile</h2>

@@ -1,8 +1,7 @@
-
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus, Recurrence, User } from './types';
+import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus, Recurrence } from './types';
 import { generateDescription } from './services/geminiService';
-import { fetchUserData, saveCompanies, saveClients, saveItems, saveInvoices, saveQuotations, saveDocument, saveActiveCompanyId, saveUsers, saveItemCategories } from './services/firebaseService';
+import { fetchUserData, saveCompanies, saveClients, saveItems, saveInvoices, saveQuotations, saveDocument, saveActiveCompanyId, saveItemCategories } from './services/firebaseService';
 import { SparklesIcon, PlusIcon, TrashIcon, CogIcon, UsersIcon, ListIcon, DocumentIcon, MailIcon, WhatsAppIcon, FileTextIcon, DownloadIcon, MoreVerticalIcon, PrinterIcon, ChevronDownIcon, CashIcon } from './components/Icons';
 import DocumentPreview from './components/DocumentPreview';
 import SetupPage from './components/SetupPage';
@@ -13,6 +12,8 @@ import QuotationListPage from './components/QuotationListPage';
 import SaveItemsModal from './components/SaveItemsModal';
 import SaveClientModal from './components/SaveClientModal';
 import LoginPage from './components/LoginPage';
+import { auth } from './services/firebaseConfig';
+import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
 
 
 declare const jspdf: any;
@@ -105,10 +106,13 @@ const App: React.FC = () => {
   // --- States ---
   const [isSaving, setIsSaving] = useState(false);
   const [currentView, setCurrentView] = useState<'editor' | 'setup' | 'clients' | 'items' | 'invoices' | 'quotations'>('editor');
-  const [currentUser, setCurrentUser] = useState<string | null>(null);
+  
+  // --- Auth States ---
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
 
-  // --- Data States (from localStorage) ---
-  const [users, setUsers] = useState<User[]>([]);
+
+  // --- Data States (from Firestore) ---
   const [companies, setCompanies] = useState<Company[]>([]);
   const [activeCompanyId, setActiveCompanyId] = useState<number>(1);
   const [clients, setClients] = useState<Client[]>([]);
@@ -118,9 +122,8 @@ const App: React.FC = () => {
   const [savedQuotations, setSavedQuotations] = useState<SavedDocument[]>([]);
   
   // --- Authentication and Data loading ---
-  const loadUserData = useCallback(() => {
-    const userData = fetchUserData();
-    setUsers(userData.users);
+  const loadUserData = useCallback(async (uid: string) => {
+    const userData = await fetchUserData(uid);
     setCompanies(userData.companies);
     setClients(userData.clients);
     setItems(userData.items);
@@ -131,29 +134,36 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const loggedInUser = localStorage.getItem('currentUser');
-    if (loggedInUser) {
-        setCurrentUser(loggedInUser);
-        loadUserData();
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setFirebaseUser(user);
+      setIsAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (firebaseUser) {
+      loadUserData(firebaseUser.uid);
+    } else {
+      // Clear data on logout
+      setCompanies([]);
+      setClients([]);
+      setItems([]);
+      setItemCategories([]);
+      setSavedInvoices([]);
+      setSavedQuotations([]);
+      setActiveCompanyId(1);
     }
-  }, [loadUserData]);
+  }, [firebaseUser, loadUserData]);
   
   useEffect(() => {
-      if (currentUser) {
+      if (firebaseUser) {
         saveItemCategories(itemCategories);
       }
-  }, [itemCategories, currentUser]);
-
-  const handleLogin = (username: string) => {
-    localStorage.setItem('currentUser', username);
-    setCurrentUser(username);
-    loadUserData();
-  };
+  }, [itemCategories, firebaseUser]);
 
   const handleLogout = () => {
-    localStorage.removeItem('currentUser');
-    setCurrentUser(null);
-    setUsers([]);
+    signOut(auth);
   };
 
   const generateDocumentNumber = useCallback((
@@ -253,10 +263,10 @@ const App: React.FC = () => {
   }, [activeCompany]);
   
   useEffect(() => {
-    if(activeCompanyId) {
+    if(activeCompanyId && firebaseUser) {
         saveActiveCompanyId(activeCompanyId);
     }
-  }, [activeCompanyId]);
+  }, [activeCompanyId, firebaseUser]);
 
   useEffect(() => {
     if (isCreatingNew) {
@@ -267,7 +277,7 @@ const App: React.FC = () => {
   // --- Recurring Invoice Generation ---
   const recurringChecked = React.useRef(false);
   useEffect(() => {
-    if (!currentUser || recurringChecked.current || savedInvoices.length === 0) return;
+    if (!firebaseUser || recurringChecked.current || savedInvoices.length === 0) return;
     recurringChecked.current = true;
 
     const calculateNextIssueDate = (lastDateStr: string, rec: Recurrence): Date => {
@@ -326,7 +336,7 @@ const App: React.FC = () => {
       saveInvoices(newInvoicesList);
       alert(`Generated ${newInvoicesToGenerate.length} new recurring invoice(s).`);
     }
-  }, [savedInvoices, generateDocumentNumber, currentUser]);
+  }, [savedInvoices, generateDocumentNumber, firebaseUser]);
 
   // --- Calculations ---
   const subtotal = useMemo(() => lineItems.reduce((acc, item) => acc + item.quantity * item.price, 0), [lineItems]);
@@ -839,17 +849,23 @@ const App: React.FC = () => {
   const activeNavButtonClasses = "bg-indigo-100 text-indigo-700";
   const inactiveNavButtonClasses = "text-slate-600 hover:bg-slate-200";
 
-  if (!currentUser) {
-    return <LoginPage onLoginSuccess={handleLogin} />;
+  if (isAuthLoading) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-indigo-500"></div>
+      </div>
+    );
+  }
+
+  if (!firebaseUser) {
+    return <LoginPage />;
   }
 
   const renderCurrentView = () => {
     switch(currentView) {
       case 'setup':
         return <SetupPage
-            currentUser={currentUser}
-            users={users}
-            setUsers={setUsers}
+            user={firebaseUser}
             companies={companies}
             setCompanies={setCompanies}
             onDone={() => setCurrentView('editor')}
@@ -1346,7 +1362,7 @@ const App: React.FC = () => {
                 </nav>
             </div>
             <div className="flex items-center gap-4">
-                <span className="text-slate-600 text-sm hidden sm:block">Welcome, <span className="font-bold">{currentUser}</span></span>
+                <span className="text-slate-600 text-sm hidden sm:block">Welcome, <span className="font-bold">{firebaseUser.email}</span></span>
                 <button onClick={handleLogout} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-50 text-sm">
                     Logout
                 </button>
