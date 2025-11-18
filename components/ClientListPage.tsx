@@ -1,7 +1,6 @@
-
 import React, { useState, useMemo } from 'react';
 import { Client } from '../types';
-import { TrashIcon } from './Icons';
+import { TrashIcon, PencilIcon } from './Icons';
 
 interface ClientListPageProps {
   clients: Client[];
@@ -204,10 +203,14 @@ const ClientListPage: React.FC<ClientListPageProps> = ({ clients, setClients, on
                                     <p className="font-bold text-slate-800">{client.name}</p>
                                     <p className="text-sm text-slate-500">{client.email}</p>
                                     <p className="text-sm text-slate-500">{client.phone}</p>
-                                    <div className="mt-2 flex gap-2">
-                                        <button onClick={() => handleEditClient(client)} className="font-semibold text-indigo-600 text-sm py-1 px-2 rounded-lg hover:bg-indigo-50">Edit</button>
-                                        <button onClick={() => handleDeleteClient(client.id)} className="font-semibold text-red-600 text-sm py-1 px-2 rounded-lg hover:bg-red-50">Delete</button>
-                                    </div>
+                                </div>
+                                <div className="mt-2 flex gap-2">
+                                    <button onClick={() => handleEditClient(client)} className="p-2 rounded-full text-indigo-600 hover:bg-indigo-100" title="Edit Client">
+                                        <PencilIcon />
+                                    </button>
+                                    <button onClick={() => handleDeleteClient(client.id)} className="p-2 rounded-full text-red-600 hover:bg-red-100" title="Delete Client">
+                                        <TrashIcon />
+                                    </button>
                                 </div>
                             </div>
                             

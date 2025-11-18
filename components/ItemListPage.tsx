@@ -1,7 +1,6 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { Item } from '../types';
-import { TrashIcon, PlusIcon } from './Icons';
+import { TrashIcon, PlusIcon, PencilIcon } from './Icons';
 
 interface ItemListPageProps {
   items: Item[];
@@ -556,9 +555,17 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
                                             </p>
                                         </div>
                                     </div>
-                                    <div className="flex gap-2 flex-shrink-0 self-end sm:self-auto">
+                                    <div className="hidden sm:flex gap-2 flex-shrink-0 self-end sm:self-auto">
                                         <button onClick={() => handleEditItem(item)} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-100">Edit</button>
                                         <button onClick={() => handleDeleteItem(item.id)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-100">Delete</button>
+                                    </div>
+                                    <div className="flex sm:hidden gap-2 flex-shrink-0 self-end sm:self-auto">
+                                        <button onClick={() => handleEditItem(item)} className="p-2 rounded-full text-indigo-600 hover:bg-indigo-100" title="Edit Item">
+                                            <PencilIcon />
+                                        </button>
+                                        <button onClick={() => handleDeleteItem(item.id)} className="p-2 rounded-full text-red-600 hover:bg-red-100" title="Delete Item">
+                                            <TrashIcon />
+                                        </button>
                                     </div>
                                 </div>
                               )})}
