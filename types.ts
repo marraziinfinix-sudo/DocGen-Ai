@@ -1,3 +1,4 @@
+
 export enum DocumentType {
   Invoice = 'Invoice',
   Quotation = 'Quotation',
