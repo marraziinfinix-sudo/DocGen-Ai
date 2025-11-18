@@ -1,5 +1,5 @@
 
-import { Company, Client, Item, SavedDocument, User, DocumentType, LineItem, Details } from '../types';
+import { Company, Client, Item, SavedDocument, User, DocumentType, LineItem, Details, Payment } from '../types';
 
 const LOCAL_STORAGE_KEY = 'invquo_data';
 
@@ -11,6 +11,7 @@ interface UserData {
     savedInvoices: SavedDocument[];
     savedQuotations: SavedDocument[];
     activeCompanyId: number;
+    itemCategories: string[];
 }
 
 const defaultUserData: UserData = {
@@ -31,6 +32,7 @@ const defaultUserData: UserData = {
     savedInvoices: [],
     savedQuotations: [],
     activeCompanyId: 1,
+    itemCategories: [],
 };
 
 // Fetches all data from local storage.
@@ -82,6 +84,14 @@ export const fetchUserData = (): UserData => {
             markup: typeof li.markup === 'number' ? li.markup : 0,
             price: typeof li.price === 'number' ? li.price : 0,
         });
+        
+        const sanitizePayment = (p: Partial<Payment>): Payment => ({
+            id: typeof p.id === 'number' ? p.id : Date.now(),
+            amount: typeof p.amount === 'number' ? p.amount : 0,
+            date: typeof p.date === 'string' ? p.date : today,
+            method: typeof p.method === 'string' ? p.method : 'Other',
+            notes: typeof p.notes === 'string' ? p.notes : '',
+        });
 
         const sanitizeDoc = (doc: Partial<SavedDocument>): SavedDocument => {
             const docId = typeof doc.id === 'number' ? doc.id : Date.now();
@@ -95,7 +105,7 @@ export const fetchUserData = (): UserData => {
                 bankQRCode: typeof doc.bankQRCode === 'string' ? doc.bankQRCode : null,
                 issueDate: typeof doc.issueDate === 'string' ? doc.issueDate : today,
                 dueDate: typeof doc.dueDate === 'string' ? doc.dueDate : today,
-                lineItems: Array.isArray(doc.lineItems) ? doc.lineItems.map(sanitizeLineItem) : [],
+                lineItems: Array.isArray(doc.lineItems) ? doc.lineItems.filter(Boolean).map(sanitizeLineItem) : [],
                 notes: typeof doc.notes === 'string' ? doc.notes : '',
                 taxRate: typeof doc.taxRate === 'number' ? doc.taxRate : 0,
                 currency: typeof doc.currency === 'string' ? doc.currency : '$',
@@ -103,7 +113,7 @@ export const fetchUserData = (): UserData => {
                 status: doc.status || null,
                 quotationStatus: doc.quotationStatus || null,
                 paidDate: doc.paidDate || null,
-                payments: Array.isArray(doc.payments) ? doc.payments : [],
+                payments: Array.isArray(doc.payments) ? doc.payments.filter(Boolean).map(sanitizePayment) : [],
                 template: typeof doc.template === 'string' ? doc.template : 'classic',
                 accentColor: typeof doc.accentColor === 'string' ? doc.accentColor : '#4f46e5',
                 recurrence: doc.recurrence || null,
@@ -111,20 +121,41 @@ export const fetchUserData = (): UserData => {
             };
         };
         
-        const loadedCompanies = Array.isArray(parsedData.companies) ? parsedData.companies.map(sanitizeCompany) : [];
+        const loadedCompanies = Array.isArray(parsedData.companies) ? parsedData.companies.filter(Boolean).map(sanitizeCompany) : [];
 
-        const completeData = {
+        const completeData: Partial<UserData> = {
           ...defaultUserData,
           ...parsedData,
-          users: Array.isArray(parsedData.users) ? parsedData.users : defaultUserData.users,
+          users: Array.isArray(parsedData.users) ? parsedData.users.filter(Boolean) : defaultUserData.users,
           companies: loadedCompanies.length > 0 ? loadedCompanies : defaultUserData.companies.map(sanitizeCompany),
-          clients: Array.isArray(parsedData.clients) ? parsedData.clients.map(sanitizeClient) : defaultUserData.clients,
-          items: Array.isArray(parsedData.items) ? parsedData.items.map(sanitizeItem) : defaultUserData.items,
-          savedInvoices: Array.isArray(parsedData.savedInvoices) ? parsedData.savedInvoices.map(sanitizeDoc) : defaultUserData.savedInvoices,
-          savedQuotations: Array.isArray(parsedData.savedQuotations) ? parsedData.savedQuotations.map(sanitizeDoc) : defaultUserData.savedQuotations,
+          clients: Array.isArray(parsedData.clients) ? parsedData.clients.filter(Boolean).map(sanitizeClient) : defaultUserData.clients,
+          items: Array.isArray(parsedData.items) ? parsedData.items.filter(Boolean).map(sanitizeItem) : defaultUserData.items,
+          savedInvoices: Array.isArray(parsedData.savedInvoices) ? parsedData.savedInvoices.filter(Boolean).map(sanitizeDoc) : defaultUserData.savedInvoices,
+          savedQuotations: Array.isArray(parsedData.savedQuotations) ? parsedData.savedQuotations.filter(Boolean).map(sanitizeDoc) : defaultUserData.savedQuotations,
           activeCompanyId: typeof parsedData.activeCompanyId === 'number' ? parsedData.activeCompanyId : defaultUserData.activeCompanyId,
+          itemCategories: Array.isArray(parsedData.itemCategories) ? parsedData.itemCategories.filter(Boolean) : undefined,
         };
         
+        if (completeData.itemCategories === undefined) {
+            let migratedCategories: string[] | null = null;
+            const oldCategoriesData = localStorage.getItem('itemCategories');
+            if (oldCategoriesData) {
+                try {
+                    const oldCategories = JSON.parse(oldCategoriesData);
+                    if (Array.isArray(oldCategories)) {
+                        migratedCategories = oldCategories;
+                        localStorage.removeItem('itemCategories');
+                    }
+                } catch (e) { console.error("Could not parse old itemCategories", e); }
+            }
+
+            if (migratedCategories === null && Array.isArray(completeData.items)) {
+                const derivedCategories = Array.from(new Set(completeData.items.map(i => i.category).filter(Boolean) as string[]));
+                migratedCategories = derivedCategories.sort();
+            }
+            completeData.itemCategories = migratedCategories || [];
+        }
+
         const activeCompanyExists = completeData.companies.some(c => c.id === completeData.activeCompanyId);
         if (!activeCompanyExists && completeData.companies.length > 0) {
             completeData.activeCompanyId = completeData.companies[0].id;
@@ -135,18 +166,15 @@ export const fetchUserData = (): UserData => {
     }
   } catch (error) {
     console.error("Error fetching data from local storage, resetting to defaults.", error);
-    // If parsing fails or data is corrupt, reset to default to prevent crash loop.
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(defaultUserData));
     return defaultUserData;
   }
   
-  // If no data is found, initialize with defaults.
   localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(defaultUserData));
   return defaultUserData;
 };
 
 
-// A generic save function that overwrites all data.
 const saveAllUserData = (data: UserData): void => {
   try {
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
@@ -178,6 +206,11 @@ export const saveClients = (clients: Client[]) => {
 export const saveItems = (items: Item[]) => {
     const data = fetchUserData();
     saveAllUserData({ ...data, items });
+};
+
+export const saveItemCategories = (itemCategories: string[]) => {
+    const data = fetchUserData();
+    saveAllUserData({ ...data, itemCategories });
 };
 
 export const saveInvoices = (savedInvoices: SavedDocument[]) => {

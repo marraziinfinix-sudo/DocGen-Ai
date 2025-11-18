@@ -6,6 +6,8 @@ import { saveItems } from '../services/firebaseService';
 interface ItemListPageProps {
   items: Item[];
   setItems: React.Dispatch<React.SetStateAction<Item[]>>;
+  categories: string[];
+  setCategories: React.Dispatch<React.SetStateAction<string[]>>;
   formatCurrency: (amount: number) => string;
   onDone: () => void;
 }
@@ -195,7 +197,7 @@ const BulkEditModal: React.FC<{
 };
 
 
-const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurrency, onDone }) => {
+const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories, setCategories, formatCurrency, onDone }) => {
   const [formState, setFormState] = useState(emptyFormState);
   const [isEditing, setIsEditing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -203,41 +205,6 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurr
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [isBulkEditModalOpen, setIsBulkEditModalOpen] = useState(false);
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
-  
-  const [categories, setCategories] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem('itemCategories');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return parsed as string[];
-        }
-      }
-    } catch (e) {
-      console.error('Failed to load categories from localStorage', e);
-    }
-    return [];
-  });
-
-  useEffect(() => {
-    // One-time migration for users who have categories on items but not the new managed list
-    if (localStorage.getItem('itemCategories') === null) {
-        if (Array.isArray(items)) {
-            const initialCategories = Array.from(new Set(items.map(i => i.category).filter(Boolean))) as string[];
-            if (initialCategories.length > 0) {
-                setCategories(initialCategories.sort());
-            }
-        }
-    }
-  }, [items]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('itemCategories', JSON.stringify(categories));
-    } catch (e) {
-      console.error('Failed to save categories to localStorage', e);
-    }
-  }, [categories]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;

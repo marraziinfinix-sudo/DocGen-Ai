@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus, Recurrence, User } from './types';
 import { generateDescription } from './services/geminiService';
-import { fetchUserData, saveCompanies, saveClients, saveItems, saveInvoices, saveQuotations, saveDocument, saveActiveCompanyId, saveUsers } from './services/firebaseService';
+import { fetchUserData, saveCompanies, saveClients, saveItems, saveInvoices, saveQuotations, saveDocument, saveActiveCompanyId, saveUsers, saveItemCategories } from './services/firebaseService';
 import { SparklesIcon, PlusIcon, TrashIcon, CogIcon, UsersIcon, ListIcon, DocumentIcon, MailIcon, WhatsAppIcon, FileTextIcon, DownloadIcon, MoreVerticalIcon, PrinterIcon, ChevronDownIcon, CashIcon } from './components/Icons';
 import DocumentPreview from './components/DocumentPreview';
 import SetupPage from './components/SetupPage';
@@ -113,6 +113,7 @@ const App: React.FC = () => {
   const [activeCompanyId, setActiveCompanyId] = useState<number>(1);
   const [clients, setClients] = useState<Client[]>([]);
   const [items, setItems] = useState<Item[]>([]);
+  const [itemCategories, setItemCategories] = useState<string[]>([]);
   const [savedInvoices, setSavedInvoices] = useState<SavedDocument[]>([]);
   const [savedQuotations, setSavedQuotations] = useState<SavedDocument[]>([]);
   
@@ -123,6 +124,7 @@ const App: React.FC = () => {
     setCompanies(userData.companies);
     setClients(userData.clients);
     setItems(userData.items);
+    setItemCategories(userData.itemCategories || []);
     setSavedInvoices(userData.savedInvoices);
     setSavedQuotations(userData.savedQuotations);
     setActiveCompanyId(userData.activeCompanyId);
@@ -135,6 +137,12 @@ const App: React.FC = () => {
         loadUserData();
     }
   }, [loadUserData]);
+  
+  useEffect(() => {
+      if (currentUser) {
+        saveItemCategories(itemCategories);
+      }
+  }, [itemCategories, currentUser]);
 
   const handleLogin = (username: string) => {
     localStorage.setItem('currentUser', username);
@@ -543,23 +551,20 @@ const App: React.FC = () => {
       return;
     }
     
-    // Check for duplicate document number across both invoices and quotations
     const trimmedDocNum = documentNumber.trim();
     if (!trimmedDocNum) {
         alert('Document number cannot be empty. Please ensure client details are filled to generate a number.');
         return;
     }
 
-    if (isCreatingNew) {
-        const allDocs = [...savedInvoices, ...savedQuotations];
-        const isDuplicate = allDocs.some(
-            doc => doc.documentNumber.trim().toLowerCase() === trimmedDocNum.toLowerCase() && doc.id !== loadedDocumentInfo?.id
-        );
+    const allDocs = [...savedInvoices, ...savedQuotations];
+    const potentialDuplicate = allDocs.find(
+        doc => doc.documentNumber.trim().toLowerCase() === trimmedDocNum.toLowerCase()
+    );
 
-        if (isDuplicate) {
-            alert(`A document (invoice or quotation) with number "${trimmedDocNum}" already exists. Please use a unique number.`);
-            return;
-        }
+    if (potentialDuplicate && potentialDuplicate.id !== loadedDocumentInfo?.id) {
+        alert(`A document (invoice or quotation) with number "${trimmedDocNum}" already exists. Please use a unique number.`);
+        return;
     }
 
     const docToSave: SavedDocument = {
@@ -859,6 +864,8 @@ const App: React.FC = () => {
         return <ItemListPage
             items={items}
             setItems={setItems}
+            categories={itemCategories}
+            setCategories={setItemCategories}
             formatCurrency={formatCurrency}
             onDone={() => setCurrentView('editor')} />;
       case 'invoices':
