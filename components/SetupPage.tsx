@@ -180,6 +180,70 @@ const CompanyForm: React.FC<{
   );
 };
 
+const AdminChangePasswordModal: React.FC<{
+    user: User;
+    isOpen: boolean;
+    onSave: (password: string) => void;
+    onCancel: () => void;
+}> = ({ user, isOpen, onSave, onCancel }) => {
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+
+    if (!isOpen) return null;
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newPassword || newPassword !== confirmPassword) {
+            alert("Passwords do not match or are empty.");
+            return;
+        }
+        if (newPassword.length < 6) {
+            alert("Password must be at least 6 characters long.");
+            return;
+        }
+        onSave(newPassword);
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
+            <div className="bg-white rounded-lg shadow-2xl max-w-md w-full">
+                <form onSubmit={handleSubmit}>
+                    <div className="p-6">
+                        <h2 className="text-xl font-bold text-gray-800 mb-4">Reset Password for <span className="text-indigo-600">{user.username}</span></h2>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-600 mb-1">New Password</label>
+                                <input
+                                    type="password"
+                                    value={newPassword}
+                                    onChange={e => setNewPassword(e.target.value)}
+                                    className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                                    required
+                                    autoFocus
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-600 mb-1">Confirm New Password</label>
+                                <input
+                                    type="password"
+                                    value={confirmPassword}
+                                    onChange={e => setConfirmPassword(e.target.value)}
+                                    className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                                    required
+                                />
+                            </div>
+                        </div>
+                    </div>
+                    <div className="bg-slate-50 p-4 flex justify-end gap-4 border-t">
+                        <button type="button" onClick={onCancel} className="bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300">Cancel</button>
+                        <button type="submit" className="bg-indigo-600 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-indigo-700">Set Password</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
+
 const UserManagement: React.FC<{
     currentUser: string | null;
     users: User[];
@@ -190,6 +254,8 @@ const UserManagement: React.FC<{
     
     const [newUsername, setNewUsername] = useState('');
     const [newUserPassword, setNewUserPassword] = useState('');
+    
+    const [editingUserPassword, setEditingUserPassword] = useState<User | null>(null);
 
     const handleChangePassword = (e: React.FormEvent) => {
         e.preventDefault();
@@ -240,6 +306,21 @@ const UserManagement: React.FC<{
         }
     };
     
+    const handleOpenPasswordModal = (user: User) => {
+        setEditingUserPassword(user);
+    };
+
+    const handleAdminUpdatePassword = (password: string) => {
+        if (!editingUserPassword) return;
+
+        setUsers(prevUsers => prevUsers.map(user => 
+            user.username === editingUserPassword.username ? { ...user, password: password } : user
+        ));
+
+        alert(`Password for user "${editingUserPassword.username}" has been updated.`);
+        setEditingUserPassword(null);
+    };
+    
     return (
         <div className="mb-8 p-6 bg-slate-50 rounded-lg border border-slate-200">
             <h2 className="text-xl font-bold text-gray-800 mb-6 border-b pb-4">User Settings</h2>
@@ -283,17 +364,29 @@ const UserManagement: React.FC<{
                         <h3 className="text-lg font-semibold text-gray-700 mb-4">Existing Users</h3>
                         <div className="space-y-2">
                             {users.filter(u => u.username !== 'admin').map(user => (
-                                <div key={user.username} className="bg-white p-3 rounded-lg border flex justify-between items-center">
+                                <div key={user.username} className="bg-white p-3 rounded-lg border flex justify-between items-center flex-wrap gap-2">
                                     <p className="font-medium text-slate-800">{user.username}</p>
-                                    <button onClick={() => handleDeleteUser(user.username)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-50 flex items-center gap-1">
-                                        <TrashIcon /> Delete
-                                    </button>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => handleOpenPasswordModal(user)} className="font-semibold text-slate-600 py-1 px-3 rounded-lg hover:bg-slate-100 text-sm">Reset Password</button>
+                                        <button onClick={() => handleDeleteUser(user.username)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-50 flex items-center gap-1 text-sm">
+                                            <TrashIcon /> Delete
+                                        </button>
+                                    </div>
                                 </div>
                             ))}
                             {users.length <= 1 && <p className="text-slate-500 text-sm">No other users have been added.</p>}
                         </div>
                     </div>
                 </>
+            )}
+
+            {editingUserPassword && (
+                <AdminChangePasswordModal
+                    isOpen={!!editingUserPassword}
+                    user={editingUserPassword}
+                    onSave={handleAdminUpdatePassword}
+                    onCancel={() => setEditingUserPassword(null)}
+                />
             )}
         </div>
     );
