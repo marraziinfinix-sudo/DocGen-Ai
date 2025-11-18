@@ -181,16 +181,17 @@ const CompanyForm: React.FC<{
 };
 
 const UserManagement: React.FC<{
+    currentUser: string | null;
     users: User[];
     setUsers: React.Dispatch<React.SetStateAction<User[]>>;
-}> = ({ users, setUsers }) => {
+}> = ({ currentUser, users, setUsers }) => {
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     
     const [newUsername, setNewUsername] = useState('');
     const [newUserPassword, setNewUserPassword] = useState('');
 
-    const handleChangeAdminPassword = (e: React.FormEvent) => {
+    const handleChangePassword = (e: React.FormEvent) => {
         e.preventDefault();
         if (!newPassword || newPassword !== confirmPassword) {
             alert("Passwords do not match or are empty.");
@@ -201,11 +202,11 @@ const UserManagement: React.FC<{
             return;
         }
         setUsers(prevUsers => prevUsers.map(user => 
-            user.username === 'admin' ? { ...user, password: newPassword } : user
+            user.username === currentUser ? { ...user, password: newPassword } : user
         ));
         setNewPassword('');
         setConfirmPassword('');
-        alert("Admin password updated successfully.");
+        alert("Your password has been updated successfully.");
     };
 
     const handleAddUser = (e: React.FormEvent) => {
@@ -241,10 +242,10 @@ const UserManagement: React.FC<{
     
     return (
         <div className="mb-8 p-6 bg-slate-50 rounded-lg border border-slate-200">
-            <h2 className="text-xl font-bold text-gray-800 mb-6 border-b pb-4">User Management</h2>
+            <h2 className="text-xl font-bold text-gray-800 mb-6 border-b pb-4">User Settings</h2>
             
-            <form onSubmit={handleChangeAdminPassword} className="mb-8">
-                <h3 className="text-lg font-semibold text-gray-700 mb-4">Change Admin Password</h3>
+            <form onSubmit={handleChangePassword} className="mb-8">
+                <h3 className="text-lg font-semibold text-gray-700 mb-4">Change Your Password</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
                     <div>
                         <label className="block text-sm font-medium text-gray-600 mb-1">New Password</label>
@@ -258,37 +259,42 @@ const UserManagement: React.FC<{
                 </div>
             </form>
 
-            <form onSubmit={handleAddUser} className="mb-8">
-                <h3 className="text-lg font-semibold text-gray-700 mb-4">Add New User</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-600 mb-1">Username</label>
-                        <input type="text" value={newUsername} onChange={e => setNewUsername(e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500" />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-600 mb-1">Password</label>
-                        <input type="password" value={newUserPassword} onChange={e => setNewUserPassword(e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500" />
-                    </div>
-                    <button type="submit" className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 flex items-center justify-center gap-2">
-                        <PlusIcon /> Add User
-                    </button>
-                </div>
-            </form>
-
-            <div>
-                <h3 className="text-lg font-semibold text-gray-700 mb-4">Existing Users</h3>
-                <div className="space-y-2">
-                    {users.filter(u => u.username !== 'admin').map(user => (
-                        <div key={user.username} className="bg-white p-3 rounded-lg border flex justify-between items-center">
-                            <p className="font-medium text-slate-800">{user.username}</p>
-                            <button onClick={() => handleDeleteUser(user.username)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-50 flex items-center gap-1">
-                                <TrashIcon /> Delete
+            {currentUser === 'admin' && (
+                <>
+                    <h2 className="text-xl font-bold text-gray-800 mb-6 border-b pb-4 mt-12">Admin: User Management</h2>
+                    <form onSubmit={handleAddUser} className="mb-8">
+                        <h3 className="text-lg font-semibold text-gray-700 mb-4">Add New User</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-600 mb-1">Username</label>
+                                <input type="text" value={newUsername} onChange={e => setNewUsername(e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-600 mb-1">Password</label>
+                                <input type="password" value={newUserPassword} onChange={e => setNewUserPassword(e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500" />
+                            </div>
+                            <button type="submit" className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 flex items-center justify-center gap-2">
+                                <PlusIcon /> Add User
                             </button>
                         </div>
-                    ))}
-                    {users.length <= 1 && <p className="text-slate-500 text-sm">No other users have been added.</p>}
-                </div>
-            </div>
+                    </form>
+
+                    <div>
+                        <h3 className="text-lg font-semibold text-gray-700 mb-4">Existing Users</h3>
+                        <div className="space-y-2">
+                            {users.filter(u => u.username !== 'admin').map(user => (
+                                <div key={user.username} className="bg-white p-3 rounded-lg border flex justify-between items-center">
+                                    <p className="font-medium text-slate-800">{user.username}</p>
+                                    <button onClick={() => handleDeleteUser(user.username)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-50 flex items-center gap-1">
+                                        <TrashIcon /> Delete
+                                    </button>
+                                </div>
+                            ))}
+                            {users.length <= 1 && <p className="text-slate-500 text-sm">No other users have been added.</p>}
+                        </div>
+                    </div>
+                </>
+            )}
         </div>
     );
 };
@@ -350,8 +356,8 @@ const SetupPage: React.FC<SetupPageProps> = ({
     <>
       <main className="container mx-auto p-4 sm:p-6 lg:p-8">
         <div className="max-w-4xl mx-auto bg-white p-4 sm:p-8 rounded-lg shadow-md">
-            {currentUser === 'admin' && (
-                <UserManagement users={users} setUsers={setUsers} />
+            {currentUser && (
+                <UserManagement currentUser={currentUser} users={users} setUsers={setUsers} />
             )}
             <div className="mb-8 p-6 bg-slate-50 rounded-lg border border-slate-200">
                 <h2 className="text-xl font-bold text-gray-800 mb-2">Active Company Profile</h2>
