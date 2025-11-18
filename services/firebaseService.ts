@@ -1,4 +1,4 @@
-import { Company, Client, Item, SavedDocument, User } from '../types';
+import { Company, Client, Item, SavedDocument, User, DocumentType } from '../types';
 
 const LOCAL_STORAGE_KEY = 'invquo_data';
 
@@ -38,17 +38,28 @@ export const fetchUserData = (): UserData => {
     const savedData = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (savedData) {
       const parsedData = JSON.parse(savedData);
-      if (parsedData && typeof parsedData === 'object' && 'companies' in parsedData) {
-        // Merge with defaults to ensure all fields are present and have correct types, especially arrays.
+      if (parsedData && typeof parsedData === 'object') {
+        const today = new Date().toISOString().split('T')[0];
+
+        const sanitizeDoc = (doc: Partial<SavedDocument>): Partial<SavedDocument> => ({
+            ...doc,
+            clientDetails: { name: '', address: '', email: '', phone: '', ...(doc.clientDetails || {}) },
+            issueDate: doc.issueDate || today,
+            dueDate: doc.dueDate || today,
+            lineItems: Array.isArray(doc.lineItems) ? doc.lineItems : [],
+            payments: doc.documentType === DocumentType.Invoice && Array.isArray(doc.payments) ? doc.payments : [],
+            total: typeof doc.total === 'number' ? doc.total : 0,
+        });
+
         const completeData = {
           ...defaultUserData,
           ...parsedData,
           users: Array.isArray(parsedData.users) ? parsedData.users : defaultUserData.users,
           companies: Array.isArray(parsedData.companies) ? parsedData.companies : defaultUserData.companies,
-          clients: Array.isArray(parsedData.clients) ? parsedData.clients : defaultUserData.clients,
-          items: Array.isArray(parsedData.items) ? parsedData.items : defaultUserData.items,
-          savedInvoices: Array.isArray(parsedData.savedInvoices) ? parsedData.savedInvoices : defaultUserData.savedInvoices,
-          savedQuotations: Array.isArray(parsedData.savedQuotations) ? parsedData.savedQuotations : defaultUserData.savedQuotations,
+          clients: Array.isArray(parsedData.clients) ? parsedData.clients.map(c => ({ name: '', ...c })) : defaultUserData.clients,
+          items: Array.isArray(parsedData.items) ? parsedData.items.map(i => ({ description: '', costPrice: 0, price: 0, ...i })) : defaultUserData.items,
+          savedInvoices: Array.isArray(parsedData.savedInvoices) ? parsedData.savedInvoices.map(sanitizeDoc) : defaultUserData.savedInvoices,
+          savedQuotations: Array.isArray(parsedData.savedQuotations) ? parsedData.savedQuotations.map(sanitizeDoc) : defaultUserData.savedQuotations,
           activeCompanyId: typeof parsedData.activeCompanyId === 'number' ? parsedData.activeCompanyId : defaultUserData.activeCompanyId,
         };
         
@@ -62,12 +73,17 @@ export const fetchUserData = (): UserData => {
                 completeData.activeCompanyId = completeData.companies[0].id;
             }
         }
-        return completeData;
+        return completeData as UserData;
       }
     }
   } catch (error) {
-    console.error("Error fetching data from local storage:", error);
+    console.error("Error fetching data from local storage, resetting to defaults.", error);
+    // If parsing fails or data is corrupt, reset to default to prevent crash loop.
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(defaultUserData));
+    return defaultUserData;
   }
+  
+  // If no data is found, initialize with defaults.
   localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(defaultUserData));
   return defaultUserData;
 };
