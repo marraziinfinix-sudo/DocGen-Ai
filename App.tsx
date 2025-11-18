@@ -292,51 +292,49 @@ const App: React.FC = () => {
       return lastDate;
     };
 
-    const createInvoiceFromTemplate = (parent: SavedDocument, nextIssueDate: Date): SavedDocument => {
-      const issueDateObj = new Date(parent.issueDate + 'T00:00:00');
-      const dueDateObj = new Date(parent.dueDate + 'T00:00:00');
-      const duration = dueDateObj.getTime() - issueDateObj.getTime();
-      
-      const newDueDate = new Date(nextIssueDate.getTime() + duration);
-      
-      return {
-        ...parent,
-        id: Date.now() + Math.random(),
-        issueDate: nextIssueDate.toISOString().split('T')[0],
-        dueDate: newDueDate.toISOString().split('T')[0],
-        documentNumber: generateDocumentNumber(parent.clientDetails, DocumentType.Invoice, savedInvoices, savedQuotations),
-        status: InvoiceStatus.Pending,
-        payments: [],
-        paidDate: null,
-        recurrence: null, // Child invoices don't have recurrence settings themselves
-        recurrenceParentId: parent.id,
-      };
-    };
-
     const parentInvoices = savedInvoices.filter(inv => inv.recurrence && !inv.recurrenceParentId);
     let newInvoicesToGenerate: SavedDocument[] = [];
+    let allInvoices = [...savedInvoices]; // Use a temporary list for number generation
 
     parentInvoices.forEach(parent => {
-      const seriesInvoices = savedInvoices.filter(inv => inv.recurrenceParentId === parent.id);
+      const seriesInvoices = allInvoices.filter(inv => inv.recurrenceParentId === parent.id);
       const allSeries = [parent, ...seriesInvoices];
       const latestInvoice = allSeries.sort((a, b) => new Date(b.issueDate).getTime() - new Date(a.issueDate).getTime())[0];
       
       let nextIssueDate = calculateNextIssueDate(latestInvoice.issueDate, parent.recurrence!);
       
       while (nextIssueDate <= new Date() && (!parent.recurrence!.endDate || nextIssueDate <= new Date(parent.recurrence!.endDate))) {
-        const newInvoice = createInvoiceFromTemplate(parent, nextIssueDate);
+        const issueDateObj = new Date(parent.issueDate + 'T00:00:00');
+        const dueDateObj = new Date(parent.dueDate + 'T00:00:00');
+        const duration = dueDateObj.getTime() - issueDateObj.getTime();
+        const newDueDate = new Date(nextIssueDate.getTime() + duration);
+
+        const newInvoice: SavedDocument = {
+          ...parent,
+          id: Date.now() + Math.random(),
+          issueDate: nextIssueDate.toISOString().split('T')[0],
+          dueDate: newDueDate.toISOString().split('T')[0],
+          documentNumber: generateDocumentNumber(parent.clientDetails, DocumentType.Invoice, allInvoices, savedQuotations),
+          status: InvoiceStatus.Pending,
+          payments: [],
+          paidDate: null,
+          recurrence: null,
+          recurrenceParentId: parent.id,
+        };
+        
         newInvoicesToGenerate.push(newInvoice);
+        allInvoices.push(newInvoice); // Add to temp list for next number generation
+        
         nextIssueDate = calculateNextIssueDate(newInvoice.issueDate, parent.recurrence!);
       }
     });
 
     if (newInvoicesToGenerate.length > 0) {
-      const newInvoicesList = [...savedInvoices, ...newInvoicesToGenerate];
-      setSavedInvoices(newInvoicesList);
-      saveInvoices(newInvoicesList);
+      setSavedInvoices(allInvoices);
+      saveInvoices(allInvoices);
       alert(`Generated ${newInvoicesToGenerate.length} new recurring invoice(s).`);
     }
-  }, [savedInvoices, generateDocumentNumber, firebaseUser]);
+  }, [savedInvoices, savedQuotations, generateDocumentNumber, firebaseUser]);
 
   // --- Calculations ---
   const subtotal = useMemo(() => lineItems.reduce((acc, item) => acc + item.quantity * item.price, 0), [lineItems]);

@@ -46,38 +46,130 @@ export const createNewUserDocument = async (uid: string, email: string) => {
     }
 };
 
+const sanitizeDetails = (details: Partial<Details>): Details => ({
+    name: typeof details.name === 'string' ? details.name : '',
+    address: typeof details.address === 'string' ? details.address : '',
+    email: typeof details.email === 'string' ? details.email : '',
+    phone: typeof details.phone === 'string' ? details.phone : '',
+    bankName: typeof details.bankName === 'string' ? details.bankName : '',
+    accountNumber: typeof details.accountNumber === 'string' ? details.accountNumber : '',
+    website: typeof details.website === 'string' ? details.website : '',
+    taxId: typeof details.taxId === 'string' ? details.taxId : '',
+});
+
+const sanitizeCompany = (comp: any): Company | null => {
+    if (typeof comp !== 'object' || comp === null) return null;
+    return {
+        id: typeof comp.id === 'number' ? comp.id : Date.now(),
+        details: sanitizeDetails(comp.details || {}),
+        logo: typeof comp.logo === 'string' ? comp.logo : null,
+        bankQRCode: typeof comp.bankQRCode === 'string' ? comp.bankQRCode : null,
+        defaultNotes: typeof comp.defaultNotes === 'string' ? comp.defaultNotes : 'Thank you for your business.',
+        taxRate: typeof comp.taxRate === 'number' ? comp.taxRate : 0,
+        currency: typeof comp.currency === 'string' ? comp.currency : '$',
+        template: typeof comp.template === 'string' ? comp.template : 'classic',
+        accentColor: typeof comp.accentColor === 'string' ? comp.accentColor : '#4f46e5',
+    };
+};
+
+const sanitizeClient = (cli: any): Client | null => {
+    if (typeof cli !== 'object' || cli === null) return null;
+    return {
+        id: typeof cli.id === 'number' ? cli.id : Date.now(),
+        ...sanitizeDetails(cli),
+    };
+};
+
+const sanitizeItem = (item: any): Item | null => {
+    if (typeof item !== 'object' || item === null) return null;
+    return {
+        id: typeof item.id === 'number' ? item.id : Date.now(),
+        description: typeof item.description === 'string' ? item.description : '',
+        costPrice: typeof item.costPrice === 'number' ? item.costPrice : 0,
+        price: typeof item.price === 'number' ? item.price : 0,
+        category: typeof item.category === 'string' ? item.category : '',
+    };
+};
+
+const sanitizePayment = (p: any): Payment | null => {
+    if (typeof p !== 'object' || p === null) return null;
+    return {
+        id: typeof p.id === 'number' ? p.id : Date.now(),
+        amount: typeof p.amount === 'number' ? p.amount : 0,
+        date: typeof p.date === 'string' ? p.date : new Date().toISOString().split('T')[0],
+        method: typeof p.method === 'string' ? p.method : 'Other',
+        notes: typeof p.notes === 'string' ? p.notes : '',
+    };
+};
+
+const sanitizeLineItem = (li: any): LineItem | null => {
+    if (typeof li !== 'object' || li === null) return null;
+    return {
+        id: typeof li.id === 'number' ? li.id : Date.now(),
+        description: typeof li.description === 'string' ? li.description : '',
+        quantity: typeof li.quantity === 'number' ? li.quantity : 1,
+        costPrice: typeof li.costPrice === 'number' ? li.costPrice : 0,
+        markup: typeof li.markup === 'number' ? li.markup : 0,
+        price: typeof li.price === 'number' ? li.price : 0,
+    };
+};
+
+const sanitizeDocument = (docData: any): SavedDocument | null => {
+    if (typeof docData !== 'object' || docData === null) return null;
+    const today = new Date().toISOString().split('T')[0];
+    return {
+        id: typeof docData.id === 'number' ? docData.id : Date.now(),
+        documentNumber: typeof docData.documentNumber === 'string' ? docData.documentNumber : '',
+        documentType: [DocumentType.Invoice, DocumentType.Quotation].includes(docData.documentType) ? docData.documentType : DocumentType.Quotation,
+        clientDetails: sanitizeDetails(docData.clientDetails || {}),
+        companyDetails: sanitizeDetails(docData.companyDetails || {}),
+        companyLogo: typeof docData.companyLogo === 'string' ? docData.companyLogo : null,
+        bankQRCode: typeof docData.bankQRCode === 'string' ? docData.bankQRCode : null,
+        issueDate: typeof docData.issueDate === 'string' ? docData.issueDate : today,
+        dueDate: typeof docData.dueDate === 'string' ? docData.dueDate : today,
+        lineItems: Array.isArray(docData.lineItems) ? docData.lineItems.map(sanitizeLineItem).filter(Boolean) as LineItem[] : [],
+        notes: typeof docData.notes === 'string' ? docData.notes : '',
+        taxRate: typeof docData.taxRate === 'number' ? docData.taxRate : 0,
+        currency: typeof docData.currency === 'string' ? docData.currency : '$',
+        total: typeof docData.total === 'number' ? docData.total : 0,
+        status: docData.status || null,
+        quotationStatus: docData.quotationStatus || null,
+        paidDate: typeof docData.paidDate === 'string' ? docData.paidDate : null,
+        payments: Array.isArray(docData.payments) ? docData.payments.map(sanitizePayment).filter(Boolean) as Payment[] : [],
+        template: typeof docData.template === 'string' ? docData.template : 'classic',
+        accentColor: typeof docData.accentColor === 'string' ? docData.accentColor : '#4f46e5',
+        recurrence: docData.recurrence || null,
+        recurrenceParentId: docData.recurrenceParentId || null,
+    };
+};
+
 export const fetchUserData = async (uid: string): Promise<UserData> => {
   try {
     const userRef = doc(db, 'users', uid);
     const docSnap = await getDoc(userRef);
 
     if (docSnap.exists()) {
-      const parsedData = docSnap.data();
-      // Basic sanitization/defaulting for robustness
-      const today = new Date().toISOString().split('T')[0];
-      const defaultCompanyDetails = defaultUserData.companies[0].details;
-
-      const sanitizeCompany = (comp: Partial<Company>): Company => ({
-          id: typeof comp.id === 'number' ? comp.id : Date.now(),
-          details: { ...defaultCompanyDetails, ...(comp.details || {}) },
-          logo: typeof comp.logo === 'string' ? comp.logo : null,
-          bankQRCode: typeof comp.bankQRCode === 'string' ? comp.bankQRCode : null,
-          defaultNotes: typeof comp.defaultNotes === 'string' ? comp.defaultNotes : defaultUserData.companies[0].defaultNotes,
-          taxRate: typeof comp.taxRate === 'number' ? comp.taxRate : 0,
-          currency: typeof comp.currency === 'string' ? comp.currency : '$',
-          template: typeof comp.template === 'string' ? comp.template : 'classic',
-          accentColor: typeof comp.accentColor === 'string' ? comp.accentColor : '#4f46e5',
-      });
+      const parsedData = docSnap.data() || {};
       
       const completeData: UserData = {
-        companies: Array.isArray(parsedData.companies) ? parsedData.companies.map(sanitizeCompany) : defaultUserData.companies,
-        clients: Array.isArray(parsedData.clients) ? parsedData.clients : defaultUserData.clients,
-        items: Array.isArray(parsedData.items) ? parsedData.items : defaultUserData.items,
-        savedInvoices: Array.isArray(parsedData.savedInvoices) ? parsedData.savedInvoices : defaultUserData.savedInvoices,
-        savedQuotations: Array.isArray(parsedData.savedQuotations) ? parsedData.savedQuotations : defaultUserData.savedQuotations,
+        companies: Array.isArray(parsedData.companies) ? parsedData.companies.map(sanitizeCompany).filter(Boolean) as Company[] : defaultUserData.companies,
+        clients: Array.isArray(parsedData.clients) ? parsedData.clients.map(sanitizeClient).filter(Boolean) as Client[] : defaultUserData.clients,
+        items: Array.isArray(parsedData.items) ? parsedData.items.map(sanitizeItem).filter(Boolean) as Item[] : defaultUserData.items,
+        savedInvoices: Array.isArray(parsedData.savedInvoices) ? parsedData.savedInvoices.map(sanitizeDocument).filter(Boolean) as SavedDocument[] : defaultUserData.savedInvoices,
+        savedQuotations: Array.isArray(parsedData.savedQuotations) ? parsedData.savedQuotations.map(sanitizeDocument).filter(Boolean) as SavedDocument[] : defaultUserData.savedQuotations,
         activeCompanyId: typeof parsedData.activeCompanyId === 'number' ? parsedData.activeCompanyId : defaultUserData.activeCompanyId,
-        itemCategories: Array.isArray(parsedData.itemCategories) ? parsedData.itemCategories : defaultUserData.itemCategories,
+        itemCategories: Array.isArray(parsedData.itemCategories) ? parsedData.itemCategories.filter((cat): cat is string => typeof cat === 'string') : defaultUserData.itemCategories,
       };
+      
+      // Ensure there is at least one company
+      if (completeData.companies.length === 0) {
+          completeData.companies = defaultUserData.companies;
+          completeData.activeCompanyId = defaultUserData.activeCompanyId;
+      }
+      // Ensure activeCompanyId is valid
+      if (!completeData.companies.some(c => c.id === completeData.activeCompanyId)) {
+          completeData.activeCompanyId = completeData.companies[0]?.id || 1;
+      }
       
       return completeData;
     } else {
