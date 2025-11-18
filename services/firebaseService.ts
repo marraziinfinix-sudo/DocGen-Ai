@@ -1,4 +1,6 @@
-
+// NOTE: This service exclusively uses the browser's localStorage for data persistence.
+// It is not connected to Firebase. The filename is a remnant from an earlier
+// version of the application.
 import { Company, Client, Item, SavedDocument, User, DocumentType, LineItem, Details, Payment } from '../types';
 
 const LOCAL_STORAGE_KEY = 'invquo_data';
