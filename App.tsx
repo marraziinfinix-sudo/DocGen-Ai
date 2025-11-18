@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus, Recurrence, User } from './types';
 import { generateDescription } from './services/geminiService';
@@ -846,16 +847,24 @@ const App: React.FC = () => {
         return <SetupPage
             currentUser={currentUser}
             users={users}
-            setUsers={(u) => {
-                const newUsers = typeof u === 'function' ? (u as (prevState: User[]) => User[])(users) : u;
-                saveUsers(newUsers);
-                setUsers(newUsers);
+            setUsers={(updater) => {
+                setUsers(currentUsers => {
+                    const newUsers = typeof updater === 'function' 
+                        ? (updater as (prevState: User[]) => User[])(currentUsers) 
+                        : updater;
+                    saveUsers(newUsers);
+                    return newUsers;
+                });
             }}
             companies={companies}
-            setCompanies={(c) => {
-                const newCompanies = typeof c === 'function' ? (c as (prevState: Company[]) => Company[])(companies) : c;
-                saveCompanies(newCompanies);
-                setCompanies(newCompanies);
+            setCompanies={(updater) => {
+                setCompanies(currentCompanies => {
+                    const newCompanies = typeof updater === 'function' 
+                        ? (updater as (prevState: Company[]) => Company[])(currentCompanies) 
+                        : updater;
+                    saveCompanies(newCompanies);
+                    return newCompanies;
+                });
             }}
             onDone={() => setCurrentView('editor')}
             activeCompanyId={activeCompanyId}
@@ -863,29 +872,41 @@ const App: React.FC = () => {
       case 'clients':
         return <ClientListPage
             clients={clients}
-            setClients={(c) => {
-                const newClients = typeof c === 'function' ? (c as (prevState: Client[]) => Client[])(clients) : c;
-                saveClients(newClients);
-                setClients(newClients);
+            setClients={(updater) => {
+                setClients(currentClients => {
+                    const newClients = typeof updater === 'function' 
+                        ? (updater as (prevState: Client[]) => Client[])(currentClients) 
+                        : updater;
+                    saveClients(newClients);
+                    return newClients;
+                });
             }}
             onDone={() => setCurrentView('editor')} />;
       case 'items':
         return <ItemListPage
             items={items}
-            setItems={(i) => {
-                const newItems = typeof i === 'function' ? (i as (prevState: Item[]) => Item[])(items) : i;
-                saveItems(newItems);
-                setItems(newItems);
+            setItems={(updater) => {
+                setItems(currentItems => {
+                    const newItems = typeof updater === 'function' 
+                        ? (updater as (prevState: Item[]) => Item[])(currentItems) 
+                        : updater;
+                    saveItems(newItems);
+                    return newItems;
+                });
             }}
             formatCurrency={formatCurrency}
             onDone={() => setCurrentView('editor')} />;
       case 'invoices':
         return <DocumentListPage
             documents={savedInvoices}
-            setDocuments={(d) => {
-                const newDocuments = typeof d === 'function' ? (d as (prevState: SavedDocument[]) => SavedDocument[])(savedInvoices) : d;
-                saveInvoices(newDocuments);
-                setSavedInvoices(newDocuments);
+            setDocuments={(updater) => {
+                setSavedInvoices(currentInvoices => {
+                    const newDocuments = typeof updater === 'function' 
+                        ? (updater as (prevState: SavedDocument[]) => SavedDocument[])(currentInvoices) 
+                        : updater;
+                    saveInvoices(newDocuments);
+                    return newDocuments;
+                });
             }}
             formatCurrency={formatCurrency}
             handleSendReminder={handleSendReminder}
@@ -893,10 +914,14 @@ const App: React.FC = () => {
       case 'quotations':
         return <QuotationListPage
             documents={savedQuotations}
-            setDocuments={(d) => {
-                const newDocuments = typeof d === 'function' ? (d as (prevState: SavedDocument[]) => SavedDocument[])(savedQuotations) : d;
-                saveQuotations(newDocuments);
-                setSavedQuotations(newDocuments);
+            setDocuments={(updater) => {
+                setSavedQuotations(currentQuotations => {
+                    const newDocuments = typeof updater === 'function' 
+                        ? (updater as (prevState: SavedDocument[]) => SavedDocument[])(currentQuotations) 
+                        : updater;
+                    saveQuotations(newDocuments);
+                    return newDocuments;
+                });
             }}
             formatCurrency={formatCurrency}
             handleCreateInvoiceFromQuote={handleCreateInvoiceFromQuote}
