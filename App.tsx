@@ -1,7 +1,8 @@
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus } from './types';
+import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus, Recurrence, User } from './types';
 import { generateDescription } from './services/geminiService';
+import { fetchUserData, saveCompanies, saveClients, saveItems, saveInvoices, saveQuotations, saveDocument, saveActiveCompanyId, saveUsers } from './services/firebaseService';
 import { SparklesIcon, PlusIcon, TrashIcon, CogIcon, UsersIcon, ListIcon, DocumentIcon, MailIcon, WhatsAppIcon, FileTextIcon, DownloadIcon, MoreVerticalIcon, PrinterIcon, ChevronDownIcon, CashIcon } from './components/Icons';
 import DocumentPreview from './components/DocumentPreview';
 import SetupPage from './components/SetupPage';
@@ -11,6 +12,8 @@ import DocumentListPage from './components/DocumentListPage';
 import QuotationListPage from './components/QuotationListPage';
 import SaveItemsModal from './components/SaveItemsModal';
 import SaveClientModal from './components/SaveClientModal';
+import LoginPage from './components/LoginPage';
+
 
 declare const jspdf: any;
 declare const html2canvas: any;
@@ -95,81 +98,59 @@ const useWindowWidth = () => {
   return windowWidth;
 };
 
-
 const App: React.FC = () => {
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth < 640;
+  
+  // --- States ---
+  const [isSaving, setIsSaving] = useState(false);
   const [currentView, setCurrentView] = useState<'editor' | 'setup' | 'clients' | 'items' | 'invoices' | 'quotations'>('editor');
+  const [currentUser, setCurrentUser] = useState<string | null>(null);
+
+  // --- Data States (from localStorage) ---
+  const [users, setUsers] = useState<User[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [activeCompanyId, setActiveCompanyId] = useState<number>(1);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [items, setItems] = useState<Item[]>([]);
+  const [savedInvoices, setSavedInvoices] = useState<SavedDocument[]>([]);
+  const [savedQuotations, setSavedQuotations] = useState<SavedDocument[]>([]);
   
-  // --- Data States (loaded from localStorage) ---
-  const [companies, setCompanies] = useState<Company[]>(() => {
-    try {
-      const saved = localStorage.getItem('companies');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed as Company[];
-        }
-      }
-    } catch (e) {
-      console.error('Failed to load companies from localStorage', e);
+  // --- Authentication and Data loading ---
+  useEffect(() => {
+    const loggedInUser = localStorage.getItem('currentUser');
+    if (loggedInUser) {
+        setCurrentUser(loggedInUser);
+        const userData = fetchUserData();
+        setUsers(userData.users);
+        setCompanies(userData.companies);
+        setClients(userData.clients);
+        setItems(userData.items);
+        setSavedInvoices(userData.savedInvoices);
+        setSavedQuotations(userData.savedQuotations);
+        setActiveCompanyId(userData.activeCompanyId);
     }
-    return [{
-      id: 1,
-      details: { name: '', address: '', email: '', phone: '', bankName: '', accountNumber: '', website: '', taxId: '' },
-      logo: null,
-      bankQRCode: null,
-      defaultNotes: '',
-      taxRate: 0,
-      currency: '',
-      template: 'classic',
-      accentColor: '#4f46e5',
-    }];
-  });
+  }, []);
 
-  const [activeCompanyId, setActiveCompanyId] = useState<number>(() => {
-    try {
-        const savedId = localStorage.getItem('activeCompanyId');
-        const parsedId = savedId ? parseInt(savedId, 10) : null;
-        const availableCompanies = JSON.parse(localStorage.getItem('companies') || '[]');
-        if (parsedId && availableCompanies.some((c: Company) => c.id === parsedId)) {
-            return parsedId;
-        }
-    } catch (e) {
-        console.error('Failed to load active company ID from localStorage', e);
-    }
-    const firstCompany = (JSON.parse(localStorage.getItem('companies') || '[]') as Company[])[0];
-    return firstCompany ? firstCompany.id : 1;
-  });
+  const handleLogin = (username: string) => {
+    localStorage.setItem('currentUser', username);
+    setCurrentUser(username);
+    const userData = fetchUserData();
+    setUsers(userData.users);
+    setCompanies(userData.companies);
+    setClients(userData.clients);
+    setItems(userData.items);
+    setSavedInvoices(userData.savedInvoices);
+    setSavedQuotations(userData.savedQuotations);
+    setActiveCompanyId(userData.activeCompanyId);
+  };
 
-  const [clients, setClients] = useState<Client[]>(() => {
-    try {
-      const saved = localStorage.getItem('clients');
-      return saved && Array.isArray(JSON.parse(saved)) ? JSON.parse(saved) : [];
-    } catch (e) { console.error(e); return []; }
-  });
+  const handleLogout = () => {
+    localStorage.removeItem('currentUser');
+    setCurrentUser(null);
+    setUsers([]);
+  };
 
-  const [items, setItems] = useState<Item[]>(() => {
-    try {
-      const saved = localStorage.getItem('items');
-      return saved && Array.isArray(JSON.parse(saved)) ? JSON.parse(saved) : [];
-    } catch (e) { console.error(e); return []; }
-  });
-
-  const [savedInvoices, setSavedInvoices] = useState<SavedDocument[]>(() => {
-    try {
-      const saved = localStorage.getItem('savedInvoices');
-      return saved && Array.isArray(JSON.parse(saved)) ? JSON.parse(saved) : [];
-    } catch (e) { console.error(e); return []; }
-  });
-
-  const [savedQuotations, setSavedQuotations] = useState<SavedDocument[]>(() => {
-    try {
-      const saved = localStorage.getItem('savedQuotations');
-      return saved && Array.isArray(JSON.parse(saved)) ? JSON.parse(saved) : [];
-    } catch (e) { console.error(e); return []; }
-  });
-  
   const generateDocumentNumber = useCallback((
     client: Details, 
     docType: DocumentType, 
@@ -217,14 +198,14 @@ const App: React.FC = () => {
   const [documentType, setDocumentType] = useState<DocumentType>(DocumentType.Quotation);
   const activeCompany = useMemo(() => companies.find(c => c.id === activeCompanyId) || companies[0], [companies, activeCompanyId]);
   
-  const [companyDetails, setCompanyDetails] = useState<Details>(activeCompany.details);
-  const [companyLogo, setCompanyLogo] = useState<string | null>(activeCompany.logo);
-  const [bankQRCode, setBankQRCode] = useState<string | null>(activeCompany.bankQRCode);
-  const [notes, setNotes] = useState(activeCompany.defaultNotes);
-  const [taxRate, setTaxRate] = useState(activeCompany.taxRate);
-  const [currency, setCurrency] = useState(activeCompany.currency);
-  const [template, setTemplate] = useState(activeCompany.template);
-  const [accentColor, setAccentColor] = useState(activeCompany.accentColor);
+  const [companyDetails, setCompanyDetails] = useState<Details>({ name: '', address: '', email: '', phone: '' });
+  const [companyLogo, setCompanyLogo] = useState<string | null>(null);
+  const [bankQRCode, setBankQRCode] = useState<string | null>(null);
+  const [notes, setNotes] = useState('');
+  const [taxRate, setTaxRate] = useState(0);
+  const [currency, setCurrency] = useState('');
+  const [template, setTemplate] = useState('classic');
+  const [accentColor, setAccentColor] = useState('#4f46e5');
   const [clientDetails, setClientDetails] = useState<Details>({ name: '', address: '', email: '', phone: '' });
   const [documentNumber, setDocumentNumber] = useState('');
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0]);
@@ -238,7 +219,7 @@ const App: React.FC = () => {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [status, setStatus] = useState<InvoiceStatus | null>(null);
   const [generatingStates, setGeneratingStates] = useState<Record<number, boolean>>({});
-  const [loadedDocumentInfo, setLoadedDocumentInfo] = useState<{ id: number; status: InvoiceStatus | QuotationStatus | null; docType: DocumentType } | null>(null);
+  const [loadedDocumentInfo, setLoadedDocumentInfo] = useState<{ id: number; status: InvoiceStatus | QuotationStatus | null; docType: DocumentType, recurrenceParentId?: number | null } | null>(null);
   const [isCreatingNew, setIsCreatingNew] = useState(true);
   const [isSaveItemsModalOpen, setIsSaveItemsModalOpen] = useState(false);
   const [potentialNewItems, setPotentialNewItems] = useState<LineItem[]>([]);
@@ -250,6 +231,7 @@ const App: React.FC = () => {
   const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
   const [isUpdateClientModalOpen, setIsUpdateClientModalOpen] = useState(false);
   const [clientUpdateInfo, setClientUpdateInfo] = useState<{ original: Client; updated: Details } | null>(null);
+  const [recurrence, setRecurrence] = useState<Recurrence | null>(null);
 
   // --- Sync active company changes to form ---
   useEffect(() => {
@@ -266,10 +248,8 @@ const App: React.FC = () => {
   }, [activeCompany]);
   
   useEffect(() => {
-    try {
-        localStorage.setItem('activeCompanyId', String(activeCompanyId));
-    } catch (e) {
-        console.error('Failed to save active company ID to localStorage', e);
+    if(activeCompanyId) {
+        saveActiveCompanyId(activeCompanyId);
     }
   }, [activeCompanyId]);
 
@@ -279,19 +259,75 @@ const App: React.FC = () => {
     }
   }, [isCreatingNew, clientDetails, documentType, savedInvoices, savedQuotations, generateDocumentNumber]);
 
+  // --- Recurring Invoice Generation ---
+  const recurringChecked = React.useRef(false);
+  useEffect(() => {
+    if (!currentUser || recurringChecked.current || savedInvoices.length === 0) return;
+    recurringChecked.current = true;
 
-  // --- LocalStorage Persistence ---
-  useEffect(() => { localStorage.setItem('companies', JSON.stringify(companies)); }, [companies]);
-  useEffect(() => { localStorage.setItem('clients', JSON.stringify(clients)); }, [clients]);
-  useEffect(() => { localStorage.setItem('items', JSON.stringify(items)); }, [items]);
-  useEffect(() => { localStorage.setItem('savedInvoices', JSON.stringify(savedInvoices)); }, [savedInvoices]);
-  useEffect(() => { localStorage.setItem('savedQuotations', JSON.stringify(savedQuotations)); }, [savedQuotations]);
+    const calculateNextIssueDate = (lastDateStr: string, rec: Recurrence): Date => {
+      const lastDate = new Date(lastDateStr + 'T00:00:00');
+      const { frequency, interval } = rec;
+      switch (frequency) {
+        case 'daily': lastDate.setDate(lastDate.getDate() + interval); break;
+        case 'weekly': lastDate.setDate(lastDate.getDate() + interval * 7); break;
+        case 'monthly': lastDate.setMonth(lastDate.getMonth() + interval); break;
+        case 'yearly': lastDate.setFullYear(lastDate.getFullYear() + interval); break;
+      }
+      return lastDate;
+    };
+
+    const createInvoiceFromTemplate = (parent: SavedDocument, nextIssueDate: Date): SavedDocument => {
+      const issueDateObj = new Date(parent.issueDate + 'T00:00:00');
+      const dueDateObj = new Date(parent.dueDate + 'T00:00:00');
+      const duration = dueDateObj.getTime() - issueDateObj.getTime();
+      
+      const newDueDate = new Date(nextIssueDate.getTime() + duration);
+      
+      return {
+        ...parent,
+        id: Date.now() + Math.random(),
+        issueDate: nextIssueDate.toISOString().split('T')[0],
+        dueDate: newDueDate.toISOString().split('T')[0],
+        documentNumber: generateDocumentNumber(parent.clientDetails, DocumentType.Invoice, savedInvoices, savedQuotations),
+        status: InvoiceStatus.Pending,
+        payments: [],
+        paidDate: null,
+        recurrence: null, // Child invoices don't have recurrence settings themselves
+        recurrenceParentId: parent.id,
+      };
+    };
+
+    const parentInvoices = savedInvoices.filter(inv => inv.recurrence && !inv.recurrenceParentId);
+    let newInvoicesToGenerate: SavedDocument[] = [];
+
+    parentInvoices.forEach(parent => {
+      const seriesInvoices = savedInvoices.filter(inv => inv.recurrenceParentId === parent.id);
+      const allSeries = [parent, ...seriesInvoices];
+      const latestInvoice = allSeries.sort((a, b) => new Date(b.issueDate).getTime() - new Date(a.issueDate).getTime())[0];
+      
+      let nextIssueDate = calculateNextIssueDate(latestInvoice.issueDate, parent.recurrence!);
+      
+      while (nextIssueDate <= new Date() && (!parent.recurrence!.endDate || nextIssueDate <= new Date(parent.recurrence!.endDate))) {
+        const newInvoice = createInvoiceFromTemplate(parent, nextIssueDate);
+        newInvoicesToGenerate.push(newInvoice);
+        nextIssueDate = calculateNextIssueDate(newInvoice.issueDate, parent.recurrence!);
+      }
+    });
+
+    if (newInvoicesToGenerate.length > 0) {
+      const newInvoicesList = [...savedInvoices, ...newInvoicesToGenerate];
+      setSavedInvoices(newInvoicesList);
+      saveInvoices(newInvoicesList);
+      alert(`Generated ${newInvoicesToGenerate.length} new recurring invoice(s).`);
+    }
+  }, [savedInvoices, generateDocumentNumber, currentUser]);
 
   // --- Calculations ---
   const subtotal = useMemo(() => lineItems.reduce((acc, item) => acc + item.quantity * item.price, 0), [lineItems]);
   const taxAmount = useMemo(() => subtotal * (taxRate / 100), [subtotal, taxRate]);
   const total = useMemo(() => subtotal + taxAmount, [subtotal, taxAmount]);
-  const formatCurrency = useCallback((amount: number) => `${activeCompany.currency} ${amount.toFixed(2)}`, [activeCompany.currency]);
+  const formatCurrency = useCallback((amount: number) => `${activeCompany?.currency || '$'} ${amount.toFixed(2)}`, [activeCompany]);
 
   // --- Handlers ---
   const handleLineItemChange = (id: number, field: keyof LineItem, value: string | number) => {
@@ -443,6 +479,9 @@ const App: React.FC = () => {
   const handleDocumentTypeChange = (newType: DocumentType) => {
     if (newType === documentType) return;
     setDocumentType(newType);
+    if (newType === DocumentType.Quotation) {
+      setRecurrence(null); // Clear recurrence when switching to quotation
+    }
   };
   
   const filteredSavedItems = useMemo(() => {
@@ -463,23 +502,29 @@ const App: React.FC = () => {
     );
   }, [clients, clientDetails.name, isClientDropdownOpen]);
 
-  const saveDocument = (docToSave: SavedDocument) => {
-    if (docToSave.documentType === DocumentType.Invoice) {
-        setSavedInvoices(prev => {
-            const existing = prev.find(inv => inv.id === docToSave.id);
-            if (existing) return prev.map(inv => inv.id === docToSave.id ? docToSave : inv);
-            return [docToSave, ...prev];
-        });
-        alert('Invoice saved successfully!');
-    } else {
-        setSavedQuotations(prev => {
-            const existing = prev.find(q => q.id === docToSave.id);
-            if (existing) return prev.map(q => q.id === docToSave.id ? docToSave : q);
-            return [docToSave, ...prev];
-        });
-        alert('Quotation saved successfully!');
-    }
-    handleCreateNew();
+  const saveDocumentAndState = (docToSave: SavedDocument) => {
+      setIsSaving(true);
+      if (docToSave.documentType === DocumentType.Invoice) {
+          saveDocument('savedInvoices', docToSave);
+          const existing = savedInvoices.find(inv => inv.id === docToSave.id);
+          if (existing) {
+              setSavedInvoices(prev => prev.map(inv => inv.id === docToSave.id ? docToSave : inv));
+          } else {
+              setSavedInvoices(prev => [docToSave, ...prev]);
+          }
+          alert('Invoice saved successfully!');
+      } else {
+          saveDocument('savedQuotations', docToSave);
+          const existing = savedQuotations.find(q => q.id === docToSave.id);
+          if (existing) {
+              setSavedQuotations(prev => prev.map(q => q.id === docToSave.id ? docToSave : q));
+          } else {
+              setSavedQuotations(prev => [docToSave, ...prev]);
+          }
+          alert('Quotation saved successfully!');
+      }
+      setIsSaving(false);
+      handleCreateNew();
   };
 
   const checkNewItemsAndSave = (docToSave: SavedDocument) => {
@@ -490,7 +535,7 @@ const App: React.FC = () => {
         setPendingDoc(docToSave);
         setIsSaveItemsModalOpen(true);
     } else {
-        saveDocument(docToSave);
+        saveDocumentAndState(docToSave);
         setPendingDoc(null);
     }
   };
@@ -528,6 +573,8 @@ const App: React.FC = () => {
       status: loadedDocumentInfo?.docType === DocumentType.Invoice ? (loadedDocumentInfo.status as InvoiceStatus) || InvoiceStatus.Pending : null,
       quotationStatus: loadedDocumentInfo?.docType === DocumentType.Quotation ? (loadedDocumentInfo.status as QuotationStatus) || QuotationStatus.Active : null,
       payments: documentType === DocumentType.Invoice ? payments : [],
+      recurrence: documentType === DocumentType.Invoice ? recurrence : null,
+      recurrenceParentId: loadedDocumentInfo?.docType === DocumentType.Invoice ? loadedDocumentInfo.recurrenceParentId : null,
     };
     
     if (!isCreatingNew) { // If editing, check if client details were modified
@@ -557,11 +604,13 @@ const App: React.FC = () => {
 
   const handleConfirmUpdateClient = () => {
     if (clientUpdateInfo) {
-      setClients(prev => prev.map(c => 
+      const newClients = clients.map(c => 
         c.id === clientUpdateInfo.original.id 
-          ? { ...c, address: clientUpdateInfo.updated.address, email: clientUpdateInfo.updated.email, phone: clientUpdateInfo.updated.phone } 
+          ? { ...c, name: clientUpdateInfo.updated.name, address: clientUpdateInfo.updated.address, email: clientUpdateInfo.updated.email, phone: clientUpdateInfo.updated.phone } 
           : c
-      ));
+      );
+      saveClients(newClients);
+      setClients(newClients);
     }
     setIsUpdateClientModalOpen(false);
     setClientUpdateInfo(null);
@@ -582,7 +631,9 @@ const App: React.FC = () => {
 
   const handleConfirmSaveNewClient = () => {
     if (potentialNewClient) {
-        setClients(prev => [{ id: Date.now(), ...potentialNewClient }, ...prev]);
+        const newClients = [{ id: Date.now(), ...potentialNewClient }, ...clients];
+        saveClients(newClients);
+        setClients(newClients);
     }
     setIsSaveClientModalOpen(false);
     setPotentialNewClient(null);
@@ -610,16 +661,18 @@ const App: React.FC = () => {
             price: li.price,
             category: ''
         }));
-        setItems(prev => [...prev, ...itemsToAdd]);
+        const newItems = [...items, ...itemsToAdd];
+        saveItems(newItems);
+        setItems(newItems);
     }
-    if (pendingDoc) saveDocument(pendingDoc);
+    if (pendingDoc) saveDocumentAndState(pendingDoc);
     setIsSaveItemsModalOpen(false);
     setPotentialNewItems([]);
     setPendingDoc(null);
   };
 
   const handleDeclineSaveNewItems = () => {
-    if (pendingDoc) saveDocument(pendingDoc);
+    if (pendingDoc) saveDocumentAndState(pendingDoc);
     setIsSaveItemsModalOpen(false);
     setPotentialNewItems([]);
     setPendingDoc(null);
@@ -639,20 +692,23 @@ const App: React.FC = () => {
     setLineItems([]);
     setPayments([]);
     setStatus(null);
+    setRecurrence(null);
     const today = new Date().toISOString().split('T')[0];
     setIssueDate(today);
     const newDueDate = new Date();
     newDueDate.setDate(newDueDate.getDate() + 15);
     setDueDate(newDueDate.toISOString().split('T')[0]);
     setDueDateOption('15days');
-    setCompanyDetails(activeCompany.details);
-    setCompanyLogo(activeCompany.logo);
-    setBankQRCode(activeCompany.bankQRCode);
-    setNotes(activeCompany.defaultNotes);
-    setTaxRate(activeCompany.taxRate);
-    setCurrency(activeCompany.currency);
-    setTemplate(activeCompany.template);
-    setAccentColor(activeCompany.accentColor);
+    if(activeCompany) {
+      setCompanyDetails(activeCompany.details);
+      setCompanyLogo(activeCompany.logo);
+      setBankQRCode(activeCompany.bankQRCode);
+      setNotes(activeCompany.defaultNotes);
+      setTaxRate(activeCompany.taxRate);
+      setCurrency(activeCompany.currency);
+      setTemplate(activeCompany.template);
+      setAccentColor(activeCompany.accentColor);
+    }
   };
 
   const handleLoadDocument = (doc: SavedDocument) => {
@@ -672,12 +728,14 @@ const App: React.FC = () => {
       setBankQRCode(doc.bankQRCode);
       setTemplate(doc.template);
       setAccentColor(doc.accentColor);
-      setLoadedDocumentInfo({id: doc.id, status: doc.status || doc.quotationStatus || null, docType: doc.documentType});
+      setRecurrence(doc.recurrence || null);
+      setLoadedDocumentInfo({id: doc.id, status: doc.status || doc.quotationStatus || null, docType: doc.documentType, recurrenceParentId: doc.recurrenceParentId});
       setIsCreatingNew(false);
       setCurrentView('editor');
   };
 
   const handleCreateInvoiceFromQuote = (quotation: SavedDocument) => {
+    setIsSaving(true);
     // Generate new invoice number
     const newInvoiceNumber = generateDocumentNumber(quotation.clientDetails, DocumentType.Invoice, savedInvoices, savedQuotations);
 
@@ -701,17 +759,15 @@ const App: React.FC = () => {
     };
 
     // Save the new invoice
+    saveDocument('savedInvoices', newInvoice);
     setSavedInvoices(prev => [newInvoice, ...prev]);
 
     // Update the original quotation's status to 'Agreed'
-    setSavedQuotations(prev => 
-      prev.map(q => 
-        q.id === quotation.id 
-          ? { ...q, quotationStatus: QuotationStatus.Agreed } 
-          : q
-      )
-    );
-
+    const updatedQuotation = { ...quotation, quotationStatus: QuotationStatus.Agreed };
+    saveDocument('savedQuotations', updatedQuotation);
+    setSavedQuotations(prev => prev.map(q => q.id === quotation.id ? updatedQuotation : q));
+    
+    setIsSaving(false);
     alert(`Invoice #${newInvoiceNumber} has been created successfully.`);
   };
   
@@ -740,7 +796,6 @@ const App: React.FC = () => {
           while (remainingHeight > 0) {
             const pageCanvas = document.createElement('canvas');
             pageCanvas.width = canvas.width;
-            // FIX: Replaced undefined variable `pageHeight` with `pdfHeight`.
             pageCanvas.height = Math.min(canvasHeight, canvasWidth * pdfHeight / pdfWidth);
             pageCanvas.getContext('2d')?.drawImage(canvas, 0, position, canvasWidth, pageCanvas.height, 0, 0, pageCanvas.width, pageCanvas.height);
             if (position > 0) pdf.addPage();
@@ -782,25 +837,55 @@ const App: React.FC = () => {
   const activeNavButtonClasses = "bg-indigo-100 text-indigo-700";
   const inactiveNavButtonClasses = "text-slate-600 hover:bg-slate-200";
 
+  if (!currentUser) {
+    return <LoginPage onLoginSuccess={handleLogin} />;
+  }
+
   const renderCurrentView = () => {
     switch(currentView) {
       case 'setup':
-        return <SetupPage companies={companies} setCompanies={setCompanies} onDone={() => setCurrentView('editor')} activeCompanyId={activeCompanyId} setActiveCompanyId={setActiveCompanyId} />;
+        return <SetupPage
+            currentUser={currentUser}
+            users={users}
+            setUsers={setUsers}
+            companies={companies}
+            setCompanies={setCompanies}
+            onDone={() => setCurrentView('editor')}
+            activeCompanyId={activeCompanyId}
+            setActiveCompanyId={setActiveCompanyId} />;
       case 'clients':
-        return <ClientListPage clients={clients} setClients={setClients} onDone={() => setCurrentView('editor')} />;
+        return <ClientListPage
+            clients={clients}
+            setClients={setClients}
+            onDone={() => setCurrentView('editor')} />;
       case 'items':
-        return <ItemListPage items={items} setItems={setItems} formatCurrency={formatCurrency} onDone={() => setCurrentView('editor')} />;
+        return <ItemListPage
+            items={items}
+            setItems={setItems}
+            formatCurrency={formatCurrency}
+            onDone={() => setCurrentView('editor')} />;
       case 'invoices':
-        return <DocumentListPage documents={savedInvoices} setDocuments={setSavedInvoices} formatCurrency={formatCurrency} handleSendReminder={handleSendReminder} handleLoadDocument={handleLoadDocument} />;
+        return <DocumentListPage
+            documents={savedInvoices}
+            setDocuments={setSavedInvoices}
+            formatCurrency={formatCurrency}
+            handleSendReminder={handleSendReminder}
+            handleLoadDocument={handleLoadDocument} />;
       case 'quotations':
-        return <QuotationListPage documents={savedQuotations} setDocuments={setSavedQuotations} formatCurrency={formatCurrency} handleCreateInvoiceFromQuote={handleCreateInvoiceFromQuote} handleLoadDocument={handleLoadDocument} handleSendQuotationReminder={handleSendQuotationReminder} />;
+        return <QuotationListPage
+            documents={savedQuotations}
+            setDocuments={setSavedQuotations}
+            formatCurrency={formatCurrency}
+            handleCreateInvoiceFromQuote={handleCreateInvoiceFromQuote}
+            handleLoadDocument={handleLoadDocument}
+            handleSendQuotationReminder={handleSendQuotationReminder} />;
       case 'editor':
       default:
         const inputType = isMobile ? 'text' : 'number';
         const inputMode = isMobile ? 'decimal' : undefined;
         return (
           <>
-            <div className="sticky top-[52px] bg-gray-100/80 backdrop-blur-sm z-10 border-b">
+            <div className="sticky top-[68px] bg-gray-100/80 backdrop-blur-sm z-10 border-b">
                 <div className="container mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex justify-between items-center py-2">
                         {/* Status text */}
@@ -817,8 +902,9 @@ const App: React.FC = () => {
                             <button onClick={handleCreateNew} className="flex items-center gap-1.5 bg-white text-slate-700 font-semibold py-2 px-3 rounded-lg shadow-sm border hover:bg-slate-100 text-sm">
                                 <PlusIcon /> New
                             </button>
-                            <button onClick={handleSaveDocument} className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700">
-                                {isCreatingNew ? 'Save' : 'Update'}
+                            <button onClick={handleSaveDocument} disabled={isSaving} className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-wait flex items-center gap-2">
+                                {isSaving && <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>}
+                                {isSaving ? 'Saving...' : (isCreatingNew ? 'Save' : 'Update')}
                             </button>
                         </div>
                     </div>
@@ -942,6 +1028,65 @@ const App: React.FC = () => {
                           <input type="date" value={dueDate} onChange={e => { setDueDate(e.target.value); setDueDateOption('custom'); }} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
                       </div>
                   </div>
+                  {documentType === DocumentType.Invoice && (
+                    <div className="space-y-2 mt-4 pt-4 border-t">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                            <input 
+                                type="checkbox"
+                                checked={!!recurrence}
+                                onChange={e => {
+                                    if (e.target.checked) {
+                                        setRecurrence({ frequency: 'monthly', interval: 1 });
+                                    } else {
+                                        setRecurrence(null);
+                                    }
+                                }}
+                                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                            />
+                            <span className="font-medium text-gray-700">Make this a recurring invoice</span>
+                        </label>
+                        {recurrence && (
+                            <div className="pl-6 pt-4">
+                                <div className="bg-slate-50 p-4 rounded-lg border space-y-4">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-600 mb-1">Repeat Every</label>
+                                            <input 
+                                                type="number" 
+                                                min="1"
+                                                value={recurrence.interval}
+                                                onChange={e => setRecurrence(r => r ? {...r, interval: parseInt(e.target.value, 10) || 1} : null)}
+                                                className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-600 mb-1">Frequency</label>
+                                            <select 
+                                                value={recurrence.frequency}
+                                                onChange={e => setRecurrence(r => r ? {...r, frequency: e.target.value as Recurrence['frequency']} : null)}
+                                                className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                                            >
+                                                <option value="daily">Day(s)</option>
+                                                <option value="weekly">Week(s)</option>
+                                                <option value="monthly">Month(s)</option>
+                                                <option value="yearly">Year(s)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-600 mb-1">End Date (Optional)</label>
+                                        <input 
+                                            type="date" 
+                                            value={recurrence.endDate || ''}
+                                            onChange={e => setRecurrence(r => r ? {...r, endDate: e.target.value || null} : null)}
+                                            className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="bg-white p-6 rounded-lg shadow-md">
@@ -1003,7 +1148,7 @@ const App: React.FC = () => {
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                         <div>
-                            <label className="block text-sm font-medium text-gray-600 mb-1">Cost Price</label>
+                            <label className="block text-sm font-medium text-gray-600 mb-1">Cost</label>
                             <input 
                                 type={inputType}
                                 inputMode={inputMode}
@@ -1023,7 +1168,7 @@ const App: React.FC = () => {
                                 className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-600 mb-1">Selling Price</label>
+                            <label className="block text-sm font-medium text-gray-600 mb-1">Sell</label>
                             <input 
                                 type={inputType}
                                 inputMode={inputMode}
@@ -1120,7 +1265,7 @@ const App: React.FC = () => {
 
               {/* Preview and Actions Section */}
               <div className="lg:col-span-2 space-y-6">
-                <div className="bg-white p-6 rounded-lg shadow-md sticky top-28">
+                <div className="bg-white p-6 rounded-lg shadow-md sticky top-[132px]">
                   <div className="flex flex-wrap justify-between items-center gap-4 mb-6 border-b pb-4">
                     <h2 className="text-xl font-bold text-gray-800">Preview</h2>
                     <div className="flex items-center gap-2">
@@ -1183,16 +1328,22 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <header className="bg-white shadow-md sticky top-0 z-20 h-[52px] flex items-center">
+      <header className="bg-white shadow-md sticky top-0 z-20 h-[68px] flex items-center">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center">
              <div className="flex items-center gap-2 sm:gap-4">
-                <h1 className="text-xl sm:text-2xl font-bold text-indigo-600">InvQuo AI</h1>
+                <h1 className="text-xl sm:text-2xl font-bold text-indigo-600">InvQuo</h1>
                 <nav className="hidden sm:flex items-center gap-2 bg-slate-100 p-1 rounded-lg">
                     <button onClick={() => setCurrentView('editor')} className={`py-1 px-3 rounded-md transition-colors text-sm font-medium ${currentView === 'editor' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Editor</button>
                     <button onClick={() => setCurrentView('quotations')} className={`py-1 px-3 rounded-md transition-colors text-sm font-medium ${currentView === 'quotations' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Quotations</button>
                     <button onClick={() => setCurrentView('invoices')} className={`py-1 px-3 rounded-md transition-colors text-sm font-medium ${currentView === 'invoices' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Invoices</button>
                 </nav>
+            </div>
+            <div className="flex items-center gap-4">
+                <span className="text-slate-600 text-sm hidden sm:block">Welcome, <span className="font-bold">{currentUser}</span></span>
+                <button onClick={handleLogout} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-50 text-sm">
+                    Logout
+                </button>
             </div>
           </div>
         </div>
@@ -1219,7 +1370,7 @@ const App: React.FC = () => {
            </button>
        </nav>
 
-        <div className="hidden sm:block fixed top-0 left-0 h-full bg-white pt-[52px] z-10 shadow-lg">
+        <div className="hidden sm:block fixed top-0 left-0 h-full bg-white pt-[68px] z-10 shadow-lg">
              <nav className="flex flex-col p-2 space-y-1">
                  <DesktopSidebarButton onClick={() => setCurrentView('clients')} isActive={currentView === 'clients'} title="Clients"><UsersIcon /></DesktopSidebarButton>
                  <DesktopSidebarButton onClick={() => setCurrentView('items')} isActive={currentView === 'items'} title="Items"><ListIcon /></DesktopSidebarButton>
