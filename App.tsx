@@ -1801,6 +1801,7 @@ const App: React.FC = () => {
                         formatCurrency={formatCurrency}
                         payments={payments}
                         status={status}
+                        quotationStatus={loadedDocumentInfo?.status as QuotationStatus}
                         template={template}
                         accentColor={accentColor}
                       />
