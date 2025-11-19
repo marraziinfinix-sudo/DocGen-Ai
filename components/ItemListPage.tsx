@@ -1,21 +1,17 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Item } from '../types';
 import { TrashIcon, PlusIcon, PencilIcon } from './Icons';
-import { saveItems } from '../services/firebaseService';
 
 interface ItemListPageProps {
   items: Item[];
   setItems: React.Dispatch<React.SetStateAction<Item[]>>;
-  categories: string[];
-  setCategories: React.Dispatch<React.SetStateAction<string[]>>;
   formatCurrency: (amount: number) => string;
   onDone: () => void;
 }
 
-const emptyFormState: Omit<Item, 'id' | 'price' | 'costPrice'> & { id: number | null; name: string; description: string; price: string; costPrice: string; markup: string; category: string } = {
+const emptyFormState: Omit<Item, 'id' | 'price' | 'costPrice'> & { id: number | null; price: string; costPrice: string; markup: string; category: string } = {
   id: null,
-  name: '', // New field
-  description: '', // Updated to be separate from name
+  description: '',
   costPrice: '',
   price: '',
   markup: '',
@@ -58,11 +54,7 @@ const CategoryManager: React.FC<{
         setCategories(prev => prev.map(c => c === oldName ? newName : c).sort());
         
         // Update items with the old category
-        setItems(prevItems => {
-            const newItems = prevItems.map(item => item.category === oldName ? { ...item, category: newName } : item);
-            saveItems(newItems);
-            return newItems;
-        });
+        setItems(prevItems => prevItems.map(item => item.category === oldName ? { ...item, category: newName } : item));
 
         setEditingCategory(null);
     };
@@ -73,11 +65,7 @@ const CategoryManager: React.FC<{
             setCategories(prev => prev.filter(c => c !== categoryToDelete));
             
             // Un-categorize items
-            setItems(prevItems => {
-                const newItems = prevItems.map(item => item.category === categoryToDelete ? { ...item, category: '' } : item);
-                saveItems(newItems);
-                return newItems;
-            });
+            setItems(prevItems => prevItems.map(item => item.category === categoryToDelete ? { ...item, category: '' } : item));
         }
     };
 
@@ -123,30 +111,14 @@ const CategoryManager: React.FC<{
     );
 };
 
-// New BulkEditItemsModal component
-interface BulkEditItemsModalProps {
+const BulkEditModal: React.FC<{
     itemCount: number;
     categories: string[];
-    formatCurrency: (amount: number) => string;
-    onSaveCategory: (category: string) => void;
-    onSavePricing: (action: 'markup' | 'percent' | 'amount', value: number) => void;
+    onSave: (category: string) => void;
     onCancel: () => void;
-}
-
-const BulkEditItemsModal: React.FC<BulkEditItemsModalProps> = ({
-    itemCount,
-    categories,
-    formatCurrency,
-    onSaveCategory,
-    onSavePricing,
-    onCancel,
-}) => {
-    const [activeTab, setActiveTab] = useState<'category' | 'pricing'>('category');
+}> = ({ itemCount, categories, onSave, onCancel }) => {
     const [targetCategory, setTargetCategory] = useState('');
-    const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
-
-    const [pricingAction, setPricingAction] = useState<'markup' | 'percent' | 'amount'>('markup');
-    const [pricingValue, setPricingValue] = useState<string>('');
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
     const filteredCategories = useMemo(() => {
         if (!categories) return [];
@@ -155,146 +127,58 @@ const BulkEditItemsModal: React.FC<BulkEditItemsModalProps> = ({
         return categories.filter(cat => cat.toLowerCase().includes(searchTerm));
     }, [categories, targetCategory]);
 
-    const handleApplyCategory = () => {
-        onSaveCategory(targetCategory.trim());
-    };
 
-    const handleApplyPricing = () => {
-        const value = parseFloat(pricingValue);
-        if (isNaN(value)) {
-            alert("Please enter a valid number for pricing adjustment.");
-            return;
-        }
-        onSavePricing(pricingAction, value);
+    const handleSave = () => {
+        onSave(targetCategory.trim());
     };
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex justify-center items-center p-4">
             <div className="bg-white rounded-lg shadow-2xl max-w-md w-full">
                 <div className="p-6">
-                    <h3 className="text-lg font-bold text-gray-800 mb-4">Bulk Edit {itemCount} items</h3>
-                    
-                    <div className="flex gap-2 bg-slate-100 p-1 rounded-lg mb-6">
-                        <button 
-                            onClick={() => setActiveTab('category')} 
-                            className={`flex-1 text-center font-semibold py-2 px-3 rounded-md transition-all duration-200 ${activeTab === 'category' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}
-                        >
-                            Category
-                        </button>
-                        <button 
-                            onClick={() => setActiveTab('pricing')} 
-                            className={`flex-1 text-center font-semibold py-2 px-3 rounded-md transition-all duration-200 ${activeTab === 'pricing' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}
-                        >
-                            Pricing
-                        </button>
+                    <h3 className="text-lg font-bold text-gray-800 mb-4">Assign Category to {itemCount} items</h3>
+                    <p className="text-sm text-gray-600 mb-4">Select an existing category from the list or type a new one to create it.</p>
+                    <div className="relative">
+                        <label className="block text-sm font-medium text-gray-600 mb-1">Category</label>
+                        <input
+                            type="text"
+                            placeholder="Select or type category"
+                            value={targetCategory}
+                            onChange={e => setTargetCategory(e.target.value)}
+                            onFocus={() => setIsDropdownOpen(true)}
+                            onBlur={() => setTimeout(() => setIsDropdownOpen(false), 200)}
+                            className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                            autoFocus
+                            autoComplete="off"
+                        />
+                        {isDropdownOpen && (
+                             <div className="absolute z-50 w-full bg-white border border-slate-300 rounded-md shadow-lg mt-1 max-h-40 overflow-y-auto">
+                               {filteredCategories.length > 0 ? (
+                                 filteredCategories.map(cat => (
+                                   <button
+                                     key={cat}
+                                     type="button"
+                                     onClick={() => {
+                                         setTargetCategory(cat);
+                                         setIsDropdownOpen(false);
+                                     }}
+                                     className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                                   >
+                                     {cat}
+                                   </button>
+                                 ))
+                               ) : (
+                                 <div className="px-4 py-2 text-sm text-slate-500">
+                                   {targetCategory.trim() ? `Create new category: "${targetCategory.trim()}"` : (categories.length > 0 ? "No match found." : "No categories yet.")}
+                                 </div>
+                               )}
+                             </div>
+                        )}
                     </div>
-
-                    {activeTab === 'category' && (
-                        <div>
-                            <p className="text-sm text-gray-600 mb-4">Select an existing category from the list or type a new one to create it.</p>
-                            <div className="relative">
-                                <label className="block text-sm font-medium text-gray-600 mb-1">Category</label>
-                                <input
-                                    type="text"
-                                    placeholder="Select or type category"
-                                    value={targetCategory}
-                                    onChange={e => setTargetCategory(e.target.value)}
-                                    onFocus={() => setIsCategoryDropdownOpen(true)}
-                                    onBlur={() => setTimeout(() => setIsCategoryDropdownOpen(false), 200)}
-                                    className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
-                                    autoFocus
-                                    autoComplete="off"
-                                />
-                                {isCategoryDropdownOpen && (
-                                    <div className="absolute z-50 w-full bg-white border border-slate-300 rounded-md shadow-lg mt-1 max-h-40 overflow-y-auto">
-                                    {filteredCategories.length > 0 ? (
-                                        filteredCategories.map(cat => (
-                                        <button
-                                            key={cat}
-                                            type="button"
-                                            onClick={() => {
-                                                setTargetCategory(cat);
-                                                setIsCategoryDropdownOpen(false);
-                                            }}
-                                            className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
-                                        >
-                                            {cat}
-                                        </button>
-                                        ))
-                                    ) : (
-                                        <div className="px-4 py-2 text-sm text-slate-500">
-                                            {targetCategory.trim() ? `Create new category: "${targetCategory.trim()}"` : (categories.length > 0 ? "No match found." : "No categories yet.")}
-                                        </div>
-                                    )}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
-
-                    {activeTab === 'pricing' && (
-                        <div>
-                            <p className="text-sm text-gray-600 mb-4">Choose an action to adjust pricing for the selected items.</p>
-                            <div className="space-y-3">
-                                <label className="flex items-center space-x-2">
-                                    <input
-                                        type="radio"
-                                        name="pricingAction"
-                                        value="markup"
-                                        checked={pricingAction === 'markup'}
-                                        onChange={() => setPricingAction('markup')}
-                                        className="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
-                                    />
-                                    <span className="text-sm font-medium text-gray-700">Set Markup (%) to</span>
-                                </label>
-                                <label className="flex items-center space-x-2">
-                                    <input
-                                        type="radio"
-                                        name="pricingAction"
-                                        value="percent"
-                                        checked={pricingAction === 'percent'}
-                                        onChange={() => setPricingAction('percent')}
-                                        className="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
-                                    />
-                                    <span className="text-sm font-medium text-gray-700">Adjust Sell Price by %</span>
-                                </label>
-                                <label className="flex items-center space-x-2">
-                                    <input
-                                        type="radio"
-                                        name="pricingAction"
-                                        value="amount"
-                                        checked={pricingAction === 'amount'}
-                                        onChange={() => setPricingAction('amount')}
-                                        className="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
-                                    />
-                                    <span className="text-sm font-medium text-gray-700">Adjust Sell Price by Amount ({formatCurrency(0).replace('0.00', '±Amount')})</span>
-                                </label>
-
-                                <div className="mt-4">
-                                    <label htmlFor="pricing-value" className="sr-only">Value</label>
-                                    <input
-                                        id="pricing-value"
-                                        type="number"
-                                        step="0.01"
-                                        placeholder={pricingAction === 'markup' ? "e.g., 50" : (pricingAction === 'percent' ? "e.g., 10 (for +10%) or -5 (for -5%)" : "e.g., 5 (for +5) or -2.5 (for -2.5)")}
-                                        value={pricingValue}
-                                        onChange={e => setPricingValue(e.target.value)}
-                                        className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    )}
                 </div>
                 <div className="bg-slate-50 p-4 flex justify-end gap-4 border-t">
                     <button type="button" onClick={onCancel} className="bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300">Cancel</button>
-                    <button 
-                        type="button" 
-                        onClick={activeTab === 'category' ? handleApplyCategory : handleApplyPricing} 
-                        className="bg-indigo-600 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-indigo-700"
-                    >
-                        Apply
-                    </button>
+                    <button type="button" onClick={handleSave} className="bg-indigo-600 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-indigo-700">Apply</button>
                 </div>
             </div>
         </div>
@@ -302,14 +186,50 @@ const BulkEditItemsModal: React.FC<BulkEditItemsModalProps> = ({
 };
 
 
-const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories, setCategories, formatCurrency, onDone }) => {
+const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, formatCurrency, onDone }) => {
   const [formState, setFormState] = useState(emptyFormState);
   const [isEditing, setIsEditing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [isBulkEditModalOpen, setIsBulkEditModalOpen] = useState(false);
-  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false); // For item add/edit category dropdown
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+  
+  const [categories, setCategories] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('itemCategories');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed as string[];
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load categories from localStorage', e);
+    }
+    return [];
+  });
+
+  useEffect(() => {
+    // One-time migration for users who have categories on items but not the new managed list
+    if (localStorage.getItem('itemCategories') === null) {
+        // FIX: Add a guard to ensure `items` is an array before calling `.map`.
+        if (Array.isArray(items)) {
+            const initialCategories = Array.from(new Set(items.map(i => i.category).filter(Boolean))) as string[];
+            if (initialCategories.length > 0) {
+                setCategories(initialCategories.sort());
+            }
+        }
+    }
+  }, [items]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('itemCategories', JSON.stringify(categories));
+    } catch (e) {
+      console.error('Failed to save categories to localStorage', e);
+    }
+  }, [categories]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -344,10 +264,10 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories
   };
 
   const filteredItems = useMemo(() => {
+    // FIX: Ensure `items` is an array before filtering to prevent runtime errors.
     if (!Array.isArray(items)) return [];
     return items.filter(item => {
-        // Search by item name
-        const matchesSearch = searchQuery ? item.name.toLowerCase().includes(searchQuery.toLowerCase()) : true;
+        const matchesSearch = searchQuery ? item.description.toLowerCase().includes(searchQuery.toLowerCase()) : true;
         const matchesCategory = categoryFilter !== 'All' ? ((item.category || 'Uncategorized') === categoryFilter) : true;
         return matchesSearch && matchesCategory;
     });
@@ -375,13 +295,12 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories
   const handleSaveItem = () => {
     const price = parseFloat(formState.price);
     const costPrice = parseFloat(formState.costPrice);
-    if (!formState.name.trim() || isNaN(price) || isNaN(costPrice)) {
-        alert("Please enter a valid item name, cost price, and selling price.");
+    if (!formState.description || isNaN(price) || isNaN(costPrice)) {
+        alert("Please enter a valid description, cost price, and selling price.");
         return;
     }
     
-    const trimmedName = formState.name.trim(); // Use name field
-    const trimmedDescription = formState.description.trim(); // Use description field
+    const trimmedDescription = formState.description.trim();
     const newCategory = formState.category.trim();
 
     if (newCategory && !categories.includes(newCategory)) {
@@ -391,23 +310,14 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories
     if (isEditing && formState.id) {
       const updatedItem: Item = {
         id: formState.id,
-        name: trimmedName,
         description: trimmedDescription,
         costPrice: costPrice,
         price: price,
         category: newCategory,
       };
-      setItems(prev => {
-        const newItems = prev.map(i => (i.id === updatedItem.id ? updatedItem : i));
-        saveItems(newItems);
-        return newItems;
-      });
+      setItems(prev => prev.map(i => (i.id === updatedItem.id ? updatedItem : i)));
     } else {
-      setItems(prev => {
-        const newItems = [{ id: Date.now(), name: trimmedName, description: trimmedDescription, costPrice, price, category: newCategory }, ...prev];
-        saveItems(newItems);
-        return newItems;
-      });
+      setItems(prev => [{ id: Date.now(), description: trimmedDescription, costPrice, price, category: newCategory }, ...prev]);
     }
     setFormState(emptyFormState);
     setIsEditing(false);
@@ -419,8 +329,6 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories
     const markup = cost > 0 ? (((sell - cost) / cost) * 100).toFixed(2) : '0.00';
     setFormState({
       ...item, 
-      name: item.name, // Populate name
-      description: item.description, // Populate description
       price: String(item.price), 
       costPrice: String(item.costPrice), 
       markup: String(markup),
@@ -432,11 +340,7 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories
 
   const handleDeleteItem = (id: number) => {
     if (window.confirm('Are you sure you want to delete this item?')) {
-        setItems(prev => {
-            const newItems = prev.filter(i => i.id !== id);
-            saveItems(newItems);
-            return newItems;
-        });
+        setItems(prev => prev.filter(i => i.id !== id));
     }
   };
 
@@ -468,23 +372,15 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories
   const handleDeleteSelected = () => {
     if (selectedIds.size === 0) return;
     if (window.confirm(`Are you sure you want to delete ${selectedIds.size} selected item(s)? This action cannot be undone.`)) {
-      setItems(prev => {
-        const newItems = prev.filter(i => !selectedIds.has(i.id));
-        saveItems(newItems);
-        return newItems;
-      });
+      setItems(prev => prev.filter(i => !selectedIds.has(i.id)));
       setSelectedIds(new Set());
     }
   };
   
-  const handleBulkEditCategory = (newCategory: string) => {
-      setItems(prevItems => {
-          const newItems = prevItems.map(item =>
-              selectedIds.has(item.id) ? { ...item, category: newCategory } : item
-          );
-          saveItems(newItems);
-          return newItems;
-      });
+  const handleBulkAssignCategory = (newCategory: string) => {
+      setItems(prevItems => prevItems.map(item =>
+          selectedIds.has(item.id) ? { ...item, category: newCategory } : item
+      ));
 
       if (newCategory && !categories.includes(newCategory)) {
           setCategories(prev => [...prev, newCategory].sort());
@@ -493,38 +389,6 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories
       setSelectedIds(new Set());
       setIsBulkEditModalOpen(false);
   };
-
-    const handleBulkEditPricing = (action: 'markup' | 'percent' | 'amount', value: number) => {
-        setItems(prevItems => {
-            const newItems = prevItems.map(item => {
-                if (selectedIds.has(item.id)) {
-                    let updatedItem = { ...item };
-                    let newPrice = updatedItem.price;
-
-                    switch (action) {
-                        case 'markup':
-                            newPrice = updatedItem.costPrice * (1 + value / 100);
-                            break;
-                        case 'percent':
-                            newPrice = updatedItem.price * (1 + value / 100);
-                            break;
-                        case 'amount':
-                            newPrice = updatedItem.price + value;
-                            break;
-                    }
-                    
-                    updatedItem.price = parseFloat(newPrice.toFixed(2));
-                    return updatedItem;
-                }
-                return item;
-            });
-            saveItems(newItems);
-            return newItems;
-        });
-        setSelectedIds(new Set());
-        setIsBulkEditModalOpen(false);
-    };
-
 
   const isAllSelected = filteredItems.length > 0 && selectedIds.size === filteredItems.length;
   const isIndeterminate = selectedIds.size > 0 && selectedIds.size < filteredItems.length;
@@ -539,8 +403,8 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories
           {selectedIds.size > 0 && (
             <div className="flex items-center gap-2">
                 <span className="text-sm font-medium text-slate-600">{selectedIds.size} selected</span>
-                <button onClick={() => setIsBulkEditModalOpen(true)} className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 transition-colors">
-                    Bulk Edit
+                <button onClick={() => setIsBulkEditModalOpen(true)} className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-blue-700 transition-colors">
+                    Assign Category
                 </button>
                 <button onClick={handleDeleteSelected} className="bg-red-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-red-700 flex items-center gap-2 transition-all duration-200">
                     <TrashIcon />
@@ -561,12 +425,8 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories
             <h3 className="text-lg font-semibold text-gray-700 mb-4">{isEditing ? 'Edit Item' : 'Add New Item'}</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="md:col-span-3">
-                    <label className="block text-sm font-medium text-gray-600 mb-1">Item Name *</label>
-                    <input type="text" name="name" placeholder="E.g., Web Design Services" value={formState.name} onChange={handleInputChange} required className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"/>
-                </div>
-                <div className="md:col-span-3">
-                    <label className="block text-sm font-medium text-gray-600 mb-1">Description (Optional)</label>
-                    <textarea name="description" placeholder="Provide additional details or features of the item (e.g., 'Includes UI/UX, development, and deployment')." value={formState.description} onChange={handleInputChange} rows={2} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"/>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">Description</label>
+                    <textarea name="description" placeholder="Item Description" value={formState.description} onChange={handleInputChange} rows={3} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"/>
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-gray-600 mb-1">Cost</label>
@@ -642,7 +502,7 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                 <input
                     type="text"
-                    placeholder="Search items by name..." // Updated search placeholder
+                    placeholder="Search items by description..."
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
                     className="md:col-span-2 w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
@@ -689,8 +549,7 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories
                                           onChange={() => handleSelect(item.id)}
                                         />
                                         <div className="ml-4 flex-1">
-                                            <p className="font-bold text-slate-800 break-words">{item.name}</p> {/* Display item name */}
-                                            {item.description && <p className="text-sm text-slate-600">{item.description}</p>} {/* Display item description if present */}
+                                            <p className="font-bold text-slate-800 break-words">{item.description}</p>
                                             <p className="text-sm text-slate-500">
                                                 Cost: {formatCurrency(cost)} &bull; Sell: {formatCurrency(sell)} &bull; <span className={`font-medium ${markup >= 0 ? 'text-green-700' : 'text-red-700'}`}>Markup: {markup.toFixed(2)}%</span>
                                             </p>
@@ -726,12 +585,10 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories
         </div>
       </div>
        {isBulkEditModalOpen && (
-            <BulkEditItemsModal
+            <BulkEditModal
                 itemCount={selectedIds.size}
                 categories={categories}
-                formatCurrency={formatCurrency}
-                onSaveCategory={handleBulkEditCategory}
-                onSavePricing={handleBulkEditPricing}
+                onSave={handleBulkAssignCategory}
                 onCancel={() => setIsBulkEditModalOpen(false)}
             />
         )}

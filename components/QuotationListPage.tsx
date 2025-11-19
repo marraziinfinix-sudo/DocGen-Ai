@@ -1,8 +1,6 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { SavedDocument, QuotationStatus } from '../types';
 import { DocumentIcon, ViewIcon, TrashIcon, MoreVerticalIcon, MailIcon, WhatsAppIcon } from './Icons';
-import { saveQuotations } from '../services/firebaseService';
 
 interface QuotationListPageProps {
   documents: SavedDocument[];
@@ -69,11 +67,7 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
 
   const handleDeleteDocument = (id: number) => {
     if (window.confirm('Are you sure you want to delete this quotation? This action cannot be undone.')) {
-      setDocuments(prev => {
-        const newDocs = prev.filter(doc => doc.id !== id);
-        saveQuotations(newDocs);
-        return newDocs;
-      });
+      setDocuments(prev => prev.filter(doc => doc.id !== id));
     }
   };
 
@@ -100,11 +94,7 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
   const handleDeleteSelected = () => {
     if (selectedIds.size === 0) return;
     if (window.confirm(`Are you sure you want to delete ${selectedIds.size} selected quotation(s)? This action cannot be undone.`)) {
-      setDocuments(prev => {
-        const newDocs = prev.filter(d => !selectedIds.has(d.id));
-        saveQuotations(newDocs);
-        return newDocs;
-      });
+      setDocuments(prev => prev.filter(d => !selectedIds.has(d.id)));
       setSelectedIds(new Set());
     }
   };

@@ -25,8 +25,7 @@ export interface Payment {
 
 export interface LineItem {
   id: number;
-  name: string; // New field for item name
-  description: string; // Additional details for the item
+  description: string;
   quantity: number;
   costPrice: number;
   markup: number;
@@ -62,8 +61,7 @@ export interface Client extends Details {
 
 export interface Item {
   id: number;
-  name: string; // New field for item name
-  description: string; // Additional details for the item
+  description: string;
   costPrice: number;
   price: number; // This is the default selling price
   category?: string;
@@ -98,4 +96,9 @@ export interface SavedDocument {
   accentColor: string;
   recurrence?: Recurrence | null;
   recurrenceParentId?: number | null;
+}
+
+export interface User {
+  username: string;
+  password: string;
 }

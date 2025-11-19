@@ -22,26 +22,10 @@
           left: 0;
           top: 0;
           width: 100%;
-        }
-        /* This overrides the on-screen scroll container */
-        div[data-print-scroller='true'] {
-            visibility: visible !important;
-            overflow: visible !important;
-            max-height: none !important;
-        }
-        /* This overrides the on-screen sticky container */
-        div[data-print-container='true'] {
-            visibility: visible !important;
-            position: static !important;
-            box-shadow: none !important;
-            padding: 0 !important;
+          height: 100%;
         }
         .no-print {
           display: none;
-        }
-        @page {
-          size: A4;
-          margin: 20mm;
         }
       }
       /* Hide number input spinners on mobile (default), but show on desktop (sm and up) */
@@ -63,10 +47,6 @@
     "react/": "https://aistudiocdn.com/react@^19.2.0/",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
     "@google/genai": "https://aistudiocdn.com/@google/genai@^1.29.0",
-    "firebase/app": "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js",
-    "firebase/analytics": "https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics.js",
-    "firebase/auth": "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js",
-    "firebase/firestore": "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js",
     "firebase/": "https://aistudiocdn.com/firebase@^12.6.0/"
   }
 }
