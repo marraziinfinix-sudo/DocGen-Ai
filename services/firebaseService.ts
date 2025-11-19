@@ -270,6 +270,7 @@ export const updatePublicQuotationStatus = async (uid: string, docId: number, st
     }
 };
 
+
 const updateUserData = async (dataToUpdate: Partial<UserData>) => {
     const user = auth.currentUser;
     if (!user) {
