@@ -1,8 +1,9 @@
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus, Recurrence, User } from './types';
+import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus, Recurrence } from './types';
 import { generateDescription } from './services/geminiService';
-import { fetchUserData, saveCompanies, saveClients, saveItems, saveInvoices, saveQuotations, saveDocument, saveActiveCompanyId, saveUsers } from './services/firebaseService';
-import { SparklesIcon, PlusIcon, TrashIcon, CogIcon, UsersIcon, ListIcon, DocumentIcon, MailIcon, WhatsAppIcon, FileTextIcon, DownloadIcon, MoreVerticalIcon, PrinterIcon, ChevronDownIcon, CashIcon } from './components/Icons';
+import { fetchUserData, saveCompanies, saveClients, saveItems, saveInvoices, saveQuotations, saveDocument, saveActiveCompanyId, saveItemCategories, defaultUserData } from './services/firebaseService';
+import { SparklesIcon, PlusIcon, TrashIcon, CogIcon, UsersIcon, ListIcon, DocumentIcon, MailIcon, WhatsAppIcon, FileTextIcon, DownloadIcon, MoreVerticalIcon, PrinterIcon, ChevronDownIcon, CashIcon, SendIcon } from './components/Icons';
 import DocumentPreview from './components/DocumentPreview';
 import SetupPage from './components/SetupPage';
 import ClientListPage from './components/ClientListPage';
@@ -12,6 +13,8 @@ import QuotationListPage from './components/QuotationListPage';
 import SaveItemsModal from './components/SaveItemsModal';
 import SaveClientModal from './components/SaveClientModal';
 import LoginPage from './components/LoginPage';
+import { auth } from './services/firebaseConfig';
+import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
 
 
 declare const jspdf: any;
@@ -104,50 +107,69 @@ const App: React.FC = () => {
   // --- States ---
   const [isSaving, setIsSaving] = useState(false);
   const [currentView, setCurrentView] = useState<'editor' | 'setup' | 'clients' | 'items' | 'invoices' | 'quotations'>('editor');
-  const [currentUser, setCurrentUser] = useState<string | null>(null);
+  
+  // --- Auth States ---
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
 
-  // --- Data States (from localStorage) ---
-  const [users, setUsers] = useState<User[]>([]);
+  // --- Refs for PDF/Print ---
+  const previewContainerRef = React.useRef<HTMLDivElement>(null);
+  const previewScrollerRef = React.useRef<HTMLDivElement>(null);
+  const [isSendDropdownOpen, setIsSendDropdownOpen] = useState(false);
+
+
+  // --- Data States (from Firestore) ---
   const [companies, setCompanies] = useState<Company[]>([]);
   const [activeCompanyId, setActiveCompanyId] = useState<number>(1);
   const [clients, setClients] = useState<Client[]>([]);
   const [items, setItems] = useState<Item[]>([]);
+  const [itemCategories, setItemCategories] = useState<string[]>([]);
   const [savedInvoices, setSavedInvoices] = useState<SavedDocument[]>([]);
   const [savedQuotations, setSavedQuotations] = useState<SavedDocument[]>([]);
   
   // --- Authentication and Data loading ---
-  useEffect(() => {
-    const loggedInUser = localStorage.getItem('currentUser');
-    if (loggedInUser) {
-        setCurrentUser(loggedInUser);
-        const userData = fetchUserData();
-        setUsers(userData.users);
-        setCompanies(userData.companies);
-        setClients(userData.clients);
-        setItems(userData.items);
-        setSavedInvoices(userData.savedInvoices);
-        setSavedQuotations(userData.savedQuotations);
-        setActiveCompanyId(userData.activeCompanyId);
-    }
-  }, []);
-
-  const handleLogin = (username: string) => {
-    localStorage.setItem('currentUser', username);
-    setCurrentUser(username);
-    const userData = fetchUserData();
-    setUsers(userData.users);
+  const loadUserData = useCallback(async (uid: string) => {
+    const userData = await fetchUserData(uid);
     setCompanies(userData.companies);
     setClients(userData.clients);
     setItems(userData.items);
+    setItemCategories(userData.itemCategories || []);
     setSavedInvoices(userData.savedInvoices);
     setSavedQuotations(userData.savedQuotations);
     setActiveCompanyId(userData.activeCompanyId);
-  };
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setFirebaseUser(user);
+      setIsAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (firebaseUser) {
+      loadUserData(firebaseUser.uid);
+    } else {
+      // Clear data on logout
+      setCompanies([]);
+      setClients([]);
+      setItems([]);
+      setItemCategories([]);
+      setSavedInvoices([]);
+      setSavedQuotations([]);
+      setActiveCompanyId(1);
+    }
+  }, [firebaseUser, loadUserData]);
+  
+  useEffect(() => {
+      if (firebaseUser) {
+        saveItemCategories(itemCategories);
+      }
+  }, [itemCategories, firebaseUser]);
 
   const handleLogout = () => {
-    localStorage.removeItem('currentUser');
-    setCurrentUser(null);
-    setUsers([]);
+    signOut(auth);
   };
 
   const generateDocumentNumber = useCallback((
@@ -225,7 +247,7 @@ const App: React.FC = () => {
   const [pendingDoc, setPendingDoc] = useState<SavedDocument | null>(null);
   const [isSaveClientModalOpen, setIsSaveClientModalOpen] = useState(false);
   const [potentialNewClient, setPotentialNewClient] = useState<Details | null>(null);
-  const [newLineItem, setNewLineItem] = useState<Omit<LineItem, 'id'>>({ description: '', quantity: isMobile ? 0 : 1, costPrice: 0, markup: 0, price: 0 });
+  const [newLineItem, setNewLineItem] = useState<Omit<LineItem, 'id'>>({ name: '', description: '', quantity: isMobile ? 0 : 1, costPrice: 0, markup: 0, price: 0 });
   const [isItemDropdownOpen, setIsItemDropdownOpen] = useState(false);
   const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
   const [isUpdateClientModalOpen, setIsUpdateClientModalOpen] = useState(false);
@@ -247,10 +269,10 @@ const App: React.FC = () => {
   }, [activeCompany]);
   
   useEffect(() => {
-    if(activeCompanyId) {
+    if (activeCompanyId && firebaseUser) {
         saveActiveCompanyId(activeCompanyId);
     }
-  }, [activeCompanyId]);
+  }, [activeCompanyId, firebaseUser]);
 
   useEffect(() => {
     if (isCreatingNew) {
@@ -261,7 +283,7 @@ const App: React.FC = () => {
   // --- Recurring Invoice Generation ---
   const recurringChecked = React.useRef(false);
   useEffect(() => {
-    if (!currentUser || recurringChecked.current || savedInvoices.length === 0) return;
+    if (!firebaseUser || recurringChecked.current || savedInvoices.length === 0) return;
     recurringChecked.current = true;
 
     const calculateNextIssueDate = (lastDateStr: string, rec: Recurrence): Date => {
@@ -276,51 +298,49 @@ const App: React.FC = () => {
       return lastDate;
     };
 
-    const createInvoiceFromTemplate = (parent: SavedDocument, nextIssueDate: Date): SavedDocument => {
-      const issueDateObj = new Date(parent.issueDate + 'T00:00:00');
-      const dueDateObj = new Date(parent.dueDate + 'T00:00:00');
-      const duration = dueDateObj.getTime() - issueDateObj.getTime();
-      
-      const newDueDate = new Date(nextIssueDate.getTime() + duration);
-      
-      return {
-        ...parent,
-        id: Date.now() + Math.random(),
-        issueDate: nextIssueDate.toISOString().split('T')[0],
-        dueDate: newDueDate.toISOString().split('T')[0],
-        documentNumber: generateDocumentNumber(parent.clientDetails, DocumentType.Invoice, savedInvoices, savedQuotations),
-        status: InvoiceStatus.Pending,
-        payments: [],
-        paidDate: null,
-        recurrence: null, // Child invoices don't have recurrence settings themselves
-        recurrenceParentId: parent.id,
-      };
-    };
-
     const parentInvoices = savedInvoices.filter(inv => inv.recurrence && !inv.recurrenceParentId);
     let newInvoicesToGenerate: SavedDocument[] = [];
+    let allInvoices = [...savedInvoices]; // Use a temporary list for number generation
 
     parentInvoices.forEach(parent => {
-      const seriesInvoices = savedInvoices.filter(inv => inv.recurrenceParentId === parent.id);
+      const seriesInvoices = allInvoices.filter(inv => inv.recurrenceParentId === parent.id);
       const allSeries = [parent, ...seriesInvoices];
       const latestInvoice = allSeries.sort((a, b) => new Date(b.issueDate).getTime() - new Date(a.issueDate).getTime())[0];
       
       let nextIssueDate = calculateNextIssueDate(latestInvoice.issueDate, parent.recurrence!);
       
       while (nextIssueDate <= new Date() && (!parent.recurrence!.endDate || nextIssueDate <= new Date(parent.recurrence!.endDate))) {
-        const newInvoice = createInvoiceFromTemplate(parent, nextIssueDate);
+        const issueDateObj = new Date(parent.issueDate + 'T00:00:00');
+        const dueDateObj = new Date(parent.dueDate + 'T00:00:00');
+        const duration = dueDateObj.getTime() - issueDateObj.getTime();
+        const newDueDate = new Date(nextIssueDate.getTime() + duration);
+
+        const newInvoice: SavedDocument = {
+          ...parent,
+          id: Date.now() + Math.random(),
+          issueDate: nextIssueDate.toISOString().split('T')[0],
+          dueDate: newDueDate.toISOString().split('T')[0],
+          documentNumber: generateDocumentNumber(parent.clientDetails, DocumentType.Invoice, allInvoices, savedQuotations),
+          status: InvoiceStatus.Pending,
+          payments: [],
+          paidDate: null,
+          recurrence: null,
+          recurrenceParentId: parent.id,
+        };
+        
         newInvoicesToGenerate.push(newInvoice);
+        allInvoices.push(newInvoice); // Add to temp list for next number generation
+        
         nextIssueDate = calculateNextIssueDate(newInvoice.issueDate, parent.recurrence!);
       }
     });
 
     if (newInvoicesToGenerate.length > 0) {
-      const newInvoicesList = [...savedInvoices, ...newInvoicesToGenerate];
-      setSavedInvoices(newInvoicesList);
-      saveInvoices(newInvoicesList);
+      setSavedInvoices(allInvoices);
+      saveInvoices(allInvoices);
       alert(`Generated ${newInvoicesToGenerate.length} new recurring invoice(s).`);
     }
-  }, [savedInvoices, generateDocumentNumber, currentUser]);
+  }, [savedInvoices, savedQuotations, generateDocumentNumber, firebaseUser]);
 
   // --- Calculations ---
   const subtotal = useMemo(() => lineItems.reduce((acc, item) => acc + item.quantity * item.price, 0), [lineItems]);
@@ -361,22 +381,22 @@ const App: React.FC = () => {
   };
 
   const handleAddLineItem = () => {
-    if (!newLineItem.description.trim() || newLineItem.price < 0 || newLineItem.quantity <= 0) {
-        alert('Please provide a valid description, quantity, and price for the item.');
+    if (!newLineItem.name.trim() || newLineItem.price < 0 || newLineItem.quantity <= 0) {
+        alert('Please provide a valid item name, quantity, and price for the item.');
         return;
     }
     setLineItems(prev => [...prev, { id: Date.now(), ...newLineItem }]);
-    setNewLineItem({ description: '', quantity: isMobile ? 0 : 1, costPrice: 0, markup: 0, price: 0 });
+    setNewLineItem({ name: '', description: '', quantity: isMobile ? 0 : 1, costPrice: 0, markup: 0, price: 0 });
   };
 
   const handleDeleteLineItem = (id: number) => {
     setLineItems(prev => prev.filter(item => item.id !== id));
   };
   
-  const handleGenerateDescription = async (id: number, currentDescription: string) => {
+  const handleGenerateDescription = async (id: number, itemName: string, currentDescription: string) => {
     setGeneratingStates(prev => ({ ...prev, [id]: true }));
     try {
-      const newDescription = await generateDescription(currentDescription);
+      const newDescription = await generateDescription(itemName); // Pass item name to AI
       handleLineItemChange(id, 'description', newDescription);
     } catch (error) {
       console.error(error);
@@ -390,7 +410,7 @@ const App: React.FC = () => {
   };
 
   const handleClearNewLineItem = () => {
-    setNewLineItem({ description: '', quantity: isMobile ? 0 : 1, costPrice: 0, markup: 0, price: 0 });
+    setNewLineItem({ name: '', description: '', quantity: isMobile ? 0 : 1, costPrice: 0, markup: 0, price: 0 });
   };
 
   const handleClientDetailChange = (field: keyof Details, value: string) => {
@@ -455,7 +475,7 @@ const App: React.FC = () => {
         return updatedItem;
     });
 
-    if (field === 'description') {
+    if (field === 'name') {
         setIsItemDropdownOpen(true);
     }
   };
@@ -466,6 +486,7 @@ const App: React.FC = () => {
     const markup = costPrice > 0 ? ((price / costPrice) - 1) * 100 : 0;
     
     setNewLineItem({
+      name: item.name,
       description: item.description,
       quantity: isMobile ? 0 : 1,
       costPrice: costPrice,
@@ -485,10 +506,10 @@ const App: React.FC = () => {
   
   const filteredSavedItems = useMemo(() => {
     if (!isItemDropdownOpen || !Array.isArray(items)) return [];
-    const searchTerm = newLineItem.description.trim().toLowerCase();
+    const searchTerm = newLineItem.name.trim().toLowerCase(); // Filter by item name
     if (!searchTerm) return items;
-    return items.filter(item => item.description.toLowerCase().includes(searchTerm));
-  }, [items, newLineItem.description, isItemDropdownOpen]);
+    return items.filter(item => item.name.toLowerCase().includes(searchTerm));
+  }, [items, newLineItem.name, isItemDropdownOpen]);
 
   const filteredSavedClients = useMemo(() => {
     if (!isClientDropdownOpen || !Array.isArray(clients)) return [];
@@ -527,8 +548,8 @@ const App: React.FC = () => {
   };
 
   const checkNewItemsAndSave = (docToSave: SavedDocument) => {
-    const savedItemDescriptions = new Set(items.map(i => i.description.trim().toLowerCase()));
-    const newItemsInDoc = docToSave.lineItems.filter(li => li.description.trim() && !savedItemDescriptions.has(li.description.trim().toLowerCase()));
+    const savedItemNames = new Set(items.map(i => i.name.trim().toLowerCase())); // Check by item name
+    const newItemsInDoc = docToSave.lineItems.filter(li => li.name.trim() && !savedItemNames.has(li.name.trim().toLowerCase())); // Filter by item name
     if (newItemsInDoc.length > 0) {
         setPotentialNewItems(newItemsInDoc);
         setPendingDoc(docToSave);
@@ -545,23 +566,20 @@ const App: React.FC = () => {
       return;
     }
     
-    // Check for duplicate document number across both invoices and quotations
     const trimmedDocNum = documentNumber.trim();
     if (!trimmedDocNum) {
         alert('Document number cannot be empty. Please ensure client details are filled to generate a number.');
         return;
     }
 
-    if (isCreatingNew) {
-        const allDocs = [...savedInvoices, ...savedQuotations];
-        const isDuplicate = allDocs.some(
-            doc => doc.documentNumber.trim().toLowerCase() === trimmedDocNum.toLowerCase() && doc.id !== loadedDocumentInfo?.id
-        );
+    const allDocs = [...savedInvoices, ...savedQuotations];
+    const potentialDuplicate = allDocs.find(
+        doc => doc.documentNumber.trim().toLowerCase() === trimmedDocNum.toLowerCase()
+    );
 
-        if (isDuplicate) {
-            alert(`A document (invoice or quotation) with number "${trimmedDocNum}" already exists. Please use a unique number.`);
-            return;
-        }
+    if (potentialDuplicate && potentialDuplicate.id !== loadedDocumentInfo?.id) {
+        alert(`A document (invoice or quotation) with number "${trimmedDocNum}" already exists. Please use a unique number.`);
+        return;
     }
 
     const docToSave: SavedDocument = {
@@ -655,7 +673,8 @@ const App: React.FC = () => {
     if (potentialNewItems.length > 0) {
         const itemsToAdd: Item[] = potentialNewItems.map((li, index) => ({
             id: Date.now() + index,
-            description: li.description,
+            name: li.name, // Save item name
+            description: li.description, // Save item description
             costPrice: li.costPrice,
             price: li.price,
             category: ''
@@ -698,7 +717,7 @@ const App: React.FC = () => {
     newDueDate.setDate(newDueDate.getDate() + 15);
     setDueDate(newDueDate.toISOString().split('T')[0]);
     setDueDateOption('15days');
-    if(activeCompany) {
+    if (activeCompany) {
       setCompanyDetails(activeCompany.details);
       setCompanyLogo(activeCompany.logo);
       setBankQRCode(activeCompany.bankQRCode);
@@ -774,61 +793,123 @@ const App: React.FC = () => {
 
   const handleDownloadPdf = async () => {
     const printArea = document.getElementById('print-area');
-    if (printArea) {
-      try {
-        const canvas = await html2canvas(printArea, { scale: 2 });
+    const container = previewContainerRef.current;
+    const scroller = previewScrollerRef.current;
+    
+    if (!printArea || !container || !scroller) {
+        alert("Preview element not found. Cannot generate PDF.");
+        return;
+    }
+
+    // Store original styles
+    const originalContainerStyle = container.style.cssText;
+    const originalScrollerStyle = scroller.style.cssText;
+
+    // Apply temporary styles for full capture
+    container.style.position = 'static';
+    scroller.style.maxHeight = 'none';
+    scroller.style.overflow = 'visible';
+    
+    window.scrollTo(0, 0);
+
+    try {
+        const canvas = await html2canvas(printArea, { 
+            scale: 2,
+            useCORS: true,
+            windowWidth: printArea.scrollWidth,
+            windowHeight: printArea.scrollHeight
+        });
+        
         const imgData = canvas.toDataURL('image/png');
         const pdf = new jspdf.jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = pdf.internal.pageSize.getHeight();
+        
         const canvasWidth = canvas.width;
         const canvasHeight = canvas.height;
-        const ratio = canvasWidth / canvasHeight;
-        const width = pdfWidth;
-        const height = width / ratio;
+        const ratio = canvasHeight / canvasWidth;
+        
+        const imgHeight = pdfWidth * ratio;
+        let heightLeft = imgHeight;
+        let position = 0;
 
-        if (height <= pdfHeight) {
-          pdf.addImage(imgData, 'PNG', 0, 0, width, height);
-        } else {
-          let position = 0;
-          let remainingHeight = canvasHeight;
-          while (remainingHeight > 0) {
-            const pageCanvas = document.createElement('canvas');
-            pageCanvas.width = canvas.width;
-            pageCanvas.height = Math.min(canvasHeight, canvasWidth * pdfHeight / pdfWidth);
-            pageCanvas.getContext('2d')?.drawImage(canvas, 0, position, canvasWidth, pageCanvas.height, 0, 0, pageCanvas.width, pageCanvas.height);
-            if (position > 0) pdf.addPage();
-            pdf.addImage(pageCanvas.toDataURL('image/png'), 'PNG', 0, 0, pdfWidth, pdfHeight);
-            position += pageCanvas.height;
-            remainingHeight -= pageCanvas.height;
-          }
+        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+        heightLeft -= pdfHeight;
+
+        while (heightLeft > 0.1) { // 0.1 for float precision
+            position = position - pdfHeight;
+            pdf.addPage();
+            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+            heightLeft -= pdfHeight;
         }
+        
         pdf.save(`${documentType}_${documentNumber}.pdf`);
-      } catch (error) {
+
+    } catch (error) {
         console.error("Error generating PDF:", error);
         alert("Sorry, there was an error generating the PDF.");
-      }
+    } finally {
+        // Restore original styles
+        container.style.cssText = originalContainerStyle;
+        scroller.style.cssText = originalScrollerStyle;
     }
   };
   
+  const handleSendViaEmail = () => {
+    if (!clientDetails.email) {
+      alert("Client email is missing.");
+      return;
+    }
+    const subject = `${documentType} #${documentNumber} from ${companyDetails.name}`;
+    const body = `Dear ${clientDetails.name},\n\nPlease find the attached ${documentType.toLowerCase()} for your review.\n\nTotal Amount: ${formatCurrency(total)}\n\nThank you for your business.\n\nBest regards,\n${companyDetails.name}\n\n---\nNOTE: Please download the PDF of this document and attach it to this email before sending.`;
+    window.location.href = `mailto:${clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  };
+  
+  const handleSendViaWhatsApp = () => {
+    const message = `Hello ${clientDetails.name},\n\nHere is the ${documentType.toLowerCase()} #${documentNumber} from ${companyDetails.name}.\n\nTotal Amount: ${formatCurrency(total)}\n\nPlease find the attached PDF for details.\n\nThank you.\n\n---\nNOTE: Please download the PDF of this document and attach it to this chat before sending.`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+  };
+
+  // FIX: Define handleSendReminder function for invoices
   const handleSendReminder = (doc: SavedDocument, channel: 'email' | 'whatsapp') => {
-    const balanceDue = doc.total - (doc.payments?.reduce((s, p) => s + p.amount, 0) || 0);
-    const message = `Dear ${doc.clientDetails.name},\n\nThis is a friendly reminder regarding invoice #${doc.documentNumber} for the amount of ${formatCurrency(doc.total)}. The outstanding balance is ${formatCurrency(balanceDue)}. The due date is ${new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}.\n\nThank you,\n${doc.companyDetails.name}`;
+    if (channel === 'email' && !doc.clientDetails.email) {
+      alert("Client email is missing for this document.");
+      return;
+    }
+  
+    const amountPaid = doc.payments?.reduce((sum, p) => sum + p.amount, 0) || 0;
+    let balanceDue = doc.total - amountPaid;
+    if (doc.status === InvoiceStatus.Paid || balanceDue < 0.01) {
+      balanceDue = 0;
+    }
+  
+    const subject = `Reminder: Invoice #${doc.documentNumber} from ${doc.companyDetails.name}`;
+    const emailBody = `Dear ${doc.clientDetails.name},\n\nThis is a friendly reminder regarding invoice #${doc.documentNumber}, which was due on ${new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}.\n\nThe outstanding balance is ${formatCurrency(balanceDue)}.\n\nPlease let us know if you have any questions.\n\nBest regards,\n${doc.companyDetails.name}`;
+    const whatsappMessage = `Hello ${doc.clientDetails.name},\n\nThis is a friendly reminder regarding invoice #${doc.documentNumber}.\nThe outstanding balance is ${formatCurrency(balanceDue)}.\n\nThank you,\n${doc.companyDetails.name}`;
+  
     if (channel === 'email') {
-      const subject = `Reminder: Invoice #${doc.documentNumber} from ${doc.companyDetails.name}`;
-      window.location.href = `mailto:${doc.clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
+      window.location.href = `mailto:${doc.clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`;
     } else {
-      window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+      window.open(`https://wa.me/?text=${encodeURIComponent(whatsappMessage)}`, '_blank');
     }
   };
-  
+
+  // FIX: Define handleSendQuotationReminder function for quotations
   const handleSendQuotationReminder = (doc: SavedDocument, channel: 'email' | 'whatsapp') => {
-    const message = `Dear ${doc.clientDetails.name},\n\nThis is a friendly follow-up on our quotation #${doc.documentNumber} for the amount of ${formatCurrency(doc.total)}. It is valid until ${new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}.\n\nPlease let us know if you have any questions.\n\nBest regards,\n${doc.companyDetails.name}`;
+    if (channel === 'email' && !doc.clientDetails.email) {
+      alert("Client email is missing for this document.");
+      return;
+    }
+  
+    const subject = `Reminder: Quotation #${doc.documentNumber} from ${doc.companyDetails.name}`;
+    const emailBody = `Dear ${doc.clientDetails.name},\n\nThis is a friendly reminder regarding quotation #${doc.documentNumber}, which is valid until ${new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}.\n\nThe total amount is ${formatCurrency(doc.total)}.\n\nPlease let us know if you have any questions or would like to proceed.\n\nBest regards,\n${doc.companyDetails.name}`;
+    const whatsappMessage = `Hello ${doc.clientDetails.name},\n\nThis is a friendly reminder regarding quotation #${doc.documentNumber}, valid until ${new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}.\nThe total amount is ${formatCurrency(doc.total)}.\n\nPlease let us know if you have any questions.\n\nThank you,\n${doc.companyDetails.name}`;
+  
     if (channel === 'email') {
-      const subject = `Quotation #${doc.documentNumber} from ${doc.companyDetails.name}`;
-      window.location.href = `mailto:${doc.clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
+      window.location.href = `mailto:${doc.clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`;
     } else {
-      window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+      window.open(`https://wa.me/?text=${encodeURIComponent(whatsappMessage)}`, '_blank');
     }
   };
 
@@ -836,68 +917,67 @@ const App: React.FC = () => {
   const activeNavButtonClasses = "bg-indigo-100 text-indigo-700";
   const inactiveNavButtonClasses = "text-slate-600 hover:bg-slate-200";
 
-  if (!currentUser) {
-    return <LoginPage onLoginSuccess={handleLogin} />;
+  if (isAuthLoading) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-indigo-500"></div>
+      </div>
+    );
   }
+
+  if (!firebaseUser) {
+    return <LoginPage />;
+  }
+  
+  // Helper to truncate email for mobile display
+  const truncateEmail = (email: string | null | undefined, maxLength: number) => {
+    if (!email) return '';
+    if (email.length <= maxLength) return email;
+    return email.substring(0, maxLength - 3) + '...';
+  };
+
 
   const renderCurrentView = () => {
     switch(currentView) {
       case 'setup':
         return <SetupPage
-            currentUser={currentUser}
-            users={users}
-            setUsers={(u) => {
-                const newUsers = typeof u === 'function' ? (u as (prevState: User[]) => User[])(users) : u;
-                saveUsers(newUsers);
-                setUsers(newUsers);
-            }}
+            user={firebaseUser}
             companies={companies}
-            setCompanies={(c) => {
-                const newCompanies = typeof c === 'function' ? (c as (prevState: Company[]) => Company[])(companies) : c;
-                saveCompanies(newCompanies);
-                setCompanies(newCompanies);
-            }}
+            setCompanies={setCompanies}
             onDone={() => setCurrentView('editor')}
             activeCompanyId={activeCompanyId}
-            setActiveCompanyId={setActiveCompanyId} />;
+            setActiveCompanyId={setActiveCompanyId}
+            setClients={setClients} // Passed for reset app
+            setItems={setItems} // Passed for reset app
+            setItemCategories={setItemCategories} // Passed for reset app
+            setSavedInvoices={setSavedInvoices} // Passed for reset app
+            setSavedQuotations={setSavedQuotations} // Passed for reset app
+            defaultUserData={defaultUserData} // Passed for reset app
+            />;
       case 'clients':
         return <ClientListPage
             clients={clients}
-            setClients={(c) => {
-                const newClients = typeof c === 'function' ? (c as (prevState: Client[]) => Client[])(clients) : c;
-                saveClients(newClients);
-                setClients(newClients);
-            }}
+            setClients={setClients}
             onDone={() => setCurrentView('editor')} />;
       case 'items':
         return <ItemListPage
             items={items}
-            setItems={(i) => {
-                const newItems = typeof i === 'function' ? (i as (prevState: Item[]) => Item[])(items) : i;
-                saveItems(newItems);
-                setItems(newItems);
-            }}
+            setItems={setItems}
+            categories={itemCategories}
+            setCategories={setItemCategories}
             formatCurrency={formatCurrency}
             onDone={() => setCurrentView('editor')} />;
       case 'invoices':
         return <DocumentListPage
             documents={savedInvoices}
-            setDocuments={(d) => {
-                const newDocuments = typeof d === 'function' ? (d as (prevState: SavedDocument[]) => SavedDocument[])(savedInvoices) : d;
-                saveInvoices(newDocuments);
-                setSavedInvoices(newDocuments);
-            }}
+            setDocuments={setSavedInvoices}
             formatCurrency={formatCurrency}
             handleSendReminder={handleSendReminder}
             handleLoadDocument={handleLoadDocument} />;
       case 'quotations':
         return <QuotationListPage
             documents={savedQuotations}
-            setDocuments={(d) => {
-                const newDocuments = typeof d === 'function' ? (d as (prevState: SavedDocument[]) => SavedDocument[])(savedQuotations) : d;
-                saveQuotations(newDocuments);
-                setSavedQuotations(newDocuments);
-            }}
+            setDocuments={setSavedQuotations}
             formatCurrency={formatCurrency}
             handleCreateInvoiceFromQuote={handleCreateInvoiceFromQuote}
             handleLoadDocument={handleLoadDocument}
@@ -908,7 +988,7 @@ const App: React.FC = () => {
         const inputMode = isMobile ? 'decimal' : undefined;
         return (
           <>
-            <div className="sticky top-[68px] bg-gray-100/80 backdrop-blur-sm z-10 border-b">
+            <div className="sticky top-[68px] bg-gray-100/80 backdrop-blur-sm z-10 border-b no-print">
                 <div className="container mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex justify-between items-center py-2">
                         {/* Status text */}
@@ -943,7 +1023,7 @@ const App: React.FC = () => {
             </div>
             <main className="container mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8 p-4 sm:p-6 lg:p-8">
               {/* Form Section */}
-              <div className="lg:col-span-1 space-y-6">
+              <div className="lg:col-span-1 space-y-6 no-print">
                 <div className="bg-white p-6 rounded-lg shadow-md">
                   <h2 className="text-xl font-bold text-gray-800 mb-4">Document Type</h2>
                   <div className="flex gap-2 bg-slate-100 p-1 rounded-lg">
@@ -1128,15 +1208,16 @@ const App: React.FC = () => {
                     </div>
                     
                     <div className="relative">
-                      <label className="block text-sm font-medium text-gray-600 mb-1">Description</label>
-                      <textarea
-                        rows={2}
+                      <label className="block text-sm font-medium text-gray-600 mb-1">Item Name</label>
+                      <input
+                        type="text"
                         placeholder="Start typing to search or add a new item..."
-                        value={newLineItem.description}
-                        onChange={e => handleNewLineItemChange('description', e.target.value)}
+                        value={newLineItem.name}
+                        onChange={e => handleNewLineItemChange('name', e.target.value)}
                         onFocus={() => setIsItemDropdownOpen(true)}
                         onBlur={() => setTimeout(() => setIsItemDropdownOpen(false), 200)}
-                        className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 resize-none"
+                        className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                        autoComplete="off"
                       />
                       {isItemDropdownOpen && (
                         <div className="absolute z-20 w-full bg-white border border-slate-300 rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto">
@@ -1148,7 +1229,8 @@ const App: React.FC = () => {
                                 onClick={() => handleSavedItemSelected(item)}
                                 className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
                               >
-                                <p className="font-semibold">{item.description}</p>
+                                <p className="font-semibold">{item.name}</p>
+                                {item.description && <p className="text-xs text-slate-500">{item.description} &bull; </p>} 
                                 <p className="text-xs text-slate-500">Cost: {formatCurrency(item.costPrice)} &bull; Sell: {formatCurrency(item.price)}</p>
                               </button>
                             ))
@@ -1159,6 +1241,16 @@ const App: React.FC = () => {
                           )}
                         </div>
                       )}
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-600 mb-1">Description (Optional)</label>
+                        <textarea
+                            rows={2}
+                            placeholder="Additional details for this item..."
+                            value={newLineItem.description}
+                            onChange={e => handleNewLineItemChange('description', e.target.value)}
+                            className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 resize-none"
+                        />
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-600 mb-1">Quantity</label>
@@ -1211,7 +1303,16 @@ const App: React.FC = () => {
                     {lineItems.map((item) => (
                       <div key={item.id} className="p-3 bg-slate-50 rounded-lg border space-y-2">
                           <div className="col-span-12">
-                              <label className="block text-sm font-medium text-gray-600 mb-1">Description</label>
+                              <label className="block text-sm font-medium text-gray-600 mb-1">Item Name</label>
+                              <input
+                                  type="text"
+                                  value={item.name}
+                                  onChange={e => handleLineItemChange(item.id, 'name', e.target.value)}
+                                  className="flex-grow w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                              />
+                          </div>
+                          <div className="col-span-12">
+                              <label className="block text-sm font-medium text-gray-600 mb-1">Description (Optional)</label>
                               <div className="flex gap-1">
                                   <textarea
                                       rows={2}
@@ -1220,7 +1321,7 @@ const App: React.FC = () => {
                                       className="flex-grow w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 resize-none"
                                   />
                                   <button
-                                      onClick={() => handleGenerateDescription(item.id, item.description)}
+                                      onClick={() => handleGenerateDescription(item.id, item.name, item.description)}
                                       className="flex-shrink-0 p-2 bg-indigo-100 text-indigo-600 rounded-md hover:bg-indigo-200"
                                       title="Generate description with AI"
                                       disabled={generatingStates[item.id]}
@@ -1287,42 +1388,81 @@ const App: React.FC = () => {
               </div>
 
               {/* Preview and Actions Section */}
-              <div className="lg:col-span-2 space-y-6">
-                <div className="bg-white p-6 rounded-lg shadow-md sticky top-[132px]">
-                  <div className="flex flex-wrap justify-between items-center gap-4 mb-6 border-b pb-4">
-                    <h2 className="text-xl font-bold text-gray-800">Preview</h2>
-                    <div className="flex items-center gap-2">
-                        <button onClick={handlePrint} className="flex items-center gap-2 bg-white text-slate-700 font-semibold py-2 px-3 rounded-lg shadow-sm border hover:bg-slate-100 text-sm">
-                            <PrinterIcon /> <span className="hidden sm:inline">Print</span>
-                        </button>
-                        <button onClick={handleDownloadPdf} className="flex items-center gap-2 bg-white text-slate-700 font-semibold py-2 px-3 rounded-lg shadow-sm border hover:bg-slate-100 text-sm">
-                            <DownloadIcon /> <span className="hidden sm:inline">Download PDF</span>
-                        </button>
+              <div className="lg:col-span-2">
+                <div 
+                  ref={previewContainerRef} 
+                  data-print-container="true"
+                  className="bg-white p-6 rounded-lg shadow-md sticky top-[132px]"
+                >
+                    <div className="flex flex-wrap justify-between items-center gap-4 mb-6 border-b pb-4 no-print">
+                      <h2 className="text-xl font-bold text-gray-800">Preview</h2>
+                      <div className="flex items-center gap-2">
+                          <button onClick={handlePrint} className="flex items-center gap-2 bg-white text-slate-700 font-semibold py-2 px-3 rounded-lg shadow-sm border hover:bg-slate-100 text-sm">
+                              <PrinterIcon /> <span className="hidden sm:inline">Print</span>
+                          </button>
+                          <button onClick={handleDownloadPdf} className="flex items-center gap-2 bg-white text-slate-700 font-semibold py-2 px-3 rounded-lg shadow-sm border hover:bg-slate-100 text-sm">
+                              <DownloadIcon /> <span className="hidden sm:inline">PDF</span>
+                          </button>
+                          <div className="relative">
+                            <button 
+                                onClick={() => setIsSendDropdownOpen(prev => !prev)}
+                                disabled={!clientDetails.name}
+                                className="flex items-center gap-2 bg-indigo-600 text-white font-semibold py-2 px-3 rounded-lg shadow-sm border border-indigo-600 hover:bg-indigo-700 text-sm disabled:bg-indigo-400 disabled:cursor-not-allowed"
+                            >
+                                <SendIcon /> <span className="hidden sm:inline">Send</span>
+                            </button>
+                             {isSendDropdownOpen && (
+                                <div 
+                                    className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-20 ring-1 ring-black ring-opacity-5"
+                                    onMouseLeave={() => setIsSendDropdownOpen(false)}
+                                >
+                                    <div className="py-1">
+                                        <button 
+                                            onClick={() => { handleSendViaEmail(); setIsSendDropdownOpen(false); }}
+                                            disabled={!clientDetails.email}
+                                            className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
+                                        >
+                                            <MailIcon /> Email
+                                        </button>
+                                        <button 
+                                            onClick={() => { handleSendViaWhatsApp(); setIsSendDropdownOpen(false); }}
+                                            className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                                        >
+                                            <WhatsAppIcon /> WhatsApp
+                                        </button>
+                                    </div>
+                                </div>
+                             )}
+                          </div>
+                      </div>
                     </div>
-                  </div>
-                  <div className="max-h-[70vh] overflow-y-auto pr-2">
-                    <DocumentPreview
-                      documentType={documentType}
-                      companyDetails={companyDetails}
-                      clientDetails={clientDetails}
-                      documentNumber={documentNumber}
-                      issueDate={issueDate}
-                      dueDate={dueDate}
-                      lineItems={lineItems}
-                      notes={notes}
-                      subtotal={subtotal}
-                      taxAmount={taxAmount}
-                      taxRate={taxRate}
-                      total={total}
-                      companyLogo={companyLogo}
-                      bankQRCode={bankQRCode}
-                      formatCurrency={formatCurrency}
-                      payments={payments}
-                      status={status}
-                      template={template}
-                      accentColor={accentColor}
-                    />
-                  </div>
+                    <div 
+                      ref={previewScrollerRef}
+                      data-print-scroller="true"
+                      className="max-h-[70vh] overflow-y-auto pr-2"
+                    >
+                      <DocumentPreview
+                        documentType={documentType}
+                        companyDetails={companyDetails}
+                        clientDetails={clientDetails}
+                        documentNumber={documentNumber}
+                        issueDate={issueDate}
+                        dueDate={dueDate}
+                        lineItems={lineItems}
+                        notes={notes}
+                        subtotal={subtotal}
+                        taxAmount={taxAmount}
+                        taxRate={taxRate}
+                        total={total}
+                        companyLogo={companyLogo}
+                        bankQRCode={bankQRCode}
+                        formatCurrency={formatCurrency}
+                        payments={payments}
+                        status={status}
+                        template={template}
+                        accentColor={accentColor}
+                      />
+                    </div>
                 </div>
               </div>
             </main>
@@ -1351,7 +1491,7 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <header className="bg-white shadow-md sticky top-0 z-20 h-[68px] flex items-center">
+      <header className="bg-white shadow-md sticky top-0 z-20 h-[68px] flex items-center no-print">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center">
              <div className="flex items-center gap-2 sm:gap-4">
@@ -1363,16 +1503,22 @@ const App: React.FC = () => {
                 </nav>
             </div>
             <div className="flex items-center gap-4">
-                <span className="text-slate-600 text-sm hidden sm:block">Welcome, <span className="font-bold">{currentUser}</span></span>
-                <button onClick={handleLogout} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-50 text-sm">
-                    Logout
-                </button>
+              {isMobile ? (
+                  <span className="text-slate-600 text-sm font-medium truncate max-w-[120px]">
+                      {truncateEmail(firebaseUser.email, 15)}
+                  </span>
+              ) : (
+                  <span className="text-slate-600 text-sm">Welcome, <span className="font-bold">{firebaseUser.email}</span></span>
+              )}
+              <button onClick={handleLogout} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-50 text-sm">
+                  Logout
+              </button>
             </div>
           </div>
         </div>
       </header>
 
-       <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t z-30 grid grid-cols-6">
+       <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t z-30 grid grid-cols-6 no-print">
            <button onClick={() => setCurrentView('editor')} className={`${navButtonClasses} ${currentView === 'editor' ? activeNavButtonClasses : inactiveNavButtonClasses}`}>
                <FileTextIcon /><span className="text-xs">Editor</span>
            </button>
@@ -1393,7 +1539,7 @@ const App: React.FC = () => {
            </button>
        </nav>
 
-        <div className="hidden sm:block fixed top-0 left-0 h-full bg-white pt-[68px] z-10 shadow-lg">
+        <div className="hidden sm:block fixed top-0 left-0 h-full bg-white pt-[68px] z-10 shadow-lg no-print">
              <nav className="flex flex-col p-2 space-y-1">
                  <DesktopSidebarButton onClick={() => setCurrentView('clients')} isActive={currentView === 'clients'} title="Clients"><UsersIcon /></DesktopSidebarButton>
                  <DesktopSidebarButton onClick={() => setCurrentView('items')} isActive={currentView === 'items'} title="Items"><ListIcon /></DesktopSidebarButton>

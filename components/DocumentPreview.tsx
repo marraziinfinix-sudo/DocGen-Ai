@@ -143,7 +143,10 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
           <tbody>
             {lineItems.map(item => (
               <tr key={item.id} className="border-b border-slate-100">
-                <td className="p-2 sm:p-3 text-slate-800">{item.description}</td>
+                <td className="p-2 sm:p-3 text-slate-800">
+                    <p className="font-medium text-slate-800">{item.name}</p>
+                    {item.description && <p className="text-xs text-slate-500">{item.description}</p>}
+                </td>
                 <td className="p-2 sm:p-3 text-center text-slate-600">{item.quantity}</td>
                 <td className="p-2 sm:p-3 text-right text-slate-600">{formatCurrency(item.price)}</td>
                 <td className="p-2 sm:p-3 text-right font-medium text-slate-800">{formatCurrency(item.price * item.quantity)}</td>
@@ -209,7 +212,10 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
           <tbody>
             {lineItems.map(item => (
               <tr key={item.id} className="border-b border-slate-100">
-                <td className="p-2 sm:p-3 text-slate-800 font-medium">{item.description}</td>
+                <td className="p-2 sm:p-3 text-slate-800 font-medium">
+                    <p className="font-medium text-slate-800">{item.name}</p>
+                    {item.description && <p className="text-xs text-slate-500">{item.description}</p>}
+                </td>
                 <td className="p-2 sm:p-3 text-center text-slate-600">{item.quantity}</td>
                 <td className="p-2 sm:p-3 text-right text-slate-600">{formatCurrency(item.price)}</td>
                 <td className="p-2 sm:p-3 text-right font-medium text-slate-800">{formatCurrency(item.price * item.quantity)}</td>

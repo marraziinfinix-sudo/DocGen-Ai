@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import { LineItem } from '../types';
 
@@ -32,7 +33,8 @@ const SaveItemsModal: React.FC<SaveItemsModalProps> = ({
           <div className="max-h-48 overflow-y-auto bg-slate-50 border rounded-md p-3 space-y-2">
             {newItems.map((item, index) => (
               <div key={index} className="text-sm p-2 bg-white rounded-md border">
-                <p className="font-semibold text-slate-800">{item.description}</p>
+                <p className="font-semibold text-slate-800">{item.name}</p>
+                {item.description && <p className="text-slate-600">{item.description}</p>}
                 <p className="text-slate-500">Cost: {formatCurrency(item.costPrice)} &bull; Sell: {formatCurrency(item.price)}</p>
               </div>
             ))}

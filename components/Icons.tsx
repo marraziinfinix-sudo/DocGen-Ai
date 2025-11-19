@@ -108,6 +108,13 @@ export const ViewIcon: React.FC = () => (
     </svg>
 );
 
+export const EyeSlashIcon: React.FC = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+        <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C16.268 4.943 10.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
+        <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c3.273 5.057 9.03 7 9.542 7 .847 0 1.673-.12 2.454-.303z" />
+    </svg>
+);
+
 export const LinkIcon: React.FC = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
         <path fillRule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clipRule="evenodd" />
@@ -123,5 +130,11 @@ export const ChevronDownIcon: React.FC = () => (
 export const RepeatIcon: React.FC = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
         <path fillRule="evenodd" d="M4 2a1 1 0 00-1 1v2.101a7.002 7.002 0 0011.601 2.966 1 1 0 10-1.202-1.604A5.002 5.002 0 015 5.101V3a1 1 0 00-1-1zm11.5 6.474a1 1 0 00-1.604-1.202A5.002 5.002 0 0115 9.899V12a1 1 0 001 1h2a1 1 0 001-1v-2.101a7.002 7.002 0 00-11.601-2.966 1 1 0 101.202 1.604A5.002 5.002 0 0115 9.899v-1.425zM16 17a1 1 0 001-1v-2.101a7.002 7.002 0 00-11.601-2.966 1 1 0 101.202 1.604A5.002 5.002 0 0115 14.899V17a1 1 0 001 1z" clipRule="evenodd" />
+    </svg>
+);
+
+export const SendIcon: React.FC = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+        <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
     </svg>
 );
