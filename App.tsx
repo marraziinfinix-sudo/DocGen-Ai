@@ -719,6 +719,16 @@ const App: React.FC = () => {
     }
     
     let finalDocNum = documentNumber.trim();
+    
+    // If finalizing a draft (or empty number), check if we need to regenerate the number
+    if (!asDraft && (finalDocNum.startsWith('DRAFT-') || !finalDocNum)) {
+         const newNum = generateDocumentNumber(clientDetails, documentType, savedInvoices, savedQuotations);
+         if (newNum) {
+             finalDocNum = newNum;
+             setDocumentNumber(newNum);
+         }
+    }
+
     if (!finalDocNum) {
         if (asDraft) {
             finalDocNum = `DRAFT-${Date.now().toString().slice(-6)}`;
@@ -1456,7 +1466,7 @@ const App: React.FC = () => {
                             onChange={e => setDocumentNumber(e.target.value)} 
                             placeholder={isCreatingNew ? "Auto-generated from client" : ""}
                             className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed"
-                            disabled={!isCreatingNew}
+                            disabled={!isCreatingNew && loadedDocumentInfo?.status !== InvoiceStatus.Draft && loadedDocumentInfo?.status !== QuotationStatus.Draft}
                           />
                       </div>
                        <div>
@@ -1844,98 +1854,4 @@ const App: React.FC = () => {
              <div className="flex items-center gap-2 sm:gap-4">
                 <h1 className="text-xl sm:text-2xl font-bold text-indigo-600">InvQuo</h1>
                 <nav className="hidden sm:flex items-center gap-2 bg-slate-100 p-1 rounded-lg">
-                    <button onClick={() => setCurrentView('editor')} className={`py-1 px-3 rounded-md transition-colors text-sm font-medium ${currentView === 'editor' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Editor</button>
-                    <button onClick={() => setCurrentView('quotations')} className={`py-1 px-3 rounded-md transition-colors text-sm font-medium ${currentView === 'quotations' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Quotations</button>
-                    <button onClick={() => setCurrentView('invoices')} className={`py-1 px-3 rounded-md transition-colors text-sm font-medium ${currentView === 'invoices' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Invoices</button>
-                </nav>
-            </div>
-            <div className="flex items-center gap-4">
-              <button
-                  onClick={handleRefresh}
-                  className="p-2 text-indigo-600 bg-indigo-50 rounded-full hover:bg-indigo-100 transition-colors"
-                  title="Refresh Data"
-                  disabled={isRefreshing}
-              >
-                  <RefreshIcon className={isRefreshing ? 'animate-spin' : ''} />
-              </button>
-              {isMobile ? (
-                  <span className="text-slate-600 text-sm font-medium truncate max-w-[120px]">
-                      {truncateEmail(firebaseUser.email, 15)}
-                  </span>
-              ) : (
-                  <span className="text-slate-600 text-sm">Welcome, <span className="font-bold">{firebaseUser.email}</span></span>
-              )}
-              <button onClick={handleLogout} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-50 text-sm">
-                  Logout
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
-
-       <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t z-30 grid grid-cols-6 no-print">
-           <button onClick={() => setCurrentView('editor')} className={`${navButtonClasses} ${currentView === 'editor' ? activeNavButtonClasses : inactiveNavButtonClasses}`}>
-               <FileTextIcon /><span className="text-xs">Editor</span>
-           </button>
-            <button onClick={() => setCurrentView('quotations')} className={`${navButtonClasses} ${currentView === 'quotations' ? activeNavButtonClasses : inactiveNavButtonClasses}`}>
-               <DocumentIcon /><span className="text-xs">Quotes</span>
-           </button>
-           <button onClick={() => setCurrentView('invoices')} className={`${navButtonClasses} ${currentView === 'invoices' ? activeNavButtonClasses : inactiveNavButtonClasses}`}>
-               <CashIcon /><span className="text-xs">Invoices</span>
-           </button>
-            <button onClick={() => setCurrentView('clients')} className={`${navButtonClasses} ${currentView === 'clients' ? activeNavButtonClasses : inactiveNavButtonClasses}`}>
-               <UsersIcon /><span className="text-xs">Clients</span>
-           </button>
-           <button onClick={() => setCurrentView('items')} className={`${navButtonClasses} ${currentView === 'items' ? activeNavButtonClasses : inactiveNavButtonClasses}`}>
-               <ListIcon /><span className="text-xs">Items</span>
-           </button>
-           <button onClick={() => setCurrentView('setup')} className={`${navButtonClasses} ${currentView === 'setup' ? activeNavButtonClasses : inactiveNavButtonClasses}`}>
-               <CogIcon /><span className="text-xs">Setup</span>
-           </button>
-       </nav>
-
-        <div className="hidden sm:block fixed top-0 left-0 h-full bg-white pt-[68px] z-10 shadow-lg no-print">
-             <nav className="flex flex-col p-2 space-y-1">
-                 <DesktopSidebarButton onClick={() => setCurrentView('clients')} isActive={currentView === 'clients'} title="Clients"><UsersIcon /></DesktopSidebarButton>
-                 <DesktopSidebarButton onClick={() => setCurrentView('items')} isActive={currentView === 'items'} title="Items"><ListIcon /></DesktopSidebarButton>
-                 <DesktopSidebarButton onClick={() => setCurrentView('setup')} isActive={currentView === 'setup'} title="Setup"><CogIcon /></DesktopSidebarButton>
-             </nav>
-        </div>
-        
-        <div className="sm:pl-16 pb-16 sm:pb-0">
-          {renderCurrentView()}
-        </div>
-
-        {isSaveItemsModalOpen && (
-            <SaveItemsModal
-                isOpen={isSaveItemsModalOpen}
-                newItems={potentialNewItems}
-                onConfirm={handleConfirmSaveNewItems}
-                onDecline={handleDeclineSaveNewItems}
-                onCancel={handleCancelSaveNewItems}
-                formatCurrency={formatCurrency}
-            />
-        )}
-        {isSaveClientModalOpen && potentialNewClient && (
-            <SaveClientModal
-                isOpen={isSaveClientModalOpen}
-                newClient={potentialNewClient}
-                onConfirm={handleConfirmSaveNewClient}
-                onDecline={handleDeclineSaveNewClient}
-                onCancel={handleCancelSaveNewClient}
-            />
-        )}
-        {isUpdateClientModalOpen && clientUpdateInfo && (
-            <UpdateClientModal
-                isOpen={isUpdateClientModalOpen}
-                clientInfo={clientUpdateInfo}
-                onConfirm={handleConfirmUpdateClient}
-                onDecline={handleDeclineUpdateClient}
-                onCancel={handleCancelUpdateClient}
-            />
-        )}
-    </div>
-  );
-};
-
-export default App;
+                    <button onClick={() => setCurrentView('editor')} className={`py-1 px
