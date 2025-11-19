@@ -3,6 +3,7 @@ import { Company, Details, Client, Item, SavedDocument } from '../types';
 import { PlusIcon, TrashIcon, ViewIcon, EyeSlashIcon } from './Icons';
 import { saveCompanies, resetUserData, deleteAccount, defaultUserData as importedDefaultUserData } from '../services/firebaseService';
 import { sendPasswordResetEmail, User as FirebaseUser } from 'firebase/auth';
+import { auth } from '../services/firebaseConfig';
 
 interface SetupPageProps {
   user: FirebaseUser;
@@ -243,7 +244,7 @@ const AccountSettings: React.FC<{ user: FirebaseUser }> = ({ user }) => {
         }
         setIsSending(true);
         try {
-            await sendPasswordResetEmail(user.auth, user.email);
+            await sendPasswordResetEmail(auth, user.email);
             setResetSent(true);
             alert("A password reset link has been sent to your email address. Please check your inbox.");
         } catch (error: any) {

@@ -1,3 +1,4 @@
+
 import { Company, Client, Item, SavedDocument, DocumentType, LineItem, Details, Payment, Recurrence } from '../types';
 import { db, auth } from './firebaseConfig';
 import { doc, getDoc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
@@ -188,7 +189,11 @@ export const fetchUserData = async (uid: string): Promise<UserData> => {
         clients: Array.isArray(parsedData.clients) ? parsedData.clients.map(sanitizeClient).filter(Boolean) as Client[] : defaultUserData.clients,
         items: Array.isArray(parsedData.items) ? parsedData.items.map(sanitizeItem).filter(Boolean) as Item[] : defaultUserData.items,
         savedInvoices: Array.isArray(parsedData.savedInvoices) ? parsedData.savedInvoices.map(sanitizeDocument).filter(Boolean) as SavedDocument[] : defaultUserData.savedInvoices,
-        savedQuotations: Array.isArray(parsedData.quotations) ? parsedData.quotations.map(sanitizeDocument).filter(Boolean) as SavedDocument[] : defaultUserData.savedQuotations,
+        savedQuotations: Array.isArray(parsedData.savedQuotations) 
+            ? parsedData.savedQuotations.map(sanitizeDocument).filter(Boolean) as SavedDocument[] 
+            : (Array.isArray(parsedData.quotations) 
+                ? parsedData.quotations.map(sanitizeDocument).filter(Boolean) as SavedDocument[] 
+                : defaultUserData.savedQuotations),
         activeCompanyId: typeof parsedData.activeCompanyId === 'number' ? parsedData.activeCompanyId : defaultUserData.activeCompanyId,
         itemCategories: Array.isArray(parsedData.itemCategories) ? parsedData.itemCategories.filter((cat): cat is string => typeof cat === 'string') : defaultUserData.itemCategories,
       };
