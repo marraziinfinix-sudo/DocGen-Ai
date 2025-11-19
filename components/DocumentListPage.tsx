@@ -39,7 +39,7 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
     if (isOverdue) return 'Overdue';
 
     switch (doc.status) {
-        case InvoiceStatus.Paid: return 'Paid';
+        case InvoiceStatus.Paid: return 'Fully Paid';
         case InvoiceStatus.PartiallyPaid: return 'Partially Paid';
         default: return 'Pending';
     }
@@ -84,7 +84,7 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
         }
 
         switch (status) {
-            case 'Paid':
+            case 'Fully Paid':
                 acc.Paid.total += doc.total;
                 acc.Paid.count++;
                 break;
@@ -183,13 +183,14 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
     const doc = lastPaidInvoice;
     const amountPaid = doc.payments?.reduce((sum, p) => sum + p.amount, 0) || 0;
     const balanceDue = Math.max(0, doc.total - amountPaid);
+    const statusDisplay = doc.status === InvoiceStatus.Paid ? 'Fully Paid' : doc.status;
 
     const subject = `Payment Receipt - Invoice #${doc.documentNumber}`;
     
     const emailBody = `Dear ${doc.clientDetails.name},\n\n` +
         `Thank you for your payment regarding Invoice #${doc.documentNumber}.\n\n` +
         `Here is the updated status:\n` +
-        `Status: ${doc.status}\n` +
+        `Status: ${statusDisplay}\n` +
         `Invoice Total: ${formatCurrency(doc.total)}\n` +
         `Total Paid: ${formatCurrency(amountPaid)}\n` +
         `Balance Due: ${formatCurrency(balanceDue)}\n\n` +
@@ -198,7 +199,7 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
 
     const whatsappMessage = `*Payment Receipt*\n` +
         `Invoice: #${doc.documentNumber}\n` +
-        `Status: *${doc.status}*\n\n` +
+        `Status: *${statusDisplay}*\n\n` +
         `Total Amount: ${formatCurrency(doc.total)}\n` +
         `Total Paid: ${formatCurrency(amountPaid)}\n` +
         `*Balance Due: ${formatCurrency(balanceDue)}*\n\n` +
@@ -271,7 +272,7 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
   const getDisplayStatus = (doc: SavedDocument) => {
     const statusText = getDisplayStatusText(doc);
     switch (statusText) {
-        case 'Paid': return { text: 'Paid', color: 'bg-green-100 text-green-700' };
+        case 'Fully Paid': return { text: 'Fully Paid', color: 'bg-green-100 text-green-700' };
         case 'Partially Paid': return { text: 'Partially Paid', color: 'bg-blue-100 text-blue-700' };
         case 'Pending': return { text: 'Pending', color: 'bg-yellow-100 text-yellow-700' };
         case 'Overdue': return { text: 'Overdue', color: 'bg-red-100 text-red-700' };
@@ -333,7 +334,7 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
     </div>
   );
   
-  const filterOptions = ['All', 'Paid', 'Partially Paid', 'Pending', 'Overdue', 'Recurring'];
+  const filterOptions = ['All', 'Fully Paid', 'Partially Paid', 'Pending', 'Overdue', 'Recurring'];
 
   return (
     <>
@@ -351,7 +352,7 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <div className="bg-green-50 border border-green-200 p-4 rounded-lg">
-                <h3 className="text-sm font-semibold text-green-800">Total Paid</h3>
+                <h3 className="text-sm font-semibold text-green-800">Fully Paid</h3>
                 <p className="text-2xl font-bold text-green-700">{formatCurrency(summary.Paid.total)}</p>
                 <p className="text-xs text-green-600">{summary.Paid.count} invoice(s)</p>
             </div>

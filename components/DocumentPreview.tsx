@@ -37,7 +37,7 @@ const StatusStamp: React.FC<{ status: InvoiceStatus | QuotationStatus | null, co
   switch (status) {
     case InvoiceStatus.Paid:
     case QuotationStatus.Agreed:
-      text = status === InvoiceStatus.Paid ? 'PAID' : 'AGREED';
+      text = status === InvoiceStatus.Paid ? 'FULLY PAID' : 'AGREED';
       borderColor = '#22c55e';
       textColor = '#22c55e';
       break;

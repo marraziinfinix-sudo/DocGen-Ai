@@ -42,7 +42,7 @@ const PaymentSuccessModal: React.FC<PaymentSuccessModalProps> = ({
           <div className="bg-slate-50 rounded-lg p-4 mb-6 text-sm space-y-2 border">
             <div className="flex justify-between">
                 <span className="text-slate-500">Status:</span>
-                <span className="font-bold text-indigo-600">{invoice.status}</span>
+                <span className="font-bold text-indigo-600">{invoice.status === 'Paid' ? 'Fully Paid' : invoice.status}</span>
             </div>
             <div className="flex justify-between">
                 <span className="text-slate-500">Total Amount:</span>
