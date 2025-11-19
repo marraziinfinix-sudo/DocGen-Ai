@@ -1349,7 +1349,7 @@ const App: React.FC = () => {
                             </button>
                             <button onClick={() => handleSaveDocument()} disabled={isSaving} className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-wait flex items-center gap-2">
                                 {isSaving && <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>}
-                                {isSaving ? 'Saving...' : (isCreatingNew ? 'Save' : 'Update')}
+                                {isSaving ? 'Saving...' : (isCreatingNew ? 'Save' : 'Save')}
                             </button>
                         </div>
                     </div>
@@ -1840,8 +1840,8 @@ const App: React.FC = () => {
                 <h1 className="text-xl sm:text-2xl font-bold text-indigo-600">InvQuo</h1>
                 <nav className="hidden sm:flex items-center gap-2 bg-slate-100 p-1 rounded-lg">
                     <button onClick={() => setCurrentView('editor')} className={`py-1 px-3 rounded-md text-sm font-semibold transition-all duration-200 ${currentView === 'editor' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Editor</button>
-                    <button onClick={() => setCurrentView('invoices')} className={`py-1 px-3 rounded-md text-sm font-semibold transition-all duration-200 ${currentView === 'invoices' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Invoices</button>
                     <button onClick={() => setCurrentView('quotations')} className={`py-1 px-3 rounded-md text-sm font-semibold transition-all duration-200 ${currentView === 'quotations' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Quotations</button>
+                    <button onClick={() => setCurrentView('invoices')} className={`py-1 px-3 rounded-md text-sm font-semibold transition-all duration-200 ${currentView === 'invoices' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Invoices</button>
                     <button onClick={() => setCurrentView('items')} className={`py-1 px-3 rounded-md text-sm font-semibold transition-all duration-200 ${currentView === 'items' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Items</button>
                     <button onClick={() => setCurrentView('clients')} className={`py-1 px-3 rounded-md text-sm font-semibold transition-all duration-200 ${currentView === 'clients' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Clients</button>
                 </nav>
@@ -1877,13 +1877,13 @@ const App: React.FC = () => {
            <PlusIcon />
            <span className="text-[10px] font-medium mt-1">Create</span>
         </button>
-         <button onClick={() => setCurrentView('invoices')} className={`flex flex-col items-center justify-center w-full py-2 ${currentView === 'invoices' ? 'text-indigo-600' : 'text-slate-500'}`}>
-           <FileTextIcon />
-           <span className="text-[10px] font-medium mt-1">Invoices</span>
-        </button>
         <button onClick={() => setCurrentView('quotations')} className={`flex flex-col items-center justify-center w-full py-2 ${currentView === 'quotations' ? 'text-indigo-600' : 'text-slate-500'}`}>
            <DocumentIcon />
            <span className="text-[10px] font-medium mt-1">Quotes</span>
+        </button>
+         <button onClick={() => setCurrentView('invoices')} className={`flex flex-col items-center justify-center w-full py-2 ${currentView === 'invoices' ? 'text-indigo-600' : 'text-slate-500'}`}>
+           <FileTextIcon />
+           <span className="text-[10px] font-medium mt-1">Invoices</span>
         </button>
          <button onClick={() => setCurrentView('items')} className={`flex flex-col items-center justify-center w-full py-2 ${currentView === 'items' ? 'text-indigo-600' : 'text-slate-500'}`}>
            <ListIcon />
