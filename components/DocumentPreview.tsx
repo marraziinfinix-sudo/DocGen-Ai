@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { DocumentType, LineItem, Details, Payment, InvoiceStatus } from '../types';
+import { DocumentType, LineItem, Details, Payment, InvoiceStatus, QuotationStatus } from '../types';
 
 interface DocumentPreviewProps {
   documentType: DocumentType;
@@ -19,31 +20,54 @@ interface DocumentPreviewProps {
   formatCurrency: (amount: number) => string;
   payments?: Payment[];
   status?: InvoiceStatus | null;
+  quotationStatus?: QuotationStatus | null; // Added prop
   template: string;
   accentColor: string;
 }
 
-const StatusStamp: React.FC<{ status: InvoiceStatus | null, color: string }> = ({ status, color }) => {
-  if (!status || status === InvoiceStatus.Pending) return null;
+const StatusStamp: React.FC<{ status: InvoiceStatus | QuotationStatus | null, color: string }> = ({ status, color }) => {
+  if (!status) return null;
+  if (status === InvoiceStatus.Pending || status === QuotationStatus.Active) return null;
 
   let text = '';
   let colorClasses = '';
+  let borderColor = '';
+  let textColor = '';
 
   switch (status) {
     case InvoiceStatus.Paid:
-      text = 'PAID';
-      colorClasses = 'border-green-500 text-green-500';
+    case QuotationStatus.Agreed:
+      text = status === InvoiceStatus.Paid ? 'PAID' : 'AGREED';
+      borderColor = '#22c55e';
+      textColor = '#22c55e';
       break;
     case InvoiceStatus.PartiallyPaid:
       text = 'PARTIALLY PAID';
-      colorClasses = 'border-blue-500 text-blue-500';
+      borderColor = '#3b82f6';
+      textColor = '#3b82f6';
+      break;
+    case InvoiceStatus.Draft:
+    case QuotationStatus.Draft:
+      text = 'DRAFT';
+      borderColor = '#9ca3af'; // Gray-400
+      textColor = '#9ca3af';
+      break;
+    case QuotationStatus.Rejected:
+      text = 'REJECTED';
+      borderColor = '#ef4444'; // Red-500
+      textColor = '#ef4444';
+      break;
+    case QuotationStatus.Expired:
+      text = 'EXPIRED';
+      borderColor = '#f97316'; // Orange-500
+      textColor = '#f97316';
       break;
     default:
       return null;
   }
 
   return (
-    <div style={{ borderColor: status === InvoiceStatus.Paid ? '#22c55e' : '#3b82f6', color: status === InvoiceStatus.Paid ? '#22c55e' : '#3b82f6' }} className={`absolute top-24 right-4 sm:top-1/4 sm:right-16 border-4 rounded-lg p-2 sm:p-4 transform rotate-[-15deg] opacity-70`}>
+    <div style={{ borderColor: borderColor, color: textColor }} className={`absolute top-24 right-4 sm:top-1/4 sm:right-16 border-4 rounded-lg p-2 sm:p-4 transform rotate-[-15deg] opacity-70 z-10`}>
       <h2 className="text-2xl sm:text-5xl font-bold tracking-widest">{text}</h2>
     </div>
   );
@@ -73,6 +97,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
   formatCurrency,
   payments,
   status,
+  quotationStatus,
   template,
   accentColor
 }) => {
@@ -83,6 +108,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
     balanceDue = 0;
   }
 
+  const effectiveStatus = documentType === DocumentType.Invoice ? status : quotationStatus;
   const rgbAccent = hexToRgb(accentColor);
   const lightAccentBg = rgbAccent ? `rgba(${rgbAccent}, 0.1)` : '#f0f0f0';
 
@@ -229,7 +255,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
 
   return (
     <div id="print-area" className="relative bg-white rounded-lg shadow-lg p-4 sm:p-8 md:p-12 text-sm text-slate-700 border">
-      {documentType === DocumentType.Invoice && <StatusStamp status={status} color={accentColor} />}
+      <StatusStamp status={effectiveStatus || null} color={accentColor} />
       
       {template === 'modern' ? renderModernTemplate() : renderClassicTemplate()}
       

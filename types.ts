@@ -5,12 +5,14 @@ export enum DocumentType {
 }
 
 export enum InvoiceStatus {
+  Draft = 'Draft',
   Pending = 'Pending',
   Paid = 'Paid',
   PartiallyPaid = 'Partially Paid',
 }
 
 export enum QuotationStatus {
+  Draft = 'Draft',
   Active = 'Active',
   Expired = 'Expired',
   Agreed = 'Agreed',
