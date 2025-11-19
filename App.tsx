@@ -566,6 +566,16 @@ const App: React.FC = () => {
               setSavedQuotations(prev => [docToSave, ...prev]);
           }
       }
+      
+      // Update the loaded document info so share functions have access to the ID immediately
+      setLoadedDocumentInfo({
+        id: docToSave.id, 
+        status: docToSave.status || docToSave.quotationStatus || null, 
+        docType: docToSave.documentType, 
+        recurrenceParentId: docToSave.recurrenceParentId
+      });
+      setIsCreatingNew(false);
+      
       setIsSaving(false);
       setIsShareModalOpen(true);
   };
