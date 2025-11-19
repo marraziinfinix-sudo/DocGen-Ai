@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { SavedDocument, Payment } from '../types';
-import { MailIcon, WhatsAppIcon } from './Icons';
+import { MailIcon, WhatsAppIcon, TelegramIcon } from './Icons';
 
 interface PaymentModalProps {
   invoice: SavedDocument;
@@ -10,9 +10,10 @@ interface PaymentModalProps {
   formatCurrency: (amount: number) => string;
   onSendEmail?: () => void;
   onSendWhatsApp?: () => void;
+  onSendTelegram?: () => void;
 }
 
-const PaymentModal: React.FC<PaymentModalProps> = ({ invoice, onSave, onCancel, formatCurrency, onSendEmail, onSendWhatsApp }) => {
+const PaymentModal: React.FC<PaymentModalProps> = ({ invoice, onSave, onCancel, formatCurrency, onSendEmail, onSendWhatsApp, onSendTelegram }) => {
   const amountPaid = invoice.payments?.reduce((sum, p) => sum + p.amount, 0) || 0;
   const balanceDue = invoice.total - amountPaid;
   const isFullyPaid = balanceDue <= 0.01;
@@ -107,6 +108,12 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ invoice, onSave, onCancel, 
                         className="w-full flex items-center justify-center gap-2 bg-green-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-700 transition-colors"
                     >
                         <WhatsAppIcon /> Resend Receipt via WhatsApp
+                    </button>
+                    <button 
+                        onClick={onSendTelegram}
+                        className="w-full flex items-center justify-center gap-2 bg-sky-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-sky-600 transition-colors"
+                    >
+                        <TelegramIcon /> Resend Receipt via Telegram
                     </button>
                      <button 
                         onClick={onCancel} 

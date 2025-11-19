@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { SavedDocument, InvoiceStatus, Payment } from '../types';
-import { MailIcon, WhatsAppIcon, CashIcon, ViewIcon, TrashIcon, MoreVerticalIcon, RepeatIcon } from './Icons';
+import { MailIcon, WhatsAppIcon, TelegramIcon, CashIcon, ViewIcon, TrashIcon, MoreVerticalIcon, RepeatIcon } from './Icons';
 import PaymentModal from './PaymentModal';
 import PaymentSuccessModal from './PaymentSuccessModal';
 import { saveInvoices } from '../services/firebaseService';
@@ -10,7 +10,7 @@ interface DocumentListPageProps {
   documents: SavedDocument[];
   setDocuments: React.Dispatch<React.SetStateAction<SavedDocument[]>>;
   formatCurrency: (amount: number) => string;
-  handleSendReminder: (doc: SavedDocument, channel: 'email' | 'whatsapp') => void;
+  handleSendReminder: (doc: SavedDocument, channel: 'email' | 'whatsapp' | 'telegram') => void;
   handleLoadDocument: (doc: SavedDocument) => void;
 }
 
@@ -178,7 +178,7 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
     }
   };
 
-  const handleSendPaymentNotification = (channel: 'email' | 'whatsapp', invoiceOverride?: SavedDocument) => {
+  const handleSendPaymentNotification = (channel: 'email' | 'whatsapp' | 'telegram', invoiceOverride?: SavedDocument) => {
     // Use override if provided (useful when calling from PaymentModal for an existing invoice), otherwise use lastPaidInvoice
     const doc = invoiceOverride || lastPaidInvoice;
     if (!doc) return;
@@ -228,8 +228,12 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
         }
         const mailtoLink = `mailto:${doc.clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`;
         window.open(mailtoLink, '_blank');
-    } else {
+    } else if (channel === 'whatsapp') {
         window.open(`https://wa.me/?text=${encodeURIComponent(whatsappMessage)}`, '_blank');
+    } else {
+        const url = window.location.origin;
+        const telegramUrl = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(whatsappMessage)}`;
+        window.open(telegramUrl, '_blank');
     }
   };
 
@@ -335,6 +339,9 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
                         </button>
                         <button onClick={() => { handleSendReminder(doc, 'whatsapp'); setOpenDropdownId(null); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">
                             <WhatsAppIcon /> Send WhatsApp Reminder
+                        </button>
+                        <button onClick={() => { handleSendReminder(doc, 'telegram'); setOpenDropdownId(null); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">
+                            <TelegramIcon /> Send Telegram Reminder
                         </button>
                     </>
                  )}
@@ -613,6 +620,7 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
           formatCurrency={formatCurrency}
           onSendEmail={() => handleSendPaymentNotification('email', selectedInvoice)}
           onSendWhatsApp={() => handleSendPaymentNotification('whatsapp', selectedInvoice)}
+          onSendTelegram={() => handleSendPaymentNotification('telegram', selectedInvoice)}
         />
       )}
       {paymentSuccessModalOpen && lastPaidInvoice && (
@@ -622,6 +630,7 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
           onClose={() => setPaymentSuccessModalOpen(false)}
           onSendEmail={() => handleSendPaymentNotification('email')}
           onSendWhatsApp={() => handleSendPaymentNotification('whatsapp')}
+          onSendTelegram={() => handleSendPaymentNotification('telegram')}
           formatCurrency={formatCurrency}
         />
       )}

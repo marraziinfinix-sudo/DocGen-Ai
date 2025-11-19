@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { SavedDocument } from '../types';
-import { MailIcon, WhatsAppIcon } from './Icons';
+import { MailIcon, WhatsAppIcon, TelegramIcon } from './Icons';
 
 interface PaymentSuccessModalProps {
   isOpen: boolean;
@@ -9,6 +9,7 @@ interface PaymentSuccessModalProps {
   onClose: () => void;
   onSendEmail: () => void;
   onSendWhatsApp: () => void;
+  onSendTelegram: () => void;
   formatCurrency: (amount: number) => string;
 }
 
@@ -18,6 +19,7 @@ const PaymentSuccessModal: React.FC<PaymentSuccessModalProps> = ({
   onClose,
   onSendEmail,
   onSendWhatsApp,
+  onSendTelegram,
   formatCurrency,
 }) => {
   if (!isOpen || !invoice) return null;
@@ -72,6 +74,12 @@ const PaymentSuccessModal: React.FC<PaymentSuccessModalProps> = ({
                 className="w-full flex items-center justify-center gap-3 px-4 py-3 text-base font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 shadow-md transition-colors"
             >
                 <WhatsAppIcon /> Send via WhatsApp
+            </button>
+            <button
+                onClick={() => { onSendTelegram(); onClose(); }}
+                className="w-full flex items-center justify-center gap-3 px-4 py-3 text-base font-medium rounded-lg text-white bg-sky-500 hover:bg-sky-600 shadow-md transition-colors"
+            >
+                <TelegramIcon /> Send via Telegram
             </button>
             <button
                 onClick={onClose}

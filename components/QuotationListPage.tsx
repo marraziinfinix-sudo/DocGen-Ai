@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { SavedDocument, QuotationStatus, InvoiceStatus } from '../types';
-import { DocumentIcon, ViewIcon, TrashIcon, MoreVerticalIcon, MailIcon, WhatsAppIcon, RepeatIcon } from './Icons';
+import { DocumentIcon, ViewIcon, TrashIcon, MoreVerticalIcon, MailIcon, WhatsAppIcon, TelegramIcon, RepeatIcon } from './Icons';
 import { saveQuotations } from '../services/firebaseService';
 
 interface QuotationListPageProps {
@@ -11,7 +11,7 @@ interface QuotationListPageProps {
   formatCurrency: (amount: number) => string;
   handleCreateInvoiceFromQuote: (quotation: SavedDocument) => void;
   handleLoadDocument: (doc: SavedDocument) => void;
-  handleSendQuotationReminder: (doc: SavedDocument, channel: 'email' | 'whatsapp') => void;
+  handleSendQuotationReminder: (doc: SavedDocument, channel: 'email' | 'whatsapp' | 'telegram') => void;
 }
 
 const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDocuments, invoices, formatCurrency, handleCreateInvoiceFromQuote, handleLoadDocument, handleSendQuotationReminder }) => {
@@ -189,6 +189,9 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
                                 </button>
                                 <button onClick={() => { handleSendQuotationReminder(doc, 'whatsapp'); setOpenDropdownId(null); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">
                                     <WhatsAppIcon /> Send WhatsApp Reminder
+                                </button>
+                                <button onClick={() => { handleSendQuotationReminder(doc, 'telegram'); setOpenDropdownId(null); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">
+                                    <TelegramIcon /> Send Telegram Reminder
                                 </button>
                             </>
                          )}

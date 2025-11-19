@@ -3,7 +3,7 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus, Recurrence } from './types';
 import { generateDescription } from './services/geminiService';
 import { fetchUserData, saveCompanies, saveClients, saveItems, saveInvoices, saveQuotations, saveDocument, saveActiveCompanyId, saveItemCategories, defaultUserData, subscribeToUserData } from './services/firebaseService';
-import { SparklesIcon, PlusIcon, TrashIcon, CogIcon, UsersIcon, ListIcon, DocumentIcon, MailIcon, WhatsAppIcon, FileTextIcon, DownloadIcon, MoreVerticalIcon, PrinterIcon, ChevronDownIcon, CashIcon, SendIcon, RefreshIcon } from './components/Icons';
+import { SparklesIcon, PlusIcon, TrashIcon, CogIcon, UsersIcon, ListIcon, DocumentIcon, MailIcon, WhatsAppIcon, TelegramIcon, FileTextIcon, DownloadIcon, MoreVerticalIcon, PrinterIcon, ChevronDownIcon, CashIcon, SendIcon, RefreshIcon } from './components/Icons';
 import DocumentPreview from './components/DocumentPreview';
 import SetupPage from './components/SetupPage';
 import ClientListPage from './components/ClientListPage';
@@ -1148,8 +1148,54 @@ const App: React.FC = () => {
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
+  const handleSendViaTelegram = () => {
+    const dateIssued = new Date(issueDate + 'T00:00:00').toLocaleDateString();
+    const dateDue = new Date(dueDate + 'T00:00:00').toLocaleDateString();
+
+    let text = `*${documentType.toUpperCase()} #${documentNumber}*\n`;
+    text += `From: *${companyDetails.name}*\n`;
+    text += `To: ${clientDetails.name}\n\n`;
+    
+    text += `Date: ${dateIssued}\n`;
+    text += `${documentType === DocumentType.Invoice ? 'Due Date' : 'Valid Until'}: ${dateDue}\n\n`;
+    
+    text += `*ITEMS:*\n`;
+    lineItems.forEach((item, index) => {
+        text += `${index + 1}. ${item.name} (x${item.quantity}) - ${formatCurrency(item.price * item.quantity)}\n`;
+    });
+    text += `\n`;
+    
+    text += `Subtotal: ${formatCurrency(subtotal)}\n`;
+    if (taxRate > 0) {
+        text += `Tax (${taxRate}%): ${formatCurrency(taxAmount)}\n`;
+    }
+    text += `*TOTAL: ${formatCurrency(total)}*\n\n`;
+    
+    if (companyDetails.bankName || companyDetails.accountNumber) {
+        text += `*Payment Details:*\n`;
+        if (companyDetails.bankName) text += `Bank: ${companyDetails.bankName}\n`;
+        if (companyDetails.accountNumber) text += `Account: ${companyDetails.accountNumber}\n`;
+        text += `\n`;
+    }
+
+    let url = window.location.origin;
+
+    if (documentType === DocumentType.Quotation && loadedDocumentInfo?.id && firebaseUser?.uid) {
+        const link = `${window.location.origin}?view=respond&uid=${firebaseUser.uid}&id=${loadedDocumentInfo.id}`;
+        text += `Do you agree with the quotation provided? Please click the link below to respond:\n${link}\n\n`;
+        url = link;
+    } else if (documentType === DocumentType.Quotation) {
+        text += `If you agree with this quotation, please reply to this message stating: "Yes, I agree to the quotation offer provided."\n\n`;
+    }
+    
+    text += `Thank you!`;
+    
+    const telegramUrl = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;
+    window.open(telegramUrl, '_blank');
+  };
+
   // FIX: Define handleSendReminder function for invoices
-  const handleSendReminder = (doc: SavedDocument, channel: 'email' | 'whatsapp') => {
+  const handleSendReminder = (doc: SavedDocument, channel: 'email' | 'whatsapp' | 'telegram') => {
     if (channel === 'email' && !doc.clientDetails.email) {
       alert("Client email is missing for this document.");
       return;
@@ -1195,13 +1241,20 @@ const App: React.FC = () => {
     if (channel === 'email') {
       const mailtoLink = `mailto:${doc.clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`;
       window.open(mailtoLink, '_blank');
-    } else {
+    } else if (channel === 'whatsapp') {
       window.open(`https://wa.me/?text=${encodeURIComponent(whatsappMessage)}`, '_blank');
+    } else {
+       let url = window.location.origin;
+       if (doc.documentType === DocumentType.Quotation && firebaseUser?.uid) {
+            url = `${window.location.origin}?view=respond&uid=${firebaseUser.uid}&id=${doc.id}`;
+       }
+       const telegramUrl = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(whatsappMessage)}`;
+       window.open(telegramUrl, '_blank');
     }
   };
 
   // FIX: Define handleSendQuotationReminder function for quotations
-  const handleSendQuotationReminder = (doc: SavedDocument, channel: 'email' | 'whatsapp') => {
+  const handleSendQuotationReminder = (doc: SavedDocument, channel: 'email' | 'whatsapp' | 'telegram') => {
     if (channel === 'email' && !doc.clientDetails.email) {
       alert("Client email is missing for this document.");
       return;
@@ -1229,8 +1282,15 @@ const App: React.FC = () => {
     if (channel === 'email') {
       const mailtoLink = `mailto:${doc.clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`;
       window.open(mailtoLink, '_blank');
-    } else {
+    } else if (channel === 'whatsapp') {
       window.open(`https://wa.me/?text=${encodeURIComponent(whatsappMessage)}`, '_blank');
+    } else {
+       let url = window.location.origin;
+       if (firebaseUser?.uid) {
+            url = `${window.location.origin}?view=respond&uid=${firebaseUser.uid}&id=${doc.id}`;
+       }
+       const telegramUrl = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(whatsappMessage)}`;
+       window.open(telegramUrl, '_blank');
     }
   };
 
@@ -1911,6 +1971,7 @@ const App: React.FC = () => {
         documentNumber={documentNumber}
         onShareEmail={handleSendViaEmail}
         onShareWhatsApp={handleSendViaWhatsApp}
+        onShareTelegram={handleSendViaTelegram}
         onClose={handleShareModalClose}
       />
     </div>

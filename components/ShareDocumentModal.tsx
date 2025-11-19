@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { DocumentType } from '../types';
-import { MailIcon, WhatsAppIcon } from './Icons';
+import { MailIcon, WhatsAppIcon, TelegramIcon } from './Icons';
 
 interface ShareDocumentModalProps {
   isOpen: boolean;
@@ -9,6 +9,7 @@ interface ShareDocumentModalProps {
   documentNumber: string;
   onShareEmail: () => void;
   onShareWhatsApp: () => void;
+  onShareTelegram: () => void;
   onClose: () => void;
 }
 
@@ -18,6 +19,7 @@ const ShareDocumentModal: React.FC<ShareDocumentModalProps> = ({
   documentNumber,
   onShareEmail,
   onShareWhatsApp,
+  onShareTelegram,
   onClose,
 }) => {
   if (!isOpen) return null;
@@ -48,6 +50,12 @@ const ShareDocumentModal: React.FC<ShareDocumentModalProps> = ({
                 className="w-full flex items-center justify-center gap-3 px-4 py-3 text-base font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 shadow-md transition-colors"
             >
                 <WhatsAppIcon /> Share via WhatsApp
+            </button>
+            <button
+                onClick={() => { onShareTelegram(); onClose(); }}
+                className="w-full flex items-center justify-center gap-3 px-4 py-3 text-base font-medium rounded-lg text-white bg-sky-500 hover:bg-sky-600 shadow-md transition-colors"
+            >
+                <TelegramIcon /> Share via Telegram
             </button>
             <button
                 onClick={onClose}
