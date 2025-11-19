@@ -18,10 +18,10 @@
           visibility: visible;
         }
         #print-area {
-          position: absolute;
-          left: 0;
-          top: 0;
-          width: 100%;
+          position: absolute !important;
+          left: 0 !important;
+          top: 0 !important;
+          width: 100% !important;
         }
         /* This overrides the on-screen scroll container */
         div[data-print-scroller='true'] {
@@ -37,7 +37,7 @@
             padding: 0 !important;
         }
         .no-print {
-          display: none;
+          display: none !important;
         }
         @page {
           size: A4;
