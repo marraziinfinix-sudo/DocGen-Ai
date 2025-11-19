@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Item } from '../types';
 import { TrashIcon, PlusIcon, PencilIcon } from './Icons';
@@ -308,6 +309,8 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
+  const [sortField, setSortField] = useState<'name' | 'price' | 'costPrice' | 'category'>('category');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [isBulkEditModalOpen, setIsBulkEditModalOpen] = useState(false);
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false); // For item add/edit category dropdown
 
@@ -353,6 +356,35 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories
     });
   }, [items, searchQuery, categoryFilter]);
   
+  const sortedItems = useMemo(() => {
+      const sorted = [...filteredItems];
+      sorted.sort((a, b) => {
+          let valA = a[sortField];
+          let valB = b[sortField];
+
+          // Handle undefined/null
+          if (valA === undefined || valA === null) valA = '';
+          if (valB === undefined || valB === null) valB = '';
+
+          // Secondary Sort by Name (to stabilize sort)
+          if (valA === valB && sortField !== 'name') {
+              return a.name.localeCompare(b.name);
+          }
+
+          // Numeric Sort
+          if (sortField === 'price' || sortField === 'costPrice') {
+              return sortOrder === 'asc' ? (Number(valA) - Number(valB)) : (Number(valB) - Number(valA));
+          }
+
+          // String Sort (Category, Name)
+          const strA = String(valA).toLowerCase();
+          const strB = String(valB).toLowerCase();
+          const res = strA.localeCompare(strB);
+          return sortOrder === 'asc' ? res : -res;
+      });
+      return sorted;
+  }, [filteredItems, sortField, sortOrder]);
+
   const filteredCategories = useMemo(() => {
     if (!isCategoryDropdownOpen) return [];
     const searchTerm = formState.category.trim().toLowerCase();
@@ -361,7 +393,10 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories
   }, [categories, formState.category, isCategoryDropdownOpen]);
 
   const groupedItems = useMemo(() => {
-    return filteredItems.reduce<Record<string, Item[]>>((acc, item) => {
+    // Only use grouping if sorting by category
+    if (sortField !== 'category') return {};
+
+    return sortedItems.reduce<Record<string, Item[]>>((acc, item) => {
       const category = item.category || 'Uncategorized';
       if (!acc[category]) {
         acc[category] = [];
@@ -369,7 +404,7 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories
       acc[category].push(item);
       return acc;
     }, {});
-  }, [filteredItems]);
+  }, [sortedItems, sortField]);
 
 
   const handleSaveItem = () => {
@@ -531,6 +566,52 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories
   
   const categoryFilterOptions = useMemo(() => ['All', ...categories, 'Uncategorized'], [categories]);
 
+  const renderItemRow = (item: Item) => {
+    const cost = item.costPrice || 0;
+    const sell = item.price || 0;
+    const markup = cost > 0 ? ((sell - cost) / cost) * 100 : 0;
+    const showCategoryBadge = sortField !== 'category';
+
+    return (
+        <div key={item.id} className={`p-4 border-x border-b flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 ${selectedIds.has(item.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-white'}`}>
+            <div className="flex items-start w-full sm:flex-1">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mt-1"
+                  checked={selectedIds.has(item.id)}
+                  onChange={() => handleSelect(item.id)}
+                />
+                <div className="ml-4 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-bold text-slate-800 break-words">{item.name}</p>
+                        {showCategoryBadge && item.category && (
+                            <span className="text-[10px] uppercase font-semibold bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">
+                                {item.category}
+                            </span>
+                        )}
+                    </div>
+                    {item.description && <p className="text-sm text-slate-600">{item.description}</p>}
+                    <p className="text-sm text-slate-500">
+                        Cost: {formatCurrency(cost)} &bull; Sell: {formatCurrency(sell)} &bull; <span className={`font-medium ${markup >= 0 ? 'text-green-700' : 'text-red-700'}`}>Markup: {markup.toFixed(2)}%</span>
+                    </p>
+                </div>
+            </div>
+            <div className="hidden sm:flex gap-2 flex-shrink-0 self-end sm:self-auto">
+                <button onClick={() => handleEditItem(item)} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-100">Edit</button>
+                <button onClick={() => handleDeleteItem(item.id)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-100">Delete</button>
+            </div>
+            <div className="flex sm:hidden gap-2 flex-shrink-0 self-end sm:self-auto">
+                <button onClick={() => handleEditItem(item)} className="p-2 rounded-full text-indigo-600 hover:bg-indigo-100" title="Edit Item">
+                    <PencilIcon />
+                </button>
+                <button onClick={() => handleDeleteItem(item.id)} className="p-2 rounded-full text-red-600 hover:bg-red-100" title="Delete Item">
+                    <TrashIcon />
+                </button>
+            </div>
+        </div>
+    );
+  };
+
   return (
     <main className="container mx-auto p-4 sm:p-6 lg:p-8">
       <div className="max-w-4xl mx-auto bg-white p-4 sm:p-8 rounded-lg shadow-md">
@@ -639,13 +720,13 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories
 
         <div>
             <h3 className="text-lg font-semibold text-gray-700 mb-4">Saved Items</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                 <input
                     type="text"
-                    placeholder="Search items by name..." // Updated search placeholder
+                    placeholder="Search items..." 
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
-                    className="md:col-span-2 w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    className="sm:col-span-2 lg:col-span-2 w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                     aria-label="Search items"
                 />
                 <select 
@@ -655,6 +736,27 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories
                 >
                     {categoryFilterOptions.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                 </select>
+                <div className="flex gap-2">
+                    <select 
+                        value={sortField} 
+                        onChange={(e) => setSortField(e.target.value as any)}
+                        className="flex-1 p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                    >
+                        <option value="category">Category</option>
+                        <option value="name">Name</option>
+                        <option value="price">Price</option>
+                        <option value="costPrice">Cost</option>
+                    </select>
+                    <button 
+                        onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+                        className="bg-slate-100 border border-slate-300 text-slate-700 px-3 rounded-md hover:bg-slate-200 flex items-center justify-center"
+                        title={`Sort ${sortOrder === 'asc' ? 'Ascending' : 'Descending'}`}
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 transition-transform duration-200 ${sortOrder === 'asc' ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </button>
+                </div>
             </div>
             {(!Array.isArray(items) || items.length === 0) ? (
                 <p className="text-slate-500 text-center py-4 bg-slate-50 rounded-lg">No items saved yet.</p>
@@ -671,49 +773,26 @@ const ItemListPage: React.FC<ItemListPageProps> = ({ items, setItems, categories
                         <label className="ml-3 text-sm font-medium text-gray-600">Select All</label>
                     </div>
                     <div className="space-y-4">
-                        {Object.keys(groupedItems).length > 0 ? (
-                          Object.entries(groupedItems).sort(([a], [b]) => a.localeCompare(b)).map(([category, itemsInCategory]) => (
-                            <div key={category}>
-                              <h4 className="font-bold text-sm uppercase text-slate-500 bg-slate-100 p-2 rounded-t-md mt-4">{category}</h4>
-                              {Array.isArray(itemsInCategory) && itemsInCategory.map(item => {
-                                const cost = item.costPrice || 0;
-                                const sell = item.price || 0;
-                                const markup = cost > 0 ? ((sell - cost) / cost) * 100 : 0;
-                                return (
-                                <div key={item.id} className={`p-4 border-x border-b flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 ${selectedIds.has(item.id) ? 'bg-indigo-50 border-indigo-200' : 'bg-white'}`}>
-                                    <div className="flex items-start w-full sm:flex-1">
-                                        <input
-                                          type="checkbox"
-                                          className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mt-1"
-                                          checked={selectedIds.has(item.id)}
-                                          onChange={() => handleSelect(item.id)}
-                                        />
-                                        <div className="ml-4 flex-1">
-                                            <p className="font-bold text-slate-800 break-words">{item.name}</p> {/* Display item name */}
-                                            {item.description && <p className="text-sm text-slate-600">{item.description}</p>} {/* Display item description if present */}
-                                            <p className="text-sm text-slate-500">
-                                                Cost: {formatCurrency(cost)} &bull; Sell: {formatCurrency(sell)} &bull; <span className={`font-medium ${markup >= 0 ? 'text-green-700' : 'text-red-700'}`}>Markup: {markup.toFixed(2)}%</span>
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="hidden sm:flex gap-2 flex-shrink-0 self-end sm:self-auto">
-                                        <button onClick={() => handleEditItem(item)} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-100">Edit</button>
-                                        <button onClick={() => handleDeleteItem(item.id)} className="font-semibold text-red-600 py-1 px-3 rounded-lg hover:bg-red-100">Delete</button>
-                                    </div>
-                                    <div className="flex sm:hidden gap-2 flex-shrink-0 self-end sm:self-auto">
-                                        <button onClick={() => handleEditItem(item)} className="p-2 rounded-full text-indigo-600 hover:bg-indigo-100" title="Edit Item">
-                                            <PencilIcon />
-                                        </button>
-                                        <button onClick={() => handleDeleteItem(item.id)} className="p-2 rounded-full text-red-600 hover:bg-red-100" title="Delete Item">
-                                            <TrashIcon />
-                                        </button>
-                                    </div>
-                                </div>
-                              )})}
-                            </div>
-                          ))
-                        ) : (
+                        {sortedItems.length === 0 ? (
                             <p className="text-slate-500 text-center py-4 bg-slate-50 rounded-lg">No items match your search or filter.</p>
+                        ) : (
+                            sortField === 'category' ? (
+                                Object.entries(groupedItems)
+                                    .sort(([a], [b]) => {
+                                        const res = a.localeCompare(b);
+                                        return sortOrder === 'asc' ? res : -res;
+                                    })
+                                    .map(([category, itemsInCategory]) => (
+                                    <div key={category}>
+                                        <h4 className="font-bold text-sm uppercase text-slate-500 bg-slate-100 p-2 rounded-t-md mt-4">{category}</h4>
+                                        {Array.isArray(itemsInCategory) && itemsInCategory.map(renderItemRow)}
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="mt-4 border-t">
+                                    {sortedItems.map(renderItemRow)}
+                                </div>
+                            )
                         )}
                     </div>
                 </>
