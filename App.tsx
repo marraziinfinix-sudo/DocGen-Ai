@@ -111,6 +111,10 @@ const App: React.FC = () => {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
 
+  // --- Refs for PDF/Print ---
+  const previewContainerRef = React.useRef<HTMLDivElement>(null);
+  const previewScrollerRef = React.useRef<HTMLDivElement>(null);
+
 
   // --- Data States (from Firestore) ---
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -787,40 +791,66 @@ const App: React.FC = () => {
 
   const handleDownloadPdf = async () => {
     const printArea = document.getElementById('print-area');
-    if (printArea) {
-      try {
-        const canvas = await html2canvas(printArea, { scale: 2 });
+    const container = previewContainerRef.current;
+    const scroller = previewScrollerRef.current;
+    
+    if (!printArea || !container || !scroller) {
+        alert("Preview element not found. Cannot generate PDF.");
+        return;
+    }
+
+    // Store original styles
+    const originalContainerStyle = container.style.cssText;
+    const originalScrollerStyle = scroller.style.cssText;
+
+    // Apply temporary styles for full capture
+    container.style.position = 'static';
+    scroller.style.maxHeight = 'none';
+    scroller.style.overflow = 'visible';
+    
+    window.scrollTo(0, 0);
+
+    try {
+        const canvas = await html2canvas(printArea, { 
+            scale: 2,
+            useCORS: true,
+            windowWidth: printArea.scrollWidth,
+            windowHeight: printArea.scrollHeight
+        });
+        
         const imgData = canvas.toDataURL('image/png');
         const pdf = new jspdf.jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = pdf.internal.pageSize.getHeight();
+        
         const canvasWidth = canvas.width;
         const canvasHeight = canvas.height;
-        const ratio = canvasWidth / canvasHeight;
-        const width = pdfWidth;
-        const height = width / ratio;
+        const ratio = canvasHeight / canvasWidth;
+        
+        const imgHeight = pdfWidth * ratio;
+        let heightLeft = imgHeight;
+        let position = 0;
 
-        if (height <= pdfHeight) {
-          pdf.addImage(imgData, 'PNG', 0, 0, width, height);
-        } else {
-          let position = 0;
-          let remainingHeight = canvasHeight;
-          while (remainingHeight > 0) {
-            const pageCanvas = document.createElement('canvas');
-            pageCanvas.width = canvas.width;
-            pageCanvas.height = Math.min(canvasHeight, canvasWidth * pdfHeight / pdfWidth);
-            pageCanvas.getContext('2d')?.drawImage(canvas, 0, position, canvasWidth, pageCanvas.height, 0, 0, pageCanvas.width, pageCanvas.height);
-            if (position > 0) pdf.addPage();
-            pdf.addImage(pageCanvas.toDataURL('image/png'), 'PNG', 0, 0, pdfWidth, pdfHeight);
-            position += pageCanvas.height;
-            remainingHeight -= pageCanvas.height;
-          }
+        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+        heightLeft -= pdfHeight;
+
+        while (heightLeft > 0.1) { // 0.1 for float precision
+            position = position - pdfHeight;
+            pdf.addPage();
+            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+            heightLeft -= pdfHeight;
         }
+        
         pdf.save(`${documentType}_${documentNumber}.pdf`);
-      } catch (error) {
+
+    } catch (error) {
         console.error("Error generating PDF:", error);
         alert("Sorry, there was an error generating the PDF.");
-      }
+    } finally {
+        // Restore original styles
+        container.style.cssText = originalContainerStyle;
+        scroller.style.cssText = originalScrollerStyle;
     }
   };
   
@@ -912,7 +942,7 @@ const App: React.FC = () => {
         const inputMode = isMobile ? 'decimal' : undefined;
         return (
           <>
-            <div className="sticky top-[68px] bg-gray-100/80 backdrop-blur-sm z-10 border-b">
+            <div className="sticky top-[68px] bg-gray-100/80 backdrop-blur-sm z-10 border-b no-print">
                 <div className="container mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex justify-between items-center py-2">
                         {/* Status text */}
@@ -947,7 +977,7 @@ const App: React.FC = () => {
             </div>
             <main className="container mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8 p-4 sm:p-6 lg:p-8">
               {/* Form Section */}
-              <div className="lg:col-span-1 space-y-6">
+              <div className="lg:col-span-1 space-y-6 no-print">
                 <div className="bg-white p-6 rounded-lg shadow-md">
                   <h2 className="text-xl font-bold text-gray-800 mb-4">Document Type</h2>
                   <div className="flex gap-2 bg-slate-100 p-1 rounded-lg">
@@ -1313,9 +1343,12 @@ const App: React.FC = () => {
 
               {/* Preview and Actions Section */}
               <div className="lg:col-span-2">
-                <div>
-                  <div className="bg-white p-6 rounded-lg shadow-md sticky top-[132px]">
-                    <div className="flex flex-wrap justify-between items-center gap-4 mb-6 border-b pb-4">
+                <div 
+                  ref={previewContainerRef} 
+                  data-print-container="true"
+                  className="bg-white p-6 rounded-lg shadow-md sticky top-[132px]"
+                >
+                    <div className="flex flex-wrap justify-between items-center gap-4 mb-6 border-b pb-4 no-print">
                       <h2 className="text-xl font-bold text-gray-800">Preview</h2>
                       <div className="flex items-center gap-2">
                           <button onClick={handlePrint} className="flex items-center gap-2 bg-white text-slate-700 font-semibold py-2 px-3 rounded-lg shadow-sm border hover:bg-slate-100 text-sm">
@@ -1326,7 +1359,11 @@ const App: React.FC = () => {
                           </button>
                       </div>
                     </div>
-                    <div className="max-h-[70vh] overflow-y-auto pr-2">
+                    <div 
+                      ref={previewScrollerRef}
+                      data-print-scroller="true"
+                      className="max-h-[70vh] overflow-y-auto pr-2"
+                    >
                       <DocumentPreview
                         documentType={documentType}
                         companyDetails={companyDetails}
@@ -1349,7 +1386,6 @@ const App: React.FC = () => {
                         accentColor={accentColor}
                       />
                     </div>
-                  </div>
                 </div>
               </div>
             </main>
@@ -1378,7 +1414,7 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <header className="bg-white shadow-md sticky top-0 z-20 h-[68px] flex items-center">
+      <header className="bg-white shadow-md sticky top-0 z-20 h-[68px] flex items-center no-print">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center">
              <div className="flex items-center gap-2 sm:gap-4">
@@ -1399,7 +1435,7 @@ const App: React.FC = () => {
         </div>
       </header>
 
-       <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t z-30 grid grid-cols-6">
+       <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t z-30 grid grid-cols-6 no-print">
            <button onClick={() => setCurrentView('editor')} className={`${navButtonClasses} ${currentView === 'editor' ? activeNavButtonClasses : inactiveNavButtonClasses}`}>
                <FileTextIcon /><span className="text-xs">Editor</span>
            </button>
@@ -1420,7 +1456,7 @@ const App: React.FC = () => {
            </button>
        </nav>
 
-        <div className="hidden sm:block fixed top-0 left-0 h-full bg-white pt-[68px] z-10 shadow-lg">
+        <div className="hidden sm:block fixed top-0 left-0 h-full bg-white pt-[68px] z-10 shadow-lg no-print">
              <nav className="flex flex-col p-2 space-y-1">
                  <DesktopSidebarButton onClick={() => setCurrentView('clients')} isActive={currentView === 'clients'} title="Clients"><UsersIcon /></DesktopSidebarButton>
                  <DesktopSidebarButton onClick={() => setCurrentView('items')} isActive={currentView === 'items'} title="Items"><ListIcon /></DesktopSidebarButton>
