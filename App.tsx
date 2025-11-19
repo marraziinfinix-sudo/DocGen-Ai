@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus, Recurrence } from './types';
 import { generateDescription } from './services/geminiService';
@@ -112,7 +113,6 @@ const App: React.FC = () => {
   const [isAuthLoading, setIsAuthLoading] = useState(true);
 
   // --- Refs for PDF/Print ---
-  const mainLayoutRef = React.useRef<HTMLDivElement>(null);
   const previewContainerRef = React.useRef<HTMLDivElement>(null);
   const previewScrollerRef = React.useRef<HTMLDivElement>(null);
   const [isSendDropdownOpen, setIsSendDropdownOpen] = useState(false);
@@ -792,32 +792,32 @@ const App: React.FC = () => {
   const handlePrint = () => window.print();
 
   const handleDownloadPdf = async () => {
-    const mainLayout = mainLayoutRef.current;
     const printArea = document.getElementById('print-area');
     const container = previewContainerRef.current;
-
-    if (!printArea || !container || !mainLayout) {
+    const scroller = previewScrollerRef.current;
+    
+    if (!printArea || !container || !scroller) {
         alert("Preview element not found. Cannot generate PDF.");
         return;
     }
 
-    // Store original styles to restore them later
-    const originalMainDisplayStyle = mainLayout.style.display;
-    const originalContainerBoxShadow = container.style.boxShadow;
+    // Store original styles
+    const originalContainerStyle = container.style.cssText;
+    const originalScrollerStyle = scroller.style.cssText;
 
-    // Temporarily change styles for accurate capture
-    mainLayout.style.display = 'block'; // Disable grid to let preview expand
-    container.style.boxShadow = 'none'; // Remove shadow for cleaner capture
-
-    // Allow DOM to update with new styles
-    await new Promise(resolve => setTimeout(resolve, 50));
+    // Apply temporary styles for full capture
+    container.style.position = 'static';
+    scroller.style.maxHeight = 'none';
+    scroller.style.overflow = 'visible';
+    
+    window.scrollTo(0, 0);
 
     try {
         const canvas = await html2canvas(printArea, { 
             scale: 2,
             useCORS: true,
             windowWidth: printArea.scrollWidth,
-            windowHeight: printArea.scrollHeight,
+            windowHeight: printArea.scrollHeight
         });
         
         const imgData = canvas.toDataURL('image/png');
@@ -837,7 +837,7 @@ const App: React.FC = () => {
         pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
         heightLeft -= pdfHeight;
 
-        while (heightLeft > 0.1) {
+        while (heightLeft > 0.1) { // 0.1 for float precision
             position = position - pdfHeight;
             pdf.addPage();
             pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
@@ -851,8 +851,8 @@ const App: React.FC = () => {
         alert("Sorry, there was an error generating the PDF.");
     } finally {
         // Restore original styles
-        mainLayout.style.display = originalMainDisplayStyle;
-        container.style.boxShadow = originalContainerBoxShadow;
+        container.style.cssText = originalContainerStyle;
+        scroller.style.cssText = originalScrollerStyle;
     }
   };
   
@@ -871,6 +871,7 @@ const App: React.FC = () => {
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
   };
 
+  // FIX: Define handleSendReminder function for invoices
   const handleSendReminder = (doc: SavedDocument, channel: 'email' | 'whatsapp') => {
     if (channel === 'email' && !doc.clientDetails.email) {
       alert("Client email is missing for this document.");
@@ -894,6 +895,7 @@ const App: React.FC = () => {
     }
   };
 
+  // FIX: Define handleSendQuotationReminder function for quotations
   const handleSendQuotationReminder = (doc: SavedDocument, channel: 'email' | 'whatsapp') => {
     if (channel === 'email' && !doc.clientDetails.email) {
       alert("Client email is missing for this document.");
@@ -1019,7 +1021,7 @@ const App: React.FC = () => {
                     )}
                 </div>
             </div>
-            <main ref={mainLayoutRef} className="container mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8 p-4 sm:p-6 lg:p-8">
+            <main className="container mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8 p-4 sm:p-6 lg:p-8">
               {/* Form Section */}
               <div className="lg:col-span-1 space-y-6 no-print">
                 <div className="bg-white p-6 rounded-lg shadow-md">
