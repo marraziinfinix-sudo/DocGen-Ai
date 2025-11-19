@@ -318,7 +318,10 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
                     <tr key={p.id}>
                       <td className="p-1 text-slate-600">{new Date(p.date + 'T00:00:00').toLocaleDateString()}</td>
                       <td className="p-1 text-slate-600">{p.method}</td>
-                      <td className="p-1 text-slate-600 text-right">{formatCurrency(p.amount)}</td>
+                      <td className="p-1 text-slate-600 text-right">
+                          {formatCurrency(p.amount)}
+                          {p.notes && <span className="text-slate-500 ml-1">({p.notes})</span>}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

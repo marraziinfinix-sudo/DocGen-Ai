@@ -1166,7 +1166,8 @@ const App: React.FC = () => {
     if (doc.payments && doc.payments.length > 0) {
         doc.payments.forEach(p => {
             const dateStr = new Date(p.date).toLocaleDateString();
-            paymentHistoryText += `- ${dateStr} (${p.method}): ${formatCurrency(p.amount)}\n`;
+            const noteStr = p.notes ? ` (${p.notes})` : '';
+            paymentHistoryText += `- ${dateStr} (${p.method}): ${formatCurrency(p.amount)}${noteStr}\n`;
         });
     } else {
         paymentHistoryText = "No payments recorded.";

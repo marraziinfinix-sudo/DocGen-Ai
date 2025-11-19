@@ -187,6 +187,18 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
     const balanceDue = Math.max(0, doc.total - amountPaid);
     const statusDisplay = doc.status === InvoiceStatus.Paid ? 'Fully Paid' : doc.status;
 
+    // Generate Payment History Text
+    let paymentHistoryText = '';
+    if (doc.payments && doc.payments.length > 0) {
+        paymentHistoryText = '\nPayment History:\n';
+        doc.payments.forEach(p => {
+            const dateStr = new Date(p.date).toLocaleDateString();
+            // Add notes in brackets if they exist
+            const noteStr = p.notes ? ` (${p.notes})` : '';
+            paymentHistoryText += `- ${dateStr} (${p.method}): ${formatCurrency(p.amount)}${noteStr}\n`;
+        });
+    }
+
     const subject = `Payment Receipt - Invoice #${doc.documentNumber}`;
     
     const emailBody = `Dear ${doc.clientDetails.name},\n\n` +
@@ -195,7 +207,8 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
         `Status: ${statusDisplay}\n` +
         `Invoice Total: ${formatCurrency(doc.total)}\n` +
         `Total Paid: ${formatCurrency(amountPaid)}\n` +
-        `Balance Due: ${formatCurrency(balanceDue)}\n\n` +
+        `Balance Due: ${formatCurrency(balanceDue)}\n` +
+        `${paymentHistoryText}\n` +
         `Thank you for your business.\n\n` +
         `Best regards,\n${doc.companyDetails.name}`;
 
@@ -204,7 +217,8 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
         `Status: *${statusDisplay}*\n\n` +
         `Total Amount: ${formatCurrency(doc.total)}\n` +
         `Total Paid: ${formatCurrency(amountPaid)}\n` +
-        `*Balance Due: ${formatCurrency(balanceDue)}*\n\n` +
+        `*Balance Due: ${formatCurrency(balanceDue)}*\n` +
+        `${paymentHistoryText}\n` +
         `Thank you!\n${doc.companyDetails.name}`;
 
     if (channel === 'email') {
