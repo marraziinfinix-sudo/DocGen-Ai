@@ -719,16 +719,6 @@ const App: React.FC = () => {
     }
     
     let finalDocNum = documentNumber.trim();
-    
-    // If finalizing a draft (or empty number), check if we need to regenerate the number
-    if (!asDraft && (finalDocNum.startsWith('DRAFT-') || !finalDocNum)) {
-         const newNum = generateDocumentNumber(clientDetails, documentType, savedInvoices, savedQuotations);
-         if (newNum) {
-             finalDocNum = newNum;
-             setDocumentNumber(newNum);
-         }
-    }
-
     if (!finalDocNum) {
         if (asDraft) {
             finalDocNum = `DRAFT-${Date.now().toString().slice(-6)}`;
@@ -988,55 +978,44 @@ const App: React.FC = () => {
 
   const handleDownloadPdf = async () => {
     const printArea = document.getElementById('print-area');
+    const container = previewContainerRef.current;
+    const scroller = previewScrollerRef.current;
     
-    if (!printArea) {
+    if (!printArea || !container || !scroller) {
         alert("Preview element not found. Cannot generate PDF.");
         return;
     }
 
-    setIsSaving(true); // Show loading state
+    // Store original styles
+    const originalContainerStyle = container.style.cssText;
+    const originalScrollerStyle = scroller.style.cssText;
+    const originalPrintAreaStyle = printArea.style.cssText;
 
     try {
         // --- HIGH-FIDELITY PDF GENERATION ---
-        // We use a cloning technique to render the PDF from a clean, specific layout container
-        // This avoids issues with screen-specific styles (scrollbars, sticky positioning, etc.)
-        
-        const a4WidthPx = 794; // Standard A4 width at 96DPI
-        
-        // Create an off-screen container
-        const container = document.createElement('div');
-        container.style.position = 'absolute';
-        container.style.left = '-9999px';
-        container.style.top = '0';
-        container.style.width = `${a4WidthPx}px`;
-        container.style.backgroundColor = '#ffffff';
-        document.body.appendChild(container);
 
-        // Clone the print area
-        const clone = printArea.cloneNode(true) as HTMLElement;
+        // Prepare for capture: force A4-like width to ensure consistent layout/text wrapping
+        const a4WidthPx = 794; // approx 210mm at 96dpi
+        container.style.position = 'static'; // Remove sticky positioning
+        container.style.width = `${a4WidthPx}px`; // Force a consistent width
+        container.style.margin = '0 auto'; 
         
-        // Force specific styles on the clone to ensure it renders correctly for print
-        clone.style.width = '100%';
-        clone.style.height = 'auto';
-        clone.style.overflow = 'visible';
-        clone.style.maxHeight = 'none';
-        clone.style.transform = 'none'; // Reset any transforms
+        scroller.style.maxHeight = 'none'; // Remove scrollbar
+        scroller.style.overflow = 'visible'; // Show all content
         
-        container.appendChild(clone);
-
-        // Small delay to allow DOM to settle (images, fonts, etc.)
+        printArea.style.width = '100%'; // Ensure print area uses the container's width
+        
+        // Wait for the DOM to update with the new styles
         await new Promise(resolve => setTimeout(resolve, 100));
+        
+        window.scrollTo(0, 0); // Scroll to top to ensure full capture
 
-        const canvas = await html2canvas(clone, { 
+        const canvas = await html2canvas(printArea, { 
             scale: 2, // Higher scale for better resolution
             useCORS: true,
-            logging: false,
-            windowWidth: a4WidthPx,
-            width: a4WidthPx
+            logging: false, // Suppress console logs from html2canvas
+            windowWidth: a4WidthPx, // Tell html2canvas the simulated window width
         });
-        
-        // Cleanup
-        document.body.removeChild(container);
         
         const imgData = canvas.toDataURL('image/png');
         const pdf = new jspdf.jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
@@ -1044,15 +1023,19 @@ const App: React.FC = () => {
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = pdf.internal.pageSize.getHeight();
         
-        const imgProps = pdf.getImageProperties(imgData);
-        const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
+        const canvasWidth = canvas.width;
+        const canvasHeight = canvas.height;
+        const ratio = canvasHeight / canvasWidth;
         
+        const imgHeight = pdfWidth * ratio;
         let heightLeft = imgHeight;
         let position = 0;
 
+        // Add the first page
         pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
         heightLeft -= pdfHeight;
 
+        // Add more pages if the content is longer than one page
         while (heightLeft > 0) {
             position = position - pdfHeight;
             pdf.addPage();
@@ -1075,12 +1058,11 @@ const App: React.FC = () => {
             doc.setFontSize(12);
             doc.text(`Number: ${documentNumber}`, 20, 30);
             doc.text(`Date: ${new Date(issueDate + 'T00:00:00').toLocaleDateString()}`, 20, 40);
-            doc.text(`${documentType === DocumentType.Invoice ? 'Due' : 'Valid'}: ${new Date(dueDate + 'T00:00:00').toLocaleDateString()}`, 20, 50);
+            doc.text(`Due: ${new Date(dueDate + 'T00:00:00').toLocaleDateString()}`, 20, 50);
             
             doc.text(`From:`, 20, 70);
             doc.setFontSize(10);
             doc.text(companyDetails.name, 20, 76);
-            // Assuming address/email might be multiline or long, but basic fallback text is okay
             
             doc.setFontSize(12);
             doc.text(`To:`, 120, 70);
@@ -1102,14 +1084,14 @@ const App: React.FC = () => {
                 if (item.description) {
                      doc.setFontSize(8);
                      doc.setTextColor(100); // Gray color for description
-                     const descLines = doc.splitTextToSize(item.description, 100); // Wrap text
-                     doc.text(descLines, 20, y);
+                     doc.text(item.description.substring(0, 80) + (item.description.length > 80 ? '...' : ''), 20, y);
                      doc.setTextColor(0); // Reset color
-                     y += (descLines.length * 4) + 4; 
+                     y += 10; // More space for description
                 } else {
-                    y += 3; 
+                    y += 3; // Less space if no description
                 }
                 
+                // Page break logic
                 if (y > 270) {
                     doc.addPage();
                     y = 20;
@@ -1121,14 +1103,17 @@ const App: React.FC = () => {
             doc.text(`Total: ${formatCurrency(total)}`, 120, y);
             
             doc.save(`${documentType}_${documentNumber}_simple.pdf`);
-            alert("A standard PDF could not be generated due to a system limitation. A simplified version has been downloaded instead.");
+            alert("A standard PDF could not be generated due to a browser limitation. A simplified version has been downloaded instead.");
             
         } catch (fallbackError) {
             console.error("Fallback PDF generation failed:", fallbackError);
             alert("Could not generate PDF. Please try the 'Print' option and save as PDF.");
         }
     } finally {
-        setIsSaving(false);
+        // Restore original styles regardless of success or failure
+        container.style.cssText = originalContainerStyle;
+        scroller.style.cssText = originalScrollerStyle;
+        printArea.style.cssText = originalPrintAreaStyle;
     }
   };
   
@@ -1471,7 +1456,7 @@ const App: React.FC = () => {
                             onChange={e => setDocumentNumber(e.target.value)} 
                             placeholder={isCreatingNew ? "Auto-generated from client" : ""}
                             className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed"
-                            disabled={!isCreatingNew && loadedDocumentInfo?.status !== InvoiceStatus.Draft && loadedDocumentInfo?.status !== QuotationStatus.Draft}
+                            disabled={!isCreatingNew}
                           />
                       </div>
                        <div>
@@ -1859,94 +1844,96 @@ const App: React.FC = () => {
              <div className="flex items-center gap-2 sm:gap-4">
                 <h1 className="text-xl sm:text-2xl font-bold text-indigo-600">InvQuo</h1>
                 <nav className="hidden sm:flex items-center gap-2 bg-slate-100 p-1 rounded-lg">
-                    <button onClick={() => setCurrentView('editor')} className={`py-1 px-3 rounded-md text-sm font-semibold transition-all duration-200 ${currentView === 'editor' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Editor</button>
-                    <button onClick={() => setCurrentView('invoices')} className={`py-1 px-3 rounded-md text-sm font-semibold transition-all duration-200 ${currentView === 'invoices' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Invoices</button>
-                    <button onClick={() => setCurrentView('quotations')} className={`py-1 px-3 rounded-md text-sm font-semibold transition-all duration-200 ${currentView === 'quotations' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Quotations</button>
-                    <button onClick={() => setCurrentView('items')} className={`py-1 px-3 rounded-md text-sm font-semibold transition-all duration-200 ${currentView === 'items' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Items</button>
-                    <button onClick={() => setCurrentView('clients')} className={`py-1 px-3 rounded-md text-sm font-semibold transition-all duration-200 ${currentView === 'clients' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Clients</button>
+                    <button onClick={() => setCurrentView('editor')} className={`py-1 px-3 rounded-md transition-colors text-sm font-medium ${currentView === 'editor' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Editor</button>
+                    <button onClick={() => setCurrentView('quotations')} className={`py-1 px-3 rounded-md transition-colors text-sm font-medium ${currentView === 'quotations' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Quotations</button>
+                    <button onClick={() => setCurrentView('invoices')} className={`py-1 px-3 rounded-md transition-colors text-sm font-medium ${currentView === 'invoices' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Invoices</button>
                 </nav>
-             </div>
-             <div className="flex items-center gap-2 sm:gap-4">
-                {firebaseUser && (
-                    <div className="hidden sm:flex flex-col items-end mr-2">
-                        <span className="text-xs font-bold text-indigo-900 truncate max-w-[150px]">{activeCompany?.details.name}</span>
-                        <span className="text-xs text-slate-500 truncate max-w-[150px]">{truncateEmail(firebaseUser.email, 25)}</span>
-                    </div>
-                )}
-                <div className="flex gap-2">
-                    <button onClick={handleRefresh} disabled={isRefreshing} className={`p-2 rounded-full text-slate-500 hover:bg-slate-100 transition-colors ${isRefreshing ? 'animate-spin text-indigo-600' : ''}`} title="Refresh Data">
-                        <RefreshIcon />
-                    </button>
-                    <button onClick={() => setCurrentView('setup')} className={`p-2 rounded-full text-slate-500 hover:bg-slate-100 transition-colors ${currentView === 'setup' ? 'bg-indigo-50 text-indigo-600' : ''}`} title="Settings">
-                        <CogIcon />
-                    </button>
-                    <button onClick={handleLogout} className="p-2 rounded-full text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors" title="Logout">
-                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
-                        </svg>
-                    </button>
-                </div>
-             </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <button
+                  onClick={handleRefresh}
+                  className="p-2 text-indigo-600 bg-indigo-50 rounded-full hover:bg-indigo-100 transition-colors"
+                  title="Refresh Data"
+                  disabled={isRefreshing}
+              >
+                  <RefreshIcon className={isRefreshing ? 'animate-spin' : ''} />
+              </button>
+              {isMobile ? (
+                  <span className="text-slate-600 text-sm font-medium truncate max-w-[120px]">
+                      {truncateEmail(firebaseUser.email, 15)}
+                  </span>
+              ) : (
+                  <span className="text-slate-600 text-sm">Welcome, <span className="font-bold">{firebaseUser.email}</span></span>
+              )}
+              <button onClick={handleLogout} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-50 text-sm">
+                  Logout
+              </button>
+            </div>
           </div>
         </div>
       </header>
-      
-      {/* Mobile Bottom Navigation */}
-      <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t z-30 flex justify-around items-center px-2 pb-safe no-print">
-        <button onClick={() => setCurrentView('editor')} className={`flex flex-col items-center justify-center w-full py-2 ${currentView === 'editor' ? 'text-indigo-600' : 'text-slate-500'}`}>
-           <PlusIcon />
-           <span className="text-[10px] font-medium mt-1">Create</span>
-        </button>
-         <button onClick={() => setCurrentView('invoices')} className={`flex flex-col items-center justify-center w-full py-2 ${currentView === 'invoices' ? 'text-indigo-600' : 'text-slate-500'}`}>
-           <FileTextIcon />
-           <span className="text-[10px] font-medium mt-1">Invoices</span>
-        </button>
-        <button onClick={() => setCurrentView('quotations')} className={`flex flex-col items-center justify-center w-full py-2 ${currentView === 'quotations' ? 'text-indigo-600' : 'text-slate-500'}`}>
-           <DocumentIcon />
-           <span className="text-[10px] font-medium mt-1">Quotes</span>
-        </button>
-         <button onClick={() => setCurrentView('items')} className={`flex flex-col items-center justify-center w-full py-2 ${currentView === 'items' ? 'text-indigo-600' : 'text-slate-500'}`}>
-           <ListIcon />
-           <span className="text-[10px] font-medium mt-1">Items</span>
-        </button>
-        <button onClick={() => setCurrentView('clients')} className={`flex flex-col items-center justify-center w-full py-2 ${currentView === 'clients' ? 'text-indigo-600' : 'text-slate-500'}`}>
-           <UsersIcon />
-           <span className="text-[10px] font-medium mt-1">Clients</span>
-        </button>
-      </nav>
 
-      {/* Desktop Sidebar (visible only on large screens if desired, but top nav handles it well) */}
-      
-      {/* Main Content Area with padding for bottom nav on mobile */}
-      <div className="pb-20 sm:pb-0">
-        {renderCurrentView()}
-      </div>
-      
-      {/* Modals */}
-      <SaveItemsModal
-        isOpen={isSaveItemsModalOpen}
-        newItems={potentialNewItems}
-        onConfirm={handleConfirmSaveNewItems}
-        onDecline={handleDeclineSaveNewItems}
-        onCancel={handleCancelSaveNewItems}
-        formatCurrency={formatCurrency}
-      />
-      <SaveClientModal
-        isOpen={isSaveClientModalOpen}
-        newClient={potentialNewClient!}
-        onConfirm={handleConfirmSaveNewClient}
-        onDecline={handleDeclineSaveNewClient}
-        onCancel={handleCancelSaveNewClient}
-      />
-       {isUpdateClientModalOpen && clientUpdateInfo && (
-        <UpdateClientModal
-          isOpen={isUpdateClientModalOpen}
-          clientInfo={clientUpdateInfo}
-          onConfirm={handleConfirmUpdateClient}
-          onDecline={handleDeclineUpdateClient}
-          onCancel={handleCancelUpdateClient}
-        />
-      )}
+       <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t z-30 grid grid-cols-6 no-print">
+           <button onClick={() => setCurrentView('editor')} className={`${navButtonClasses} ${currentView === 'editor' ? activeNavButtonClasses : inactiveNavButtonClasses}`}>
+               <FileTextIcon /><span className="text-xs">Editor</span>
+           </button>
+            <button onClick={() => setCurrentView('quotations')} className={`${navButtonClasses} ${currentView === 'quotations' ? activeNavButtonClasses : inactiveNavButtonClasses}`}>
+               <DocumentIcon /><span className="text-xs">Quotes</span>
+           </button>
+           <button onClick={() => setCurrentView('invoices')} className={`${navButtonClasses} ${currentView === 'invoices' ? activeNavButtonClasses : inactiveNavButtonClasses}`}>
+               <CashIcon /><span className="text-xs">Invoices</span>
+           </button>
+            <button onClick={() => setCurrentView('clients')} className={`${navButtonClasses} ${currentView === 'clients' ? activeNavButtonClasses : inactiveNavButtonClasses}`}>
+               <UsersIcon /><span className="text-xs">Clients</span>
+           </button>
+           <button onClick={() => setCurrentView('items')} className={`${navButtonClasses} ${currentView === 'items' ? activeNavButtonClasses : inactiveNavButtonClasses}`}>
+               <ListIcon /><span className="text-xs">Items</span>
+           </button>
+           <button onClick={() => setCurrentView('setup')} className={`${navButtonClasses} ${currentView === 'setup' ? activeNavButtonClasses : inactiveNavButtonClasses}`}>
+               <CogIcon /><span className="text-xs">Setup</span>
+           </button>
+       </nav>
+
+        <div className="hidden sm:block fixed top-0 left-0 h-full bg-white pt-[68px] z-10 shadow-lg no-print">
+             <nav className="flex flex-col p-2 space-y-1">
+                 <DesktopSidebarButton onClick={() => setCurrentView('clients')} isActive={currentView === 'clients'} title="Clients"><UsersIcon /></DesktopSidebarButton>
+                 <DesktopSidebarButton onClick={() => setCurrentView('items')} isActive={currentView === 'items'} title="Items"><ListIcon /></DesktopSidebarButton>
+                 <DesktopSidebarButton onClick={() => setCurrentView('setup')} isActive={currentView === 'setup'} title="Setup"><CogIcon /></DesktopSidebarButton>
+             </nav>
+        </div>
+        
+        <div className="sm:pl-16 pb-16 sm:pb-0">
+          {renderCurrentView()}
+        </div>
+
+        {isSaveItemsModalOpen && (
+            <SaveItemsModal
+                isOpen={isSaveItemsModalOpen}
+                newItems={potentialNewItems}
+                onConfirm={handleConfirmSaveNewItems}
+                onDecline={handleDeclineSaveNewItems}
+                onCancel={handleCancelSaveNewItems}
+                formatCurrency={formatCurrency}
+            />
+        )}
+        {isSaveClientModalOpen && potentialNewClient && (
+            <SaveClientModal
+                isOpen={isSaveClientModalOpen}
+                newClient={potentialNewClient}
+                onConfirm={handleConfirmSaveNewClient}
+                onDecline={handleDeclineSaveNewClient}
+                onCancel={handleCancelSaveNewClient}
+            />
+        )}
+        {isUpdateClientModalOpen && clientUpdateInfo && (
+            <UpdateClientModal
+                isOpen={isUpdateClientModalOpen}
+                clientInfo={clientUpdateInfo}
+                onConfirm={handleConfirmUpdateClient}
+                onDecline={handleDeclineUpdateClient}
+                onCancel={handleCancelUpdateClient}
+            />
+        )}
     </div>
   );
 };
