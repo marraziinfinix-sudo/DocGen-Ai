@@ -26,6 +26,9 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
     if (doc.quotationStatus === QuotationStatus.Agreed) {
       return QuotationStatus.Agreed;
     }
+    if (doc.quotationStatus === QuotationStatus.Rejected) {
+      return QuotationStatus.Rejected;
+    }
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const dueDate = new Date(doc.dueDate + 'T00:00:00');
@@ -113,7 +116,8 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
     const statusText = getQuotationDisplayStatusText(doc);
     switch (statusText) {
       case QuotationStatus.Agreed: return { text: 'Agreed', color: 'bg-green-100 text-green-700' };
-      case QuotationStatus.Expired: return { text: 'Expired', color: 'bg-red-100 text-red-700' };
+      case QuotationStatus.Rejected: return { text: 'Rejected', color: 'bg-red-100 text-red-700' };
+      case QuotationStatus.Expired: return { text: 'Expired', color: 'bg-orange-100 text-orange-700' };
       default: return { text: 'Active', color: 'bg-blue-100 text-blue-700' };
     }
   };
@@ -144,7 +148,7 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
                         <button
                             onClick={() => { handleCreateInvoiceFromQuote(doc); setOpenDropdownId(null); }}
                             disabled={!isActionable}
-                            title={!isActionable ? (statusInfo.text === 'Agreed' ? 'Already converted to invoice' : 'Quotation has expired') : "Convert to Invoice"}
+                            title={!isActionable ? (statusInfo.text === 'Agreed' ? 'Already converted to invoice' : 'Quotation is not active') : "Convert to Invoice"}
                             className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed disabled:hover:bg-white"
                         >
                             <DocumentIcon /> Convert to Invoice
@@ -174,7 +178,7 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
       );
   }
 
-  const filterOptions = ['All', 'Active', 'Agreed', 'Expired'];
+  const filterOptions = ['All', 'Active', 'Agreed', 'Rejected', 'Expired'];
 
   return (
     <main className="container mx-auto p-4 sm:p-6 lg:p-8">
