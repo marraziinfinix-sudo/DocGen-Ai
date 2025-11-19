@@ -2,8 +2,8 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus, Recurrence } from './types';
 import { generateDescription } from './services/geminiService';
-import { fetchUserData, saveCompanies, saveClients, saveItems, saveInvoices, saveQuotations, saveDocument, saveActiveCompanyId, saveItemCategories, defaultUserData } from './services/firebaseService';
-import { SparklesIcon, PlusIcon, TrashIcon, CogIcon, UsersIcon, ListIcon, DocumentIcon, MailIcon, WhatsAppIcon, FileTextIcon, DownloadIcon, MoreVerticalIcon, PrinterIcon, ChevronDownIcon, CashIcon, SendIcon } from './components/Icons';
+import { fetchUserData, saveCompanies, saveClients, saveItems, saveInvoices, saveQuotations, saveDocument, saveActiveCompanyId, saveItemCategories, defaultUserData, fetchPublicQuotation, updatePublicQuotationStatus } from './services/firebaseService';
+import { SparklesIcon, PlusIcon, TrashIcon, CogIcon, UsersIcon, ListIcon, DocumentIcon, MailIcon, WhatsAppIcon, FileTextIcon, DownloadIcon, MoreVerticalIcon, PrinterIcon, ChevronDownIcon, CashIcon, SendIcon, RefreshIcon } from './components/Icons';
 import DocumentPreview from './components/DocumentPreview';
 import SetupPage from './components/SetupPage';
 import ClientListPage from './components/ClientListPage';
@@ -19,6 +19,123 @@ import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth
 
 declare const jspdf: any;
 declare const html2canvas: any;
+
+// --- Customer Response Component ---
+const CustomerResponsePage: React.FC<{ uid: string; docId: number; formatCurrency: (amount: number) => string }> = ({ uid, docId, formatCurrency }) => {
+    const [loading, setLoading] = useState(true);
+    const [doc, setDoc] = useState<SavedDocument | null>(null);
+    const [responseStatus, setResponseStatus] = useState<'pending' | 'agreed' | 'rejected' | 'error'>('pending');
+    const [errorMsg, setErrorMsg] = useState('');
+
+    useEffect(() => {
+        const loadDoc = async () => {
+            const document = await fetchPublicQuotation(uid, docId);
+            if (document) {
+                setDoc(document);
+                if (document.quotationStatus === QuotationStatus.Agreed) setResponseStatus('agreed');
+                if (document.quotationStatus === QuotationStatus.Rejected) setResponseStatus('rejected');
+            } else {
+                setResponseStatus('error');
+                setErrorMsg('Quotation not found or invalid link.');
+            }
+            setLoading(false);
+        };
+        loadDoc();
+    }, [uid, docId]);
+
+    const handleResponse = async (agree: boolean) => {
+        setLoading(true);
+        try {
+            const status = agree ? QuotationStatus.Agreed : QuotationStatus.Rejected;
+            await updatePublicQuotationStatus(uid, docId, status);
+            setResponseStatus(agree ? 'agreed' : 'rejected');
+            if (doc) setDoc({ ...doc, quotationStatus: status });
+        } catch (e) {
+            console.error(e);
+            alert("Failed to update status. Please try again.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    if (loading) return <div className="flex justify-center items-center h-screen"><div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-indigo-500"></div></div>;
+
+    if (responseStatus === 'error' || !doc) {
+        return (
+            <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+                <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full text-center">
+                    <h1 className="text-2xl font-bold text-red-600 mb-4">Error</h1>
+                    <p className="text-slate-600">{errorMsg}</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (responseStatus === 'agreed') {
+        return (
+            <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+                 <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full text-center">
+                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                    </div>
+                    <h1 className="text-2xl font-bold text-green-700 mb-2">Thank You!</h1>
+                    <p className="text-slate-600">You have agreed to the quotation <strong>#{doc.documentNumber}</strong>.</p>
+                    <p className="text-slate-500 text-sm mt-4">We have notified {doc.companyDetails.name}.</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (responseStatus === 'rejected') {
+        return (
+            <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+                 <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full text-center">
+                    <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </div>
+                    <h1 className="text-2xl font-bold text-red-700 mb-2">Response Recorded</h1>
+                    <p className="text-slate-600">You have declined quotation <strong>#{doc.documentNumber}</strong>.</p>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+            <div className="bg-white p-6 sm:p-8 rounded-lg shadow-xl max-w-lg w-full">
+                <div className="border-b pb-4 mb-6">
+                    <h1 className="text-xl font-bold text-gray-800">Quotation Response</h1>
+                    <p className="text-sm text-slate-500">From: {doc.companyDetails.name}</p>
+                </div>
+                
+                <div className="mb-8">
+                    <p className="text-lg text-slate-700 mb-2">
+                        Do you agree with quotation <span className="font-bold text-indigo-600">#{doc.documentNumber}</span> and the total price <span className="font-bold text-indigo-600">{formatCurrency(doc.total)}</span> provided?
+                    </p>
+                    <div className="bg-slate-50 p-4 rounded-md mt-4 text-sm text-slate-600">
+                        <p><strong>Date:</strong> {new Date(doc.issueDate).toLocaleDateString()}</p>
+                        <p><strong>Valid Until:</strong> {new Date(doc.dueDate).toLocaleDateString()}</p>
+                    </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-4">
+                    <button 
+                        onClick={() => handleResponse(true)} 
+                        className="flex-1 bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition-colors shadow-sm flex justify-center items-center gap-2"
+                    >
+                        Yes, I Agree
+                    </button>
+                    <button 
+                        onClick={() => handleResponse(false)} 
+                        className="flex-1 bg-white text-red-600 border-2 border-red-100 font-bold py-3 px-4 rounded-lg hover:bg-red-50 transition-colors shadow-sm"
+                    >
+                        No, I Disagree
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 // --- Update Client Modal Component ---
 interface UpdateClientModalProps {
@@ -108,9 +225,13 @@ const App: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [currentView, setCurrentView] = useState<'editor' | 'setup' | 'clients' | 'items' | 'invoices' | 'quotations'>('editor');
   
+  // --- Public Response State ---
+  const [publicResponseData, setPublicResponseData] = useState<{ uid: string, docId: number } | null>(null);
+
   // --- Auth States ---
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // --- Refs for PDF/Print ---
   const previewContainerRef = React.useRef<HTMLDivElement>(null);
@@ -127,6 +248,20 @@ const App: React.FC = () => {
   const [savedInvoices, setSavedInvoices] = useState<SavedDocument[]>([]);
   const [savedQuotations, setSavedQuotations] = useState<SavedDocument[]>([]);
   
+  // --- Check for URL Parameters for Public Response ---
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const action = params.get('action');
+    const uid = params.get('uid');
+    const id = params.get('id');
+
+    if (action === 'respond' && uid && id) {
+        setPublicResponseData({ uid, docId: parseInt(id, 10) });
+        setIsAuthLoading(false); // Stop loading auth if we are in public mode
+    }
+  }, []);
+
+
   // --- Authentication and Data loading ---
   const loadUserData = useCallback(async (uid: string) => {
     const userData = await fetchUserData(uid);
@@ -139,18 +274,27 @@ const App: React.FC = () => {
     setActiveCompanyId(userData.activeCompanyId);
   }, []);
 
+  const handleRefresh = async () => {
+      if (!firebaseUser) return;
+      setIsRefreshing(true);
+      await loadUserData(firebaseUser.uid);
+      setIsRefreshing(false);
+  };
+
   useEffect(() => {
+    if (publicResponseData) return; // Skip auth check if in public mode
+
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setFirebaseUser(user);
       setIsAuthLoading(false);
     });
     return () => unsubscribe();
-  }, []);
+  }, [publicResponseData]);
 
   useEffect(() => {
-    if (firebaseUser) {
+    if (firebaseUser && !publicResponseData) {
       loadUserData(firebaseUser.uid);
-    } else {
+    } else if (!publicResponseData) {
       // Clear data on logout
       setCompanies([]);
       setClients([]);
@@ -160,13 +304,13 @@ const App: React.FC = () => {
       setSavedQuotations([]);
       setActiveCompanyId(1);
     }
-  }, [firebaseUser, loadUserData]);
+  }, [firebaseUser, loadUserData, publicResponseData]);
   
   useEffect(() => {
-      if (firebaseUser) {
+      if (firebaseUser && !publicResponseData) {
         saveItemCategories(itemCategories);
       }
-  }, [itemCategories, firebaseUser]);
+  }, [itemCategories, firebaseUser, publicResponseData]);
 
   const handleLogout = () => {
     signOut(auth);
@@ -184,11 +328,17 @@ const App: React.FC = () => {
           return '';
       }
 
-      const clientNamePart = clientNameTrimmed.toLowerCase().replace(/\s+/g, '_');
-      const phonePart = client.phone ? client.phone.slice(-4) : '0000';
+      // Shorten the client name part to the first 6 alphanumeric characters, uppercase
+      const clientNamePart = clientNameTrimmed.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().substring(0, 6);
+      
+      // Ensure phone part is digits only, fallback to '0000'
+      const phoneDigits = client.phone ? client.phone.replace(/\D/g, '') : '';
+      const phonePart = phoneDigits.length >= 4 ? phoneDigits.slice(-4) : phoneDigits.padEnd(4, '0');
+      
       const docTypePart = docType === DocumentType.Quotation ? 'QUO' : 'INV';
       
-      const prefix = `${clientNamePart}_${phonePart}_${docTypePart}_`;
+      // Use 'CLI' as fallback if name has no alphanumeric characters
+      const prefix = `${clientNamePart || 'CLI'}_${phonePart}_${docTypePart}_`;
 
       const relevantDocs = docType === DocumentType.Quotation ? quotations : invoices;
       
@@ -804,20 +954,32 @@ const App: React.FC = () => {
     // Store original styles
     const originalContainerStyle = container.style.cssText;
     const originalScrollerStyle = scroller.style.cssText;
-
-    // Apply temporary styles for full capture
-    container.style.position = 'static';
-    scroller.style.maxHeight = 'none';
-    scroller.style.overflow = 'visible';
-    
-    window.scrollTo(0, 0);
+    const originalPrintAreaStyle = printArea.style.cssText;
 
     try {
+        // --- HIGH-FIDELITY PDF GENERATION ---
+
+        // Prepare for capture: force A4-like width to ensure consistent layout/text wrapping
+        const a4WidthPx = 794; // approx 210mm at 96dpi
+        container.style.position = 'static'; // Remove sticky positioning
+        container.style.width = `${a4WidthPx}px`; // Force a consistent width
+        container.style.margin = '0 auto'; 
+        
+        scroller.style.maxHeight = 'none'; // Remove scrollbar
+        scroller.style.overflow = 'visible'; // Show all content
+        
+        printArea.style.width = '100%'; // Ensure print area uses the container's width
+        
+        // Wait for the DOM to update with the new styles
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        window.scrollTo(0, 0); // Scroll to top to ensure full capture
+
         const canvas = await html2canvas(printArea, { 
-            scale: 2,
+            scale: 2, // Higher scale for better resolution
             useCORS: true,
-            windowWidth: printArea.scrollWidth,
-            windowHeight: printArea.scrollHeight
+            logging: false, // Suppress console logs from html2canvas
+            windowWidth: a4WidthPx, // Tell html2canvas the simulated window width
         });
         
         const imgData = canvas.toDataURL('image/png');
@@ -834,10 +996,12 @@ const App: React.FC = () => {
         let heightLeft = imgHeight;
         let position = 0;
 
+        // Add the first page
         pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
         heightLeft -= pdfHeight;
 
-        while (heightLeft > 0.1) { // 0.1 for float precision
+        // Add more pages if the content is longer than one page
+        while (heightLeft > 0) {
             position = position - pdfHeight;
             pdf.addPage();
             pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
@@ -847,12 +1011,74 @@ const App: React.FC = () => {
         pdf.save(`${documentType}_${documentNumber}.pdf`);
 
     } catch (error) {
-        console.error("Error generating PDF:", error);
-        alert("Sorry, there was an error generating the PDF.");
+        console.error("Error generating rich PDF, falling back to simple text PDF:", error);
+        
+        try {
+            // --- FALLBACK: SIMPLE TEXT-BASED PDF ---
+            const doc = new jspdf.jsPDF();
+            
+            doc.setFontSize(20);
+            doc.text(documentType.toUpperCase(), 20, 20);
+            
+            doc.setFontSize(12);
+            doc.text(`Number: ${documentNumber}`, 20, 30);
+            doc.text(`Date: ${new Date(issueDate + 'T00:00:00').toLocaleDateString()}`, 20, 40);
+            doc.text(`Due: ${new Date(dueDate + 'T00:00:00').toLocaleDateString()}`, 20, 50);
+            
+            doc.text(`From:`, 20, 70);
+            doc.setFontSize(10);
+            doc.text(companyDetails.name, 20, 76);
+            
+            doc.setFontSize(12);
+            doc.text(`To:`, 120, 70);
+            doc.setFontSize(10);
+            doc.text(clientDetails.name, 120, 76);
+            
+            let y = 100;
+            doc.setFontSize(12);
+            doc.text("Items:", 20, y);
+            y += 10;
+            
+            lineItems.forEach((item: LineItem) => {
+                doc.setFontSize(10);
+                const itemText = `${item.name} (x${item.quantity})`;
+                const priceText = formatCurrency(item.price * item.quantity);
+                doc.text(itemText, 20, y);
+                doc.text(priceText, 150, y);
+                y += 7;
+                if (item.description) {
+                     doc.setFontSize(8);
+                     doc.setTextColor(100); // Gray color for description
+                     doc.text(item.description.substring(0, 80) + (item.description.length > 80 ? '...' : ''), 20, y);
+                     doc.setTextColor(0); // Reset color
+                     y += 10; // More space for description
+                } else {
+                    y += 3; // Less space if no description
+                }
+                
+                // Page break logic
+                if (y > 270) {
+                    doc.addPage();
+                    y = 20;
+                }
+            });
+            
+            y += 10;
+            doc.setFontSize(14);
+            doc.text(`Total: ${formatCurrency(total)}`, 120, y);
+            
+            doc.save(`${documentType}_${documentNumber}_simple.pdf`);
+            alert("A standard PDF could not be generated due to a browser limitation. A simplified version has been downloaded instead.");
+            
+        } catch (fallbackError) {
+            console.error("Fallback PDF generation failed:", fallbackError);
+            alert("Could not generate PDF. Please try the 'Print' option and save as PDF.");
+        }
     } finally {
-        // Restore original styles
+        // Restore original styles regardless of success or failure
         container.style.cssText = originalContainerStyle;
         scroller.style.cssText = originalScrollerStyle;
+        printArea.style.cssText = originalPrintAreaStyle;
     }
   };
   
@@ -861,14 +1087,90 @@ const App: React.FC = () => {
       alert("Client email is missing.");
       return;
     }
+    
+    const dateIssued = new Date(issueDate + 'T00:00:00').toLocaleDateString();
+    const dateDue = new Date(dueDate + 'T00:00:00').toLocaleDateString();
+    
+    let docText = `${documentType.toUpperCase()} #${documentNumber}\n`;
+    docText += `From: ${companyDetails.name}\n`;
+    docText += `To: ${clientDetails.name}\n\n`;
+    docText += `Date: ${dateIssued}\n`;
+    docText += `${documentType === DocumentType.Invoice ? 'Due Date' : 'Valid Until'}: ${dateDue}\n\n`;
+    
+    docText += `ITEMS:\n`;
+    lineItems.forEach((item, index) => {
+        docText += `${index + 1}. ${item.name} (x${item.quantity}) - ${formatCurrency(item.price * item.quantity)}\n`;
+    });
+    docText += `\n`;
+    
+    docText += `Subtotal: ${formatCurrency(subtotal)}\n`;
+    if (taxRate > 0) {
+        docText += `Tax (${taxRate}%): ${formatCurrency(taxAmount)}\n`;
+    }
+    docText += `TOTAL: ${formatCurrency(total)}\n\n`;
+    
+    if (companyDetails.bankName || companyDetails.accountNumber) {
+        docText += `PAYMENT DETAILS:\n`;
+        if (companyDetails.bankName) docText += `Bank: ${companyDetails.bankName}\n`;
+        if (companyDetails.accountNumber) docText += `Account: ${companyDetails.accountNumber}\n`;
+        docText += `\n`;
+    }
+
     const subject = `${documentType} #${documentNumber} from ${companyDetails.name}`;
-    const body = `Dear ${clientDetails.name},\n\nPlease find the attached ${documentType.toLowerCase()} for your review.\n\nTotal Amount: ${formatCurrency(total)}\n\nThank you for your business.\n\nBest regards,\n${companyDetails.name}\n\n---\nNOTE: Please download the PDF of this document and attach it to this email before sending.`;
+    let body = `Dear ${clientDetails.name},\n\nHere are the details for your ${documentType.toLowerCase()}:\n\n${docText}`;
+    
+    // Add response link for quotation
+    if (documentType === DocumentType.Quotation && firebaseUser && loadedDocumentInfo?.id) {
+         const responseLink = `${window.location.origin}?action=respond&uid=${firebaseUser.uid}&id=${loadedDocumentInfo.id}`;
+         body += `Please click the link below to respond to this quotation:\n${responseLink}\n\n`;
+    } else if (documentType === DocumentType.Quotation) {
+        body += `If you agree with this quotation, please reply to this email stating: "Yes, I agree to the quotation offer provided."\n\n`;
+    }
+
+    body += `Thank you for your business.\n\nBest regards,\n${companyDetails.name}`;
+    
     window.location.href = `mailto:${clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   };
   
   const handleSendViaWhatsApp = () => {
-    const message = `Hello ${clientDetails.name},\n\nHere is the ${documentType.toLowerCase()} #${documentNumber} from ${companyDetails.name}.\n\nTotal Amount: ${formatCurrency(total)}\n\nPlease find the attached PDF for details.\n\nThank you.\n\n---\nNOTE: Please download the PDF of this document and attach it to this chat before sending.`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+    const dateIssued = new Date(issueDate + 'T00:00:00').toLocaleDateString();
+    const dateDue = new Date(dueDate + 'T00:00:00').toLocaleDateString();
+
+    let text = `*${documentType.toUpperCase()} #${documentNumber}*\n`;
+    text += `From: *${companyDetails.name}*\n`;
+    text += `To: ${clientDetails.name}\n\n`;
+    
+    text += `Date: ${dateIssued}\n`;
+    text += `${documentType === DocumentType.Invoice ? 'Due Date' : 'Valid Until'}: ${dateDue}\n\n`;
+    
+    text += `*ITEMS:*\n`;
+    lineItems.forEach((item, index) => {
+        text += `${index + 1}. ${item.name} (x${item.quantity}) - ${formatCurrency(item.price * item.quantity)}\n`;
+    });
+    text += `\n`;
+    
+    text += `Subtotal: ${formatCurrency(subtotal)}\n`;
+    if (taxRate > 0) {
+        text += `Tax (${taxRate}%): ${formatCurrency(taxAmount)}\n`;
+    }
+    text += `*TOTAL: ${formatCurrency(total)}*\n\n`;
+    
+    if (companyDetails.bankName || companyDetails.accountNumber) {
+        text += `*Payment Details:*\n`;
+        if (companyDetails.bankName) text += `Bank: ${companyDetails.bankName}\n`;
+        if (companyDetails.accountNumber) text += `Account: ${companyDetails.accountNumber}\n`;
+        text += `\n`;
+    }
+
+    if (documentType === DocumentType.Quotation && firebaseUser && loadedDocumentInfo?.id) {
+         const responseLink = `${window.location.origin}?action=respond&uid=${firebaseUser.uid}&id=${loadedDocumentInfo.id}`;
+         text += `Please click the link below to respond to this quotation:\n${responseLink}\n\n`;
+    } else if (documentType === DocumentType.Quotation) {
+        text += `If you agree with this quotation, please reply to this message stating: "Yes, I agree to the quotation offer provided."\n\n`;
+    }
+    
+    text += `Thank you!`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
   // FIX: Define handleSendReminder function for invoices
@@ -923,6 +1225,10 @@ const App: React.FC = () => {
         <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-indigo-500"></div>
       </div>
     );
+  }
+
+  if (publicResponseData) {
+      return <CustomerResponsePage uid={publicResponseData.uid} docId={publicResponseData.docId} formatCurrency={formatCurrency} />
   }
 
   if (!firebaseUser) {
@@ -1503,6 +1809,14 @@ const App: React.FC = () => {
                 </nav>
             </div>
             <div className="flex items-center gap-4">
+              <button
+                  onClick={handleRefresh}
+                  className="p-2 text-indigo-600 bg-indigo-50 rounded-full hover:bg-indigo-100 transition-colors"
+                  title="Refresh Data"
+                  disabled={isRefreshing}
+              >
+                  <RefreshIcon className={isRefreshing ? 'animate-spin' : ''} />
+              </button>
               {isMobile ? (
                   <span className="text-slate-600 text-sm font-medium truncate max-w-[120px]">
                       {truncateEmail(firebaseUser.email, 15)}

@@ -1,3 +1,4 @@
+
 export enum DocumentType {
   Invoice = 'Invoice',
   Quotation = 'Quotation',
@@ -13,6 +14,7 @@ export enum QuotationStatus {
   Active = 'Active',
   Expired = 'Expired',
   Agreed = 'Agreed',
+  Rejected = 'Rejected',
 }
 
 export interface Payment {
