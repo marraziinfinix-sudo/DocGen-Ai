@@ -223,54 +223,6 @@ export const fetchUserData = async (uid: string): Promise<UserData> => {
   }
 };
 
-// New function to fetch a specific public quotation without login
-export const fetchPublicQuotation = async (uid: string, docId: number): Promise<SavedDocument | null> => {
-    try {
-        const userRef = doc(db, 'users', uid);
-        const docSnap = await getDoc(userRef);
-
-        if (docSnap.exists()) {
-            const data = docSnap.data();
-            const quotations = Array.isArray(data.savedQuotations) 
-                ? data.savedQuotations.map(sanitizeDocument).filter(Boolean) as SavedDocument[]
-                : [];
-            
-            return quotations.find(q => q.id === docId) || null;
-        }
-        return null;
-    } catch (error) {
-        console.error("Error fetching public quotation:", error);
-        return null;
-    }
-};
-
-// New function to update specific public quotation status
-export const updatePublicQuotationStatus = async (uid: string, docId: number, status: QuotationStatus) => {
-    try {
-        const userRef = doc(db, 'users', uid);
-        // We need to read, modify array, and write back (Firestore doesn't support array element update by ID easily)
-        // In a production app, use transactions or proper subcollections.
-        const docSnap = await getDoc(userRef);
-        if (docSnap.exists()) {
-            const data = docSnap.data();
-            let quotations = Array.isArray(data.savedQuotations) ? data.savedQuotations : [];
-            
-            const updatedQuotations = quotations.map((q: any) => {
-                if (q.id === docId) {
-                    return { ...q, quotationStatus: status };
-                }
-                return q;
-            });
-
-            await updateDoc(userRef, { savedQuotations: updatedQuotations });
-        }
-    } catch (error) {
-         console.error("Error updating public quotation:", error);
-         throw error;
-    }
-};
-
-
 const updateUserData = async (dataToUpdate: Partial<UserData>) => {
     const user = auth.currentUser;
     if (!user) {

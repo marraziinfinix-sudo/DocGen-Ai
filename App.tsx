@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus, Recurrence } from './types';
 import { generateDescription } from './services/geminiService';
-import { fetchUserData, saveCompanies, saveClients, saveItems, saveInvoices, saveQuotations, saveDocument, saveActiveCompanyId, saveItemCategories, defaultUserData, fetchPublicQuotation, updatePublicQuotationStatus } from './services/firebaseService';
+import { fetchUserData, saveCompanies, saveClients, saveItems, saveInvoices, saveQuotations, saveDocument, saveActiveCompanyId, saveItemCategories, defaultUserData } from './services/firebaseService';
 import { SparklesIcon, PlusIcon, TrashIcon, CogIcon, UsersIcon, ListIcon, DocumentIcon, MailIcon, WhatsAppIcon, FileTextIcon, DownloadIcon, MoreVerticalIcon, PrinterIcon, ChevronDownIcon, CashIcon, SendIcon, RefreshIcon } from './components/Icons';
 import DocumentPreview from './components/DocumentPreview';
 import SetupPage from './components/SetupPage';
@@ -19,123 +19,6 @@ import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth
 
 declare const jspdf: any;
 declare const html2canvas: any;
-
-// --- Customer Response Component ---
-const CustomerResponsePage: React.FC<{ uid: string; docId: number; formatCurrency: (amount: number) => string }> = ({ uid, docId, formatCurrency }) => {
-    const [loading, setLoading] = useState(true);
-    const [doc, setDoc] = useState<SavedDocument | null>(null);
-    const [responseStatus, setResponseStatus] = useState<'pending' | 'agreed' | 'rejected' | 'error'>('pending');
-    const [errorMsg, setErrorMsg] = useState('');
-
-    useEffect(() => {
-        const loadDoc = async () => {
-            const document = await fetchPublicQuotation(uid, docId);
-            if (document) {
-                setDoc(document);
-                if (document.quotationStatus === QuotationStatus.Agreed) setResponseStatus('agreed');
-                if (document.quotationStatus === QuotationStatus.Rejected) setResponseStatus('rejected');
-            } else {
-                setResponseStatus('error');
-                setErrorMsg('Quotation not found or invalid link.');
-            }
-            setLoading(false);
-        };
-        loadDoc();
-    }, [uid, docId]);
-
-    const handleResponse = async (agree: boolean) => {
-        setLoading(true);
-        try {
-            const status = agree ? QuotationStatus.Agreed : QuotationStatus.Rejected;
-            await updatePublicQuotationStatus(uid, docId, status);
-            setResponseStatus(agree ? 'agreed' : 'rejected');
-            if (doc) setDoc({ ...doc, quotationStatus: status });
-        } catch (e) {
-            console.error(e);
-            alert("Failed to update status. Please try again.");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    if (loading) return <div className="flex justify-center items-center h-screen"><div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-indigo-500"></div></div>;
-
-    if (responseStatus === 'error' || !doc) {
-        return (
-            <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-                <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full text-center">
-                    <h1 className="text-2xl font-bold text-red-600 mb-4">Error</h1>
-                    <p className="text-slate-600">{errorMsg}</p>
-                </div>
-            </div>
-        );
-    }
-
-    if (responseStatus === 'agreed') {
-        return (
-            <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-                 <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full text-center">
-                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                    </div>
-                    <h1 className="text-2xl font-bold text-green-700 mb-2">Thank You!</h1>
-                    <p className="text-slate-600">You have agreed to the quotation <strong>#{doc.documentNumber}</strong>.</p>
-                    <p className="text-slate-500 text-sm mt-4">We have notified {doc.companyDetails.name}.</p>
-                </div>
-            </div>
-        );
-    }
-
-    if (responseStatus === 'rejected') {
-        return (
-            <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-                 <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full text-center">
-                    <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                    </div>
-                    <h1 className="text-2xl font-bold text-red-700 mb-2">Response Recorded</h1>
-                    <p className="text-slate-600">You have declined quotation <strong>#{doc.documentNumber}</strong>.</p>
-                </div>
-            </div>
-        );
-    }
-
-    return (
-        <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-            <div className="bg-white p-6 sm:p-8 rounded-lg shadow-xl max-w-lg w-full">
-                <div className="border-b pb-4 mb-6">
-                    <h1 className="text-xl font-bold text-gray-800">Quotation Response</h1>
-                    <p className="text-sm text-slate-500">From: {doc.companyDetails.name}</p>
-                </div>
-                
-                <div className="mb-8">
-                    <p className="text-lg text-slate-700 mb-2">
-                        Do you agree with quotation <span className="font-bold text-indigo-600">#{doc.documentNumber}</span> and the total price <span className="font-bold text-indigo-600">{formatCurrency(doc.total)}</span> provided?
-                    </p>
-                    <div className="bg-slate-50 p-4 rounded-md mt-4 text-sm text-slate-600">
-                        <p><strong>Date:</strong> {new Date(doc.issueDate).toLocaleDateString()}</p>
-                        <p><strong>Valid Until:</strong> {new Date(doc.dueDate).toLocaleDateString()}</p>
-                    </div>
-                </div>
-
-                <div className="flex flex-col sm:flex-row gap-4">
-                    <button 
-                        onClick={() => handleResponse(true)} 
-                        className="flex-1 bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition-colors shadow-sm flex justify-center items-center gap-2"
-                    >
-                        Yes, I Agree
-                    </button>
-                    <button 
-                        onClick={() => handleResponse(false)} 
-                        className="flex-1 bg-white text-red-600 border-2 border-red-100 font-bold py-3 px-4 rounded-lg hover:bg-red-50 transition-colors shadow-sm"
-                    >
-                        No, I Disagree
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-};
 
 // --- Update Client Modal Component ---
 interface UpdateClientModalProps {
@@ -225,9 +108,6 @@ const App: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [currentView, setCurrentView] = useState<'editor' | 'setup' | 'clients' | 'items' | 'invoices' | 'quotations'>('editor');
   
-  // --- Public Response State ---
-  const [publicResponseData, setPublicResponseData] = useState<{ uid: string, docId: number } | null>(null);
-
   // --- Auth States ---
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
@@ -248,20 +128,6 @@ const App: React.FC = () => {
   const [savedInvoices, setSavedInvoices] = useState<SavedDocument[]>([]);
   const [savedQuotations, setSavedQuotations] = useState<SavedDocument[]>([]);
   
-  // --- Check for URL Parameters for Public Response ---
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const action = params.get('action');
-    const uid = params.get('uid');
-    const id = params.get('id');
-
-    if (action === 'respond' && uid && id) {
-        setPublicResponseData({ uid, docId: parseInt(id, 10) });
-        setIsAuthLoading(false); // Stop loading auth if we are in public mode
-    }
-  }, []);
-
-
   // --- Authentication and Data loading ---
   const loadUserData = useCallback(async (uid: string) => {
     const userData = await fetchUserData(uid);
@@ -282,19 +148,17 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    if (publicResponseData) return; // Skip auth check if in public mode
-
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setFirebaseUser(user);
       setIsAuthLoading(false);
     });
     return () => unsubscribe();
-  }, [publicResponseData]);
+  }, []);
 
   useEffect(() => {
-    if (firebaseUser && !publicResponseData) {
+    if (firebaseUser) {
       loadUserData(firebaseUser.uid);
-    } else if (!publicResponseData) {
+    } else {
       // Clear data on logout
       setCompanies([]);
       setClients([]);
@@ -304,13 +168,13 @@ const App: React.FC = () => {
       setSavedQuotations([]);
       setActiveCompanyId(1);
     }
-  }, [firebaseUser, loadUserData, publicResponseData]);
+  }, [firebaseUser, loadUserData]);
   
   useEffect(() => {
-      if (firebaseUser && !publicResponseData) {
+      if (firebaseUser) {
         saveItemCategories(itemCategories);
       }
-  }, [itemCategories, firebaseUser, publicResponseData]);
+  }, [itemCategories, firebaseUser]);
 
   const handleLogout = () => {
     signOut(auth);
@@ -1152,11 +1016,7 @@ const App: React.FC = () => {
     const subject = `${documentType} #${documentNumber} from ${companyDetails.name}`;
     let body = `Dear ${clientDetails.name},\n\nHere are the details for your ${documentType.toLowerCase()}:\n\n${docText}`;
     
-    // Add response link for quotation
-    if (documentType === DocumentType.Quotation && firebaseUser && loadedDocumentInfo?.id) {
-         const responseLink = `${window.location.origin}?action=respond&uid=${firebaseUser.uid}&id=${loadedDocumentInfo.id}`;
-         body += `Please click the link below to respond to this quotation:\n${responseLink}\n\n`;
-    } else if (documentType === DocumentType.Quotation) {
+    if (documentType === DocumentType.Quotation) {
         body += `If you agree with this quotation, please reply to this email stating: "Yes, I agree to the quotation offer provided."\n\n`;
     }
 
@@ -1196,10 +1056,7 @@ const App: React.FC = () => {
         text += `\n`;
     }
 
-    if (documentType === DocumentType.Quotation && firebaseUser && loadedDocumentInfo?.id) {
-         const responseLink = `${window.location.origin}?action=respond&uid=${firebaseUser.uid}&id=${loadedDocumentInfo.id}`;
-         text += `Please click the link below to respond to this quotation:\n${responseLink}\n\n`;
-    } else if (documentType === DocumentType.Quotation) {
+    if (documentType === DocumentType.Quotation) {
         text += `If you agree with this quotation, please reply to this message stating: "Yes, I agree to the quotation offer provided."\n\n`;
     }
     
@@ -1261,10 +1118,6 @@ const App: React.FC = () => {
         <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-indigo-500"></div>
       </div>
     );
-  }
-
-  if (publicResponseData) {
-      return <CustomerResponsePage uid={publicResponseData.uid} docId={publicResponseData.docId} formatCurrency={formatCurrency} />
   }
 
   if (!firebaseUser) {
