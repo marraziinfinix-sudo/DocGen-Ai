@@ -1033,7 +1033,7 @@ const App: React.FC = () => {
     
     if (documentType === DocumentType.Quotation && loadedDocumentInfo?.id && firebaseUser?.uid) {
         const link = `${window.location.origin}?view=respond&uid=${firebaseUser.uid}&id=${loadedDocumentInfo.id}`;
-        body += `Do you agree withe the quotation ${documentNumber} and the total price ${formatCurrency(total)} provided? Please click the link below to respond:\n\n${link}\n\n`;
+        body += `Do you agree with the quotation provided? Please click the link below to respond:\n\n${link}\n\n`;
     } else if (documentType === DocumentType.Quotation) {
          body += `If you agree with this quotation, please reply to this email stating: "Yes, I agree to the quotation offer provided."\n\n`;
     }
@@ -1076,7 +1076,7 @@ const App: React.FC = () => {
 
     if (documentType === DocumentType.Quotation && loadedDocumentInfo?.id && firebaseUser?.uid) {
         const link = `${window.location.origin}?view=respond&uid=${firebaseUser.uid}&id=${loadedDocumentInfo.id}`;
-        text += `Do you agree withe the quotation ${documentNumber} and the total price ${formatCurrency(total)} provided? Please click the link below to respond:\n${link}\n\n`;
+        text += `Do you agree with the quotation provided? Please click the link below to respond:\n${link}\n\n`;
     } else if (documentType === DocumentType.Quotation) {
         text += `If you agree with this quotation, please reply to this message stating: "Yes, I agree to the quotation offer provided."\n\n`;
     }
@@ -1122,7 +1122,7 @@ const App: React.FC = () => {
     
     if (firebaseUser?.uid) {
         const link = `${window.location.origin}?view=respond&uid=${firebaseUser.uid}&id=${doc.id}`;
-        emailBody += `Do you agree withe the quotation ${doc.documentNumber} and the total price ${formatCurrency(doc.total)} provided? Please click the link below to respond:\n${link}\n\n`;
+        emailBody += `Do you agree with the quotation provided? Please click the link below to respond:\n${link}\n\n`;
     }
 
     emailBody += `Please let us know if you have any questions or would like to proceed.\n\nBest regards,\n${doc.companyDetails.name}`;
@@ -1131,7 +1131,7 @@ const App: React.FC = () => {
     
     if (firebaseUser?.uid) {
         const link = `${window.location.origin}?view=respond&uid=${firebaseUser.uid}&id=${doc.id}`;
-        whatsappMessage += `Do you agree withe the quotation ${doc.documentNumber} and the total price ${formatCurrency(doc.total)} provided? Please click the link below to respond:\n${link}\n\n`;
+        whatsappMessage += `Do you agree with the quotation provided? Please click the link below to respond:\n${link}\n\n`;
     }
 
     whatsappMessage += `Please let us know if you have any questions.\n\nThank you,\n${doc.companyDetails.name}`;
