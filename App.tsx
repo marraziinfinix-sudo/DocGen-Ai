@@ -12,6 +12,7 @@ import DocumentListPage from './components/DocumentListPage';
 import QuotationListPage from './components/QuotationListPage';
 import SaveItemsModal from './components/SaveItemsModal';
 import SaveClientModal from './components/SaveClientModal';
+import ShareDocumentModal from './components/ShareDocumentModal';
 import LoginPage from './components/LoginPage';
 import { auth } from './services/firebaseConfig';
 import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
@@ -267,6 +268,7 @@ const App: React.FC = () => {
   const [isUpdateClientModalOpen, setIsUpdateClientModalOpen] = useState(false);
   const [clientUpdateInfo, setClientUpdateInfo] = useState<{ original: Client; updated: Details } | null>(null);
   const [recurrence, setRecurrence] = useState<Recurrence | null>(null);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
   // --- Sync active company changes to form ---
   useEffect(() => {
@@ -546,7 +548,6 @@ const App: React.FC = () => {
           } else {
               setSavedInvoices(prev => [docToSave, ...prev]);
           }
-          alert('Invoice saved successfully!');
       } else {
           saveDocument('savedQuotations', docToSave);
           const existing = savedQuotations.find(q => q.id === docToSave.id);
@@ -555,10 +556,9 @@ const App: React.FC = () => {
           } else {
               setSavedQuotations(prev => [docToSave, ...prev]);
           }
-          alert('Quotation saved successfully!');
       }
       setIsSaving(false);
-      handleCreateNew();
+      setIsShareModalOpen(true);
   };
 
   const checkNewItemsAndSave = (docToSave: SavedDocument) => {
@@ -769,6 +769,11 @@ const App: React.FC = () => {
       setTemplate(activeCompany.template);
       setAccentColor(activeCompany.accentColor);
     }
+  };
+
+  const handleShareModalClose = () => {
+    setIsShareModalOpen(false);
+    handleCreateNew();
   };
 
   const handleLoadDocument = (doc: SavedDocument) => {
@@ -1781,6 +1786,14 @@ const App: React.FC = () => {
           onCancel={handleCancelUpdateClient}
         />
       )}
+      <ShareDocumentModal
+        isOpen={isShareModalOpen}
+        documentType={documentType}
+        documentNumber={documentNumber}
+        onShareEmail={handleSendViaEmail}
+        onShareWhatsApp={handleSendViaWhatsApp}
+        onClose={handleShareModalClose}
+      />
     </div>
   );
 };
