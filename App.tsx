@@ -1106,10 +1106,36 @@ const App: React.FC = () => {
     if (doc.status === InvoiceStatus.Paid || balanceDue < 0.01) {
       balanceDue = 0;
     }
+
+    // Build Payment History Text
+    let paymentHistoryText = '';
+    if (doc.payments && doc.payments.length > 0) {
+        doc.payments.forEach(p => {
+            const dateStr = new Date(p.date).toLocaleDateString();
+            paymentHistoryText += `- ${dateStr} (${p.method}): ${formatCurrency(p.amount)}\n`;
+        });
+    } else {
+        paymentHistoryText = "No payments recorded.";
+    }
   
     const subject = `Reminder: Invoice #${doc.documentNumber} from ${doc.companyDetails.name}`;
-    const emailBody = `Dear ${doc.clientDetails.name},\n\nThis is a friendly reminder regarding invoice #${doc.documentNumber}, which was due on ${new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}.\n\nThe outstanding balance is ${formatCurrency(balanceDue)}.\n\nPlease let us know if you have any questions.\n\nBest regards,\n${doc.companyDetails.name}`;
-    const whatsappMessage = `Hello ${doc.clientDetails.name},\n\nThis is a friendly reminder regarding invoice #${doc.documentNumber}.\nThe outstanding balance is ${formatCurrency(balanceDue)}.\n\nThank you,\n${doc.companyDetails.name}`;
+    const emailBody = `Dear ${doc.clientDetails.name},\n\n` +
+        `This is a friendly reminder regarding invoice #${doc.documentNumber}, which was due on ${new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}.\n\n` +
+        `Invoice Summary:\n` +
+        `Total Amount: ${formatCurrency(doc.total)}\n` +
+        `Amount Paid: ${formatCurrency(amountPaid)}\n` +
+        `Balance Due: ${formatCurrency(balanceDue)}\n\n` +
+        `Payment History:\n${paymentHistoryText}\n\n` +
+        `Please let us know if you have any questions.\n\n` +
+        `Best regards,\n${doc.companyDetails.name}`;
+    
+    const whatsappMessage = `Hello ${doc.clientDetails.name},\n\n` +
+        `This is a friendly reminder regarding invoice #${doc.documentNumber}.\n` + 
+        `Total Amount: ${formatCurrency(doc.total)}\n` +
+        `Amount Paid: ${formatCurrency(amountPaid)}\n` +
+        `*Balance Due: ${formatCurrency(balanceDue)}*\n\n` +
+        `Payment History:\n${paymentHistoryText}\n\n` +
+        `Thank you,\n${doc.companyDetails.name}`;
   
     if (channel === 'email') {
       const mailtoLink = `mailto:${doc.clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`;
