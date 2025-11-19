@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 export const SparklesIcon: React.FC<{ isLoading?: boolean }> = ({ isLoading }) => (
@@ -131,5 +130,11 @@ export const ChevronDownIcon: React.FC = () => (
 export const RepeatIcon: React.FC = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
         <path fillRule="evenodd" d="M4 2a1 1 0 00-1 1v2.101a7.002 7.002 0 0011.601 2.966 1 1 0 10-1.202-1.604A5.002 5.002 0 015 5.101V3a1 1 0 00-1-1zm11.5 6.474a1 1 0 00-1.604-1.202A5.002 5.002 0 0115 9.899V12a1 1 0 001 1h2a1 1 0 001-1v-2.101a7.002 7.002 0 00-11.601-2.966 1 1 0 101.202 1.604A5.002 5.002 0 0115 9.899v-1.425zM16 17a1 1 0 001-1v-2.101a7.002 7.002 0 00-11.601-2.966 1 1 0 101.202 1.604A5.002 5.002 0 0115 14.899V17a1 1 0 001 1z" clipRule="evenodd" />
+    </svg>
+);
+
+export const SendIcon: React.FC = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+        <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
     </svg>
 );

@@ -1,8 +1,9 @@
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus, Recurrence } from './types';
 import { generateDescription } from './services/geminiService';
 import { fetchUserData, saveCompanies, saveClients, saveItems, saveInvoices, saveQuotations, saveDocument, saveActiveCompanyId, saveItemCategories, defaultUserData } from './services/firebaseService';
-import { SparklesIcon, PlusIcon, TrashIcon, CogIcon, UsersIcon, ListIcon, DocumentIcon, MailIcon, WhatsAppIcon, FileTextIcon, DownloadIcon, MoreVerticalIcon, PrinterIcon, ChevronDownIcon, CashIcon } from './components/Icons';
+import { SparklesIcon, PlusIcon, TrashIcon, CogIcon, UsersIcon, ListIcon, DocumentIcon, MailIcon, WhatsAppIcon, FileTextIcon, DownloadIcon, MoreVerticalIcon, PrinterIcon, ChevronDownIcon, CashIcon, SendIcon } from './components/Icons';
 import DocumentPreview from './components/DocumentPreview';
 import SetupPage from './components/SetupPage';
 import ClientListPage from './components/ClientListPage';
@@ -114,6 +115,7 @@ const App: React.FC = () => {
   // --- Refs for PDF/Print ---
   const previewContainerRef = React.useRef<HTMLDivElement>(null);
   const previewScrollerRef = React.useRef<HTMLDivElement>(null);
+  const [isSendDropdownOpen, setIsSendDropdownOpen] = useState(false);
 
 
   // --- Data States (from Firestore) ---
@@ -854,24 +856,60 @@ const App: React.FC = () => {
     }
   };
   
-  const handleSendReminder = (doc: SavedDocument, channel: 'email' | 'whatsapp') => {
-    const balanceDue = doc.total - (doc.payments?.reduce((s, p) => s + p.amount, 0) || 0);
-    const message = `Dear ${doc.clientDetails.name},\n\nThis is a friendly reminder regarding invoice #${doc.documentNumber} for the amount of ${formatCurrency(doc.total)}. The outstanding balance is ${formatCurrency(balanceDue)}. The due date is ${new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}.\n\nThank you,\n${doc.companyDetails.name}`;
-    if (channel === 'email') {
-      const subject = `Reminder: Invoice #${doc.documentNumber} from ${doc.companyDetails.name}`;
-      window.location.href = `mailto:${doc.clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
-    } else {
-      window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+  const handleSendViaEmail = () => {
+    if (!clientDetails.email) {
+      alert("Client email is missing.");
+      return;
     }
+    const subject = `${documentType} #${documentNumber} from ${companyDetails.name}`;
+    const body = `Dear ${clientDetails.name},\n\nPlease find the attached ${documentType.toLowerCase()} for your review.\n\nTotal Amount: ${formatCurrency(total)}\n\nThank you for your business.\n\nBest regards,\n${companyDetails.name}\n\n---\nNOTE: Please download the PDF of this document and attach it to this email before sending.`;
+    window.location.href = `mailto:${clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   };
   
-  const handleSendQuotationReminder = (doc: SavedDocument, channel: 'email' | 'whatsapp') => {
-    const message = `Dear ${doc.clientDetails.name},\n\nThis is a friendly follow-up on our quotation #${doc.documentNumber} for the amount of ${formatCurrency(doc.total)}. It is valid until ${new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}.\n\nPlease let us know if you have any questions.\n\nBest regards,\n${doc.companyDetails.name}`;
+  const handleSendViaWhatsApp = () => {
+    const message = `Hello ${clientDetails.name},\n\nHere is the ${documentType.toLowerCase()} #${documentNumber} from ${companyDetails.name}.\n\nTotal Amount: ${formatCurrency(total)}\n\nPlease find the attached PDF for details.\n\nThank you.\n\n---\nNOTE: Please download the PDF of this document and attach it to this chat before sending.`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+  };
+
+  // FIX: Define handleSendReminder function for invoices
+  const handleSendReminder = (doc: SavedDocument, channel: 'email' | 'whatsapp') => {
+    if (channel === 'email' && !doc.clientDetails.email) {
+      alert("Client email is missing for this document.");
+      return;
+    }
+  
+    const amountPaid = doc.payments?.reduce((sum, p) => sum + p.amount, 0) || 0;
+    let balanceDue = doc.total - amountPaid;
+    if (doc.status === InvoiceStatus.Paid || balanceDue < 0.01) {
+      balanceDue = 0;
+    }
+  
+    const subject = `Reminder: Invoice #${doc.documentNumber} from ${doc.companyDetails.name}`;
+    const emailBody = `Dear ${doc.clientDetails.name},\n\nThis is a friendly reminder regarding invoice #${doc.documentNumber}, which was due on ${new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}.\n\nThe outstanding balance is ${formatCurrency(balanceDue)}.\n\nPlease let us know if you have any questions.\n\nBest regards,\n${doc.companyDetails.name}`;
+    const whatsappMessage = `Hello ${doc.clientDetails.name},\n\nThis is a friendly reminder regarding invoice #${doc.documentNumber}.\nThe outstanding balance is ${formatCurrency(balanceDue)}.\n\nThank you,\n${doc.companyDetails.name}`;
+  
     if (channel === 'email') {
-      const subject = `Quotation #${doc.documentNumber} from ${doc.companyDetails.name}`;
-      window.location.href = `mailto:${doc.clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
+      window.location.href = `mailto:${doc.clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`;
     } else {
-      window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+      window.open(`https://wa.me/?text=${encodeURIComponent(whatsappMessage)}`, '_blank');
+    }
+  };
+
+  // FIX: Define handleSendQuotationReminder function for quotations
+  const handleSendQuotationReminder = (doc: SavedDocument, channel: 'email' | 'whatsapp') => {
+    if (channel === 'email' && !doc.clientDetails.email) {
+      alert("Client email is missing for this document.");
+      return;
+    }
+  
+    const subject = `Reminder: Quotation #${doc.documentNumber} from ${doc.companyDetails.name}`;
+    const emailBody = `Dear ${doc.clientDetails.name},\n\nThis is a friendly reminder regarding quotation #${doc.documentNumber}, which is valid until ${new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}.\n\nThe total amount is ${formatCurrency(doc.total)}.\n\nPlease let us know if you have any questions or would like to proceed.\n\nBest regards,\n${doc.companyDetails.name}`;
+    const whatsappMessage = `Hello ${doc.clientDetails.name},\n\nThis is a friendly reminder regarding quotation #${doc.documentNumber}, valid until ${new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}.\nThe total amount is ${formatCurrency(doc.total)}.\n\nPlease let us know if you have any questions.\n\nThank you,\n${doc.companyDetails.name}`;
+  
+    if (channel === 'email') {
+      window.location.href = `mailto:${doc.clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`;
+    } else {
+      window.open(`https://wa.me/?text=${encodeURIComponent(whatsappMessage)}`, '_blank');
     }
   };
 
@@ -890,6 +928,14 @@ const App: React.FC = () => {
   if (!firebaseUser) {
     return <LoginPage />;
   }
+  
+  // Helper to truncate email for mobile display
+  const truncateEmail = (email: string | null | undefined, maxLength: number) => {
+    if (!email) return '';
+    if (email.length <= maxLength) return email;
+    return email.substring(0, maxLength - 3) + '...';
+  };
+
 
   const renderCurrentView = () => {
     switch(currentView) {
@@ -1355,8 +1401,39 @@ const App: React.FC = () => {
                               <PrinterIcon /> <span className="hidden sm:inline">Print</span>
                           </button>
                           <button onClick={handleDownloadPdf} className="flex items-center gap-2 bg-white text-slate-700 font-semibold py-2 px-3 rounded-lg shadow-sm border hover:bg-slate-100 text-sm">
-                              <DownloadIcon /> <span className="hidden sm:inline">Download PDF</span>
+                              <DownloadIcon /> <span className="hidden sm:inline">PDF</span>
                           </button>
+                          <div className="relative">
+                            <button 
+                                onClick={() => setIsSendDropdownOpen(prev => !prev)}
+                                disabled={!clientDetails.name}
+                                className="flex items-center gap-2 bg-indigo-600 text-white font-semibold py-2 px-3 rounded-lg shadow-sm border border-indigo-600 hover:bg-indigo-700 text-sm disabled:bg-indigo-400 disabled:cursor-not-allowed"
+                            >
+                                <SendIcon /> <span className="hidden sm:inline">Send</span>
+                            </button>
+                             {isSendDropdownOpen && (
+                                <div 
+                                    className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-20 ring-1 ring-black ring-opacity-5"
+                                    onMouseLeave={() => setIsSendDropdownOpen(false)}
+                                >
+                                    <div className="py-1">
+                                        <button 
+                                            onClick={() => { handleSendViaEmail(); setIsSendDropdownOpen(false); }}
+                                            disabled={!clientDetails.email}
+                                            className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
+                                        >
+                                            <MailIcon /> Email
+                                        </button>
+                                        <button 
+                                            onClick={() => { handleSendViaWhatsApp(); setIsSendDropdownOpen(false); }}
+                                            className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                                        >
+                                            <WhatsAppIcon /> WhatsApp
+                                        </button>
+                                    </div>
+                                </div>
+                             )}
+                          </div>
                       </div>
                     </div>
                     <div 
@@ -1426,10 +1503,16 @@ const App: React.FC = () => {
                 </nav>
             </div>
             <div className="flex items-center gap-4">
-                <span className="text-slate-600 text-sm hidden sm:block">Welcome, <span className="font-bold">{firebaseUser.email}</span></span>
-                <button onClick={handleLogout} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-50 text-sm">
-                    Logout
-                </button>
+              {isMobile ? (
+                  <span className="text-slate-600 text-sm font-medium truncate max-w-[120px]">
+                      {truncateEmail(firebaseUser.email, 15)}
+                  </span>
+              ) : (
+                  <span className="text-slate-600 text-sm">Welcome, <span className="font-bold">{firebaseUser.email}</span></span>
+              )}
+              <button onClick={handleLogout} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-50 text-sm">
+                  Logout
+              </button>
             </div>
           </div>
         </div>
