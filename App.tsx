@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus, Recurrence } from './types';
 import { generateDescription } from './services/geminiService';
-import { fetchUserData, saveCompanies, saveClients, saveItems, saveInvoices, saveQuotations, saveDocument, saveActiveCompanyId, saveItemCategories, defaultUserData } from './services/firebaseService';
+import { fetchUserData, saveCompanies, saveClients, saveItems, saveInvoices, saveQuotations, saveDocument, saveActiveCompanyId, saveItemCategories, defaultUserData, subscribeToUserData } from './services/firebaseService';
 import { SparklesIcon, PlusIcon, TrashIcon, CogIcon, UsersIcon, ListIcon, DocumentIcon, MailIcon, WhatsAppIcon, FileTextIcon, DownloadIcon, MoreVerticalIcon, PrinterIcon, ChevronDownIcon, CashIcon, SendIcon, RefreshIcon } from './components/Icons';
 import DocumentPreview from './components/DocumentPreview';
 import SetupPage from './components/SetupPage';
@@ -147,6 +147,39 @@ const App: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    let unsubscribeSnapshot: (() => void) | undefined;
+
+    if (firebaseUser && !isResponseMode) {
+      // Subscribe to real-time updates
+      unsubscribeSnapshot = subscribeToUserData(firebaseUser.uid, (userData) => {
+        setCompanies(userData.companies);
+        setClients(userData.clients);
+        setItems(userData.items);
+        setItemCategories(userData.itemCategories || []);
+        setSavedInvoices(userData.savedInvoices);
+        setSavedQuotations(userData.savedQuotations);
+        setActiveCompanyId(userData.activeCompanyId);
+      });
+    } else {
+      // Clear data on logout or if response mode
+      setCompanies([]);
+      setClients([]);
+      setItems([]);
+      setItemCategories([]);
+      setSavedInvoices([]);
+      setSavedQuotations([]);
+      setActiveCompanyId(1);
+    }
+
+    return () => {
+        if (unsubscribeSnapshot) {
+            unsubscribeSnapshot();
+        }
+    };
+  }, [firebaseUser, isResponseMode]);
+
+  // Helper for manual refresh (force fetch) if needed
   const loadUserData = useCallback(async (uid: string) => {
     const userData = await fetchUserData(uid);
     setCompanies(userData.companies);
@@ -164,21 +197,6 @@ const App: React.FC = () => {
       await loadUserData(firebaseUser.uid);
       setIsRefreshing(false);
   };
-
-  useEffect(() => {
-    if (firebaseUser) {
-      loadUserData(firebaseUser.uid);
-    } else {
-      // Clear data on logout
-      setCompanies([]);
-      setClients([]);
-      setItems([]);
-      setItemCategories([]);
-      setSavedInvoices([]);
-      setSavedQuotations([]);
-      setActiveCompanyId(1);
-    }
-  }, [firebaseUser, loadUserData]);
   
   useEffect(() => {
       if (firebaseUser) {

@@ -1,7 +1,7 @@
 
 import { Company, Client, Item, SavedDocument, DocumentType, LineItem, Details, Payment, Recurrence, QuotationStatus } from '../types';
 import { db, auth } from './firebaseConfig';
-import { doc, getDoc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { deleteUser, User as FirebaseUser } from 'firebase/auth';
 
 interface UserData {
@@ -177,15 +177,8 @@ const sanitizeDocument = (docData: any): SavedDocument | null => {
     };
 };
 
-export const fetchUserData = async (uid: string): Promise<UserData> => {
-  try {
-    const userRef = doc(db, 'users', uid);
-    const docSnap = await getDoc(userRef);
-
-    if (docSnap.exists()) {
-      const parsedData = docSnap.data() || {};
-      
-      const completeData: UserData = {
+const parseFirestoreData = (parsedData: any): UserData => {
+    const completeData: UserData = {
         companies: Array.isArray(parsedData.companies) ? parsedData.companies.map(sanitizeCompany).filter(Boolean) as Company[] : defaultUserData.companies,
         clients: Array.isArray(parsedData.clients) ? parsedData.clients.map(sanitizeClient).filter(Boolean) as Client[] : defaultUserData.clients,
         items: Array.isArray(parsedData.items) ? parsedData.items.map(sanitizeItem).filter(Boolean) as Item[] : defaultUserData.items,
@@ -208,8 +201,16 @@ export const fetchUserData = async (uid: string): Promise<UserData> => {
       if (!completeData.companies.some(c => c.id === completeData.activeCompanyId)) {
           completeData.activeCompanyId = completeData.companies[0]?.id || 1;
       }
-      
       return completeData;
+};
+
+export const fetchUserData = async (uid: string): Promise<UserData> => {
+  try {
+    const userRef = doc(db, 'users', uid);
+    const docSnap = await getDoc(userRef);
+
+    if (docSnap.exists()) {
+      return parseFirestoreData(docSnap.data() || {});
     } else {
         console.log("No such document! Creating one for new user.");
         const user = auth.currentUser;
@@ -222,6 +223,17 @@ export const fetchUserData = async (uid: string): Promise<UserData> => {
     console.error("Error fetching user data from Firestore:", error);
     return defaultUserData;
   }
+};
+
+export const subscribeToUserData = (uid: string, callback: (data: UserData) => void) => {
+    const userRef = doc(db, 'users', uid);
+    return onSnapshot(userRef, (docSnap) => {
+        if (docSnap.exists()) {
+            callback(parseFirestoreData(docSnap.data() || {}));
+        }
+    }, (error) => {
+        console.error("Error subscribing to user data:", error);
+    });
 };
 
 const updateUserData = async (dataToUpdate: Partial<UserData>) => {
