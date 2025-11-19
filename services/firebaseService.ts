@@ -237,6 +237,52 @@ const updateUserData = async (dataToUpdate: Partial<UserData>) => {
     }
 };
 
+// --- External Response Functions ---
+
+export const fetchQuotationForResponse = async (uid: string, docId: number): Promise<SavedDocument | null> => {
+    try {
+        const userRef = doc(db, 'users', uid);
+        const docSnap = await getDoc(userRef);
+
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            const quotations = Array.isArray(data.savedQuotations) ? data.savedQuotations : [];
+            const targetDoc = quotations.find((q: any) => q.id === docId);
+            return targetDoc ? sanitizeDocument(targetDoc) : null;
+        }
+        return null;
+    } catch (error) {
+        console.error("Error fetching quotation for response:", error);
+        return null;
+    }
+};
+
+export const respondToQuotation = async (uid: string, docId: number, status: QuotationStatus) => {
+    try {
+        const userRef = doc(db, 'users', uid);
+        const docSnap = await getDoc(userRef);
+
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            const quotations = Array.isArray(data.savedQuotations) ? data.savedQuotations : [];
+            
+            const updatedQuotations = quotations.map((q: any) => {
+                if (q.id === docId) {
+                    return { ...q, quotationStatus: status };
+                }
+                return q;
+            });
+
+            await updateDoc(userRef, { savedQuotations: updatedQuotations });
+        }
+    } catch (error) {
+        console.error("Error saving response:", error);
+        throw error;
+    }
+};
+
+// --- End External Response Functions ---
+
 export const saveCompanies = (companies: Company[]) => {
     updateUserData({ companies });
 };

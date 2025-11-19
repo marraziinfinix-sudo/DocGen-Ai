@@ -13,6 +13,7 @@ import QuotationListPage from './components/QuotationListPage';
 import SaveItemsModal from './components/SaveItemsModal';
 import SaveClientModal from './components/SaveClientModal';
 import ShareDocumentModal from './components/ShareDocumentModal';
+import CustomerResponsePage from './components/CustomerResponsePage';
 import LoginPage from './components/LoginPage';
 import { auth } from './services/firebaseConfig';
 import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
@@ -108,6 +109,7 @@ const App: React.FC = () => {
   // --- States ---
   const [isSaving, setIsSaving] = useState(false);
   const [currentView, setCurrentView] = useState<'editor' | 'setup' | 'clients' | 'items' | 'invoices' | 'quotations'>('editor');
+  const [isResponseMode, setIsResponseMode] = useState(false);
   
   // --- Auth States ---
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
@@ -130,6 +132,22 @@ const App: React.FC = () => {
   const [savedQuotations, setSavedQuotations] = useState<SavedDocument[]>([]);
   
   // --- Authentication and Data loading ---
+  useEffect(() => {
+    // Check for response mode URL params first
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('view') === 'respond') {
+      setIsResponseMode(true);
+      setIsAuthLoading(false);
+      return;
+    }
+
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setFirebaseUser(user);
+      setIsAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
   const loadUserData = useCallback(async (uid: string) => {
     const userData = await fetchUserData(uid);
     setCompanies(userData.companies);
@@ -147,14 +165,6 @@ const App: React.FC = () => {
       await loadUserData(firebaseUser.uid);
       setIsRefreshing(false);
   };
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setFirebaseUser(user);
-      setIsAuthLoading(false);
-    });
-    return () => unsubscribe();
-  }, []);
 
   useEffect(() => {
     if (firebaseUser) {
@@ -1021,8 +1031,11 @@ const App: React.FC = () => {
     const subject = `${documentType} #${documentNumber} from ${companyDetails.name}`;
     let body = `Dear ${clientDetails.name},\n\nHere are the details for your ${documentType.toLowerCase()}:\n\n${docText}`;
     
-    if (documentType === DocumentType.Quotation) {
-        body += `If you agree with this quotation, please reply to this email stating: "Yes, I agree to the quotation offer provided."\n\n`;
+    if (documentType === DocumentType.Quotation && loadedDocumentInfo?.id && firebaseUser?.uid) {
+        const link = `${window.location.origin}?view=respond&uid=${firebaseUser.uid}&id=${loadedDocumentInfo.id}`;
+        body += `Do you agree withe the quotation ${documentNumber} and the total price ${formatCurrency(total)} provided? Please click the link below to respond:\n\n${link}\n\n`;
+    } else if (documentType === DocumentType.Quotation) {
+         body += `If you agree with this quotation, please reply to this email stating: "Yes, I agree to the quotation offer provided."\n\n`;
     }
 
     body += `Thank you for your business.\n\nBest regards,\n${companyDetails.name}`;
@@ -1061,7 +1074,10 @@ const App: React.FC = () => {
         text += `\n`;
     }
 
-    if (documentType === DocumentType.Quotation) {
+    if (documentType === DocumentType.Quotation && loadedDocumentInfo?.id && firebaseUser?.uid) {
+        const link = `${window.location.origin}?view=respond&uid=${firebaseUser.uid}&id=${loadedDocumentInfo.id}`;
+        text += `Do you agree withe the quotation ${documentNumber} and the total price ${formatCurrency(total)} provided? Please click the link below to respond:\n${link}\n\n`;
+    } else if (documentType === DocumentType.Quotation) {
         text += `If you agree with this quotation, please reply to this message stating: "Yes, I agree to the quotation offer provided."\n\n`;
     }
     
@@ -1102,8 +1118,23 @@ const App: React.FC = () => {
     }
   
     const subject = `Reminder: Quotation #${doc.documentNumber} from ${doc.companyDetails.name}`;
-    const emailBody = `Dear ${doc.clientDetails.name},\n\nThis is a friendly reminder regarding quotation #${doc.documentNumber}, which is valid until ${new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}.\n\nThe total amount is ${formatCurrency(doc.total)}.\n\nPlease let us know if you have any questions or would like to proceed.\n\nBest regards,\n${doc.companyDetails.name}`;
-    const whatsappMessage = `Hello ${doc.clientDetails.name},\n\nThis is a friendly reminder regarding quotation #${doc.documentNumber}, valid until ${new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}.\nThe total amount is ${formatCurrency(doc.total)}.\n\nPlease let us know if you have any questions.\n\nThank you,\n${doc.companyDetails.name}`;
+    let emailBody = `Dear ${doc.clientDetails.name},\n\nThis is a friendly reminder regarding quotation #${doc.documentNumber}, which is valid until ${new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}.\n\nThe total amount is ${formatCurrency(doc.total)}.\n\n`;
+    
+    if (firebaseUser?.uid) {
+        const link = `${window.location.origin}?view=respond&uid=${firebaseUser.uid}&id=${doc.id}`;
+        emailBody += `Do you agree withe the quotation ${doc.documentNumber} and the total price ${formatCurrency(doc.total)} provided? Please click the link below to respond:\n${link}\n\n`;
+    }
+
+    emailBody += `Please let us know if you have any questions or would like to proceed.\n\nBest regards,\n${doc.companyDetails.name}`;
+
+    let whatsappMessage = `Hello ${doc.clientDetails.name},\n\nThis is a friendly reminder regarding quotation #${doc.documentNumber}, valid until ${new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}.\nThe total amount is ${formatCurrency(doc.total)}.\n\n`;
+    
+    if (firebaseUser?.uid) {
+        const link = `${window.location.origin}?view=respond&uid=${firebaseUser.uid}&id=${doc.id}`;
+        whatsappMessage += `Do you agree withe the quotation ${doc.documentNumber} and the total price ${formatCurrency(doc.total)} provided? Please click the link below to respond:\n${link}\n\n`;
+    }
+
+    whatsappMessage += `Please let us know if you have any questions.\n\nThank you,\n${doc.companyDetails.name}`;
   
     if (channel === 'email') {
       const mailtoLink = `mailto:${doc.clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`;
@@ -1123,6 +1154,10 @@ const App: React.FC = () => {
         <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-indigo-500"></div>
       </div>
     );
+  }
+
+  if (isResponseMode) {
+    return <CustomerResponsePage />;
   }
 
   if (!firebaseUser) {
@@ -1697,67 +1732,73 @@ const App: React.FC = () => {
           <div className="flex justify-between items-center">
              <div className="flex items-center gap-2 sm:gap-4">
                 <h1 className="text-xl sm:text-2xl font-bold text-indigo-600">InvQuo</h1>
-                <nav className="hidden sm:flex items-center gap-2 bg-slate-100 p-1 rounded-lg">
-                    <button onClick={() => setCurrentView('editor')} className={`py-1 px-3 rounded-md text-sm font-semibold transition-all duration-200 ${currentView === 'editor' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Editor</button>
-                    <button onClick={() => setCurrentView('quotations')} className={`py-1 px-3 rounded-md text-sm font-semibold transition-all duration-200 ${currentView === 'quotations' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Quotations</button>
-                    <button onClick={() => setCurrentView('invoices')} className={`py-1 px-3 rounded-md text-sm font-semibold transition-all duration-200 ${currentView === 'invoices' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Invoices</button>
-                    <button onClick={() => setCurrentView('items')} className={`py-1 px-3 rounded-md text-sm font-semibold transition-all duration-200 ${currentView === 'items' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Items</button>
-                    <button onClick={() => setCurrentView('clients')} className={`py-1 px-3 rounded-md text-sm font-semibold transition-all duration-200 ${currentView === 'clients' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Clients</button>
-                </nav>
-             </div>
-             <div className="flex items-center gap-2 sm:gap-4">
-                {firebaseUser && (
-                    <div className="hidden sm:flex flex-col items-end mr-2">
-                        <span className="text-xs font-bold text-indigo-900 truncate max-w-[150px]">{activeCompany?.details.name}</span>
-                        <span className="text-xs text-slate-500 truncate max-w-[150px]">{truncateEmail(firebaseUser.email, 25)}</span>
-                    </div>
+                {!isResponseMode && (
+                    <nav className="hidden sm:flex items-center gap-2 bg-slate-100 p-1 rounded-lg">
+                        <button onClick={() => setCurrentView('editor')} className={`py-1 px-3 rounded-md text-sm font-semibold transition-all duration-200 ${currentView === 'editor' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Editor</button>
+                        <button onClick={() => setCurrentView('quotations')} className={`py-1 px-3 rounded-md text-sm font-semibold transition-all duration-200 ${currentView === 'quotations' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Quotations</button>
+                        <button onClick={() => setCurrentView('invoices')} className={`py-1 px-3 rounded-md text-sm font-semibold transition-all duration-200 ${currentView === 'invoices' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Invoices</button>
+                        <button onClick={() => setCurrentView('items')} className={`py-1 px-3 rounded-md text-sm font-semibold transition-all duration-200 ${currentView === 'items' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Items</button>
+                        <button onClick={() => setCurrentView('clients')} className={`py-1 px-3 rounded-md text-sm font-semibold transition-all duration-200 ${currentView === 'clients' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Clients</button>
+                    </nav>
                 )}
-                <div className="flex gap-2">
-                    <button onClick={handleRefresh} disabled={isRefreshing} className={`p-2 rounded-full text-slate-500 hover:bg-slate-100 transition-colors ${isRefreshing ? 'animate-spin text-indigo-600' : ''}`} title="Refresh Data">
-                        <RefreshIcon />
-                    </button>
-                    <button onClick={() => setCurrentView('setup')} className={`p-2 rounded-full text-slate-500 hover:bg-slate-100 transition-colors ${currentView === 'setup' ? 'bg-indigo-50 text-indigo-600' : ''}`} title="Settings">
-                        <CogIcon />
-                    </button>
-                    <button onClick={handleLogout} className="p-2 rounded-full text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors" title="Logout">
-                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
-                        </svg>
-                    </button>
-                </div>
              </div>
+             {!isResponseMode && (
+                 <div className="flex items-center gap-2 sm:gap-4">
+                    {firebaseUser && (
+                        <div className="hidden sm:flex flex-col items-end mr-2">
+                            <span className="text-xs font-bold text-indigo-900 truncate max-w-[150px]">{activeCompany?.details.name}</span>
+                            <span className="text-xs text-slate-500 truncate max-w-[150px]">{truncateEmail(firebaseUser.email, 25)}</span>
+                        </div>
+                    )}
+                    <div className="flex gap-2">
+                        <button onClick={handleRefresh} disabled={isRefreshing} className={`p-2 rounded-full text-slate-500 hover:bg-slate-100 transition-colors ${isRefreshing ? 'animate-spin text-indigo-600' : ''}`} title="Refresh Data">
+                            <RefreshIcon />
+                        </button>
+                        <button onClick={() => setCurrentView('setup')} className={`p-2 rounded-full text-slate-500 hover:bg-slate-100 transition-colors ${currentView === 'setup' ? 'bg-indigo-50 text-indigo-600' : ''}`} title="Settings">
+                            <CogIcon />
+                        </button>
+                        <button onClick={handleLogout} className="p-2 rounded-full text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors" title="Logout">
+                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
+                            </svg>
+                        </button>
+                    </div>
+                 </div>
+             )}
           </div>
         </div>
       </header>
       
       {/* Mobile Bottom Navigation */}
-      <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t z-30 flex justify-around items-center px-2 pb-safe no-print">
-        <button onClick={() => setCurrentView('editor')} className={`flex flex-col items-center justify-center w-full py-2 ${currentView === 'editor' ? 'text-indigo-600' : 'text-slate-500'}`}>
-           <PlusIcon />
-           <span className="text-[10px] font-medium mt-1">Create</span>
-        </button>
-        <button onClick={() => setCurrentView('quotations')} className={`flex flex-col items-center justify-center w-full py-2 ${currentView === 'quotations' ? 'text-indigo-600' : 'text-slate-500'}`}>
-           <DocumentIcon />
-           <span className="text-[10px] font-medium mt-1">Quotes</span>
-        </button>
-         <button onClick={() => setCurrentView('invoices')} className={`flex flex-col items-center justify-center w-full py-2 ${currentView === 'invoices' ? 'text-indigo-600' : 'text-slate-500'}`}>
-           <FileTextIcon />
-           <span className="text-[10px] font-medium mt-1">Invoices</span>
-        </button>
-         <button onClick={() => setCurrentView('items')} className={`flex flex-col items-center justify-center w-full py-2 ${currentView === 'items' ? 'text-indigo-600' : 'text-slate-500'}`}>
-           <ListIcon />
-           <span className="text-[10px] font-medium mt-1">Items</span>
-        </button>
-        <button onClick={() => setCurrentView('clients')} className={`flex flex-col items-center justify-center w-full py-2 ${currentView === 'clients' ? 'text-indigo-600' : 'text-slate-500'}`}>
-           <UsersIcon />
-           <span className="text-[10px] font-medium mt-1">Clients</span>
-        </button>
-      </nav>
+      {!isResponseMode && (
+        <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t z-30 flex justify-around items-center px-2 pb-safe no-print">
+            <button onClick={() => setCurrentView('editor')} className={`flex flex-col items-center justify-center w-full py-2 ${currentView === 'editor' ? 'text-indigo-600' : 'text-slate-500'}`}>
+            <PlusIcon />
+            <span className="text-[10px] font-medium mt-1">Create</span>
+            </button>
+            <button onClick={() => setCurrentView('quotations')} className={`flex flex-col items-center justify-center w-full py-2 ${currentView === 'quotations' ? 'text-indigo-600' : 'text-slate-500'}`}>
+            <DocumentIcon />
+            <span className="text-[10px] font-medium mt-1">Quotes</span>
+            </button>
+            <button onClick={() => setCurrentView('invoices')} className={`flex flex-col items-center justify-center w-full py-2 ${currentView === 'invoices' ? 'text-indigo-600' : 'text-slate-500'}`}>
+            <FileTextIcon />
+            <span className="text-[10px] font-medium mt-1">Invoices</span>
+            </button>
+            <button onClick={() => setCurrentView('items')} className={`flex flex-col items-center justify-center w-full py-2 ${currentView === 'items' ? 'text-indigo-600' : 'text-slate-500'}`}>
+            <ListIcon />
+            <span className="text-[10px] font-medium mt-1">Items</span>
+            </button>
+            <button onClick={() => setCurrentView('clients')} className={`flex flex-col items-center justify-center w-full py-2 ${currentView === 'clients' ? 'text-indigo-600' : 'text-slate-500'}`}>
+            <UsersIcon />
+            <span className="text-[10px] font-medium mt-1">Clients</span>
+            </button>
+        </nav>
+      )}
 
       {/* Desktop Sidebar (visible only on large screens if desired, but top nav handles it well) */}
       
       {/* Main Content Area with padding for bottom nav on mobile */}
-      <div className="pb-20 sm:pb-0">
+      <div className={isResponseMode ? '' : "pb-20 sm:pb-0"}>
         {renderCurrentView()}
       </div>
       
