@@ -279,6 +279,11 @@ const App: React.FC = () => {
   const [recurrence, setRecurrence] = useState<Recurrence | null>(null);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
+  // Derived state for Read Only (Fully Paid Invoice)
+  const isReadOnly = useMemo(() => {
+      return loadedDocumentInfo?.docType === DocumentType.Invoice && loadedDocumentInfo?.status === InvoiceStatus.Paid;
+  }, [loadedDocumentInfo]);
+
   // --- Sync active company changes to form ---
   useEffect(() => {
     if (activeCompany) {
@@ -594,6 +599,8 @@ const App: React.FC = () => {
   };
 
   const handleSaveDocument = () => {
+    if (isReadOnly) return;
+
     if (!clientDetails.name || lineItems.length === 0) {
         alert('Please fill in client details and add at least one item to save.');
         return;
@@ -1275,9 +1282,9 @@ const App: React.FC = () => {
                             <button onClick={handleCreateNew} className="flex items-center gap-1.5 bg-white text-slate-700 font-semibold py-2 px-3 rounded-lg shadow-sm border hover:bg-slate-100 text-sm">
                                 <PlusIcon /> New
                             </button>
-                            <button onClick={() => handleSaveDocument()} disabled={isSaving} className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-wait flex items-center gap-2">
+                            <button onClick={() => handleSaveDocument()} disabled={isSaving || isReadOnly} className={`${isReadOnly ? 'bg-slate-400' : 'bg-indigo-600 hover:bg-indigo-700'} text-white font-semibold py-2 px-4 rounded-lg shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2`}>
                                 {isSaving && <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>}
-                                {isSaving ? 'Saving...' : (isCreatingNew ? 'Save' : 'Save')}
+                                {isSaving ? 'Saving...' : (isReadOnly ? 'Read Only (Paid)' : 'Save')}
                             </button>
                         </div>
                     </div>
@@ -1289,6 +1296,11 @@ const App: React.FC = () => {
                         </span>
                       </div>
                     )}
+                    {isReadOnly && (
+                      <div className="w-full bg-green-50 border-l-4 border-green-500 p-2 mb-2 text-xs sm:text-sm text-green-700">
+                        This invoice is fully paid and cannot be edited.
+                      </div>
+                    )}
                 </div>
             </div>
             <main className="container mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8 p-4 sm:p-6 lg:p-8">
@@ -1297,10 +1309,10 @@ const App: React.FC = () => {
                 <div className="bg-white p-6 rounded-lg shadow-md">
                   <h2 className="text-xl font-bold text-gray-800 mb-4">Document Type</h2>
                   <div className="flex gap-2 bg-slate-100 p-1 rounded-lg">
-                      <button onClick={() => handleDocumentTypeChange(DocumentType.Quotation)} className={`flex-1 text-center font-semibold py-2 px-3 rounded-md transition-all duration-200 ${documentType === DocumentType.Quotation ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>
+                      <button disabled={isReadOnly} onClick={() => handleDocumentTypeChange(DocumentType.Quotation)} className={`flex-1 text-center font-semibold py-2 px-3 rounded-md transition-all duration-200 ${documentType === DocumentType.Quotation ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'} ${isReadOnly ? 'opacity-50 cursor-not-allowed' : ''}`}>
                           Quotation
                       </button>
-                      <button onClick={() => handleDocumentTypeChange(DocumentType.Invoice)} className={`flex-1 text-center font-semibold py-2 px-3 rounded-md transition-all duration-200 ${documentType === DocumentType.Invoice ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>
+                      <button disabled={isReadOnly} onClick={() => handleDocumentTypeChange(DocumentType.Invoice)} className={`flex-1 text-center font-semibold py-2 px-3 rounded-md transition-all duration-200 ${documentType === DocumentType.Invoice ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'} ${isReadOnly ? 'opacity-50 cursor-not-allowed' : ''}`}>
                           Invoice
                       </button>
                   </div>
@@ -1312,7 +1324,8 @@ const App: React.FC = () => {
                     <button 
                         onClick={handleClearClientDetails} 
                         type="button"
-                        className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
+                        className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={isReadOnly}
                     >
                         Clear Fields
                     </button>
@@ -1329,9 +1342,9 @@ const App: React.FC = () => {
                             placeholder="Search name, email, or phone..."
                             className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed"
                             autoComplete="off"
-                            disabled={!isCreatingNew}
+                            disabled={!isCreatingNew || isReadOnly}
                         />
-                        {isClientDropdownOpen && isCreatingNew && (
+                        {isClientDropdownOpen && isCreatingNew && !isReadOnly && (
                             <div className="absolute z-20 w-full bg-white border border-slate-300 rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto">
                             {filteredSavedClients.length > 0 ? (
                                 filteredSavedClients.map(client => (
@@ -1355,15 +1368,15 @@ const App: React.FC = () => {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-600 mb-1">Client Address</label>
-                      <input type="text" value={clientDetails.address} onChange={e => handleClientDetailChange('address', e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                      <input type="text" value={clientDetails.address} onChange={e => handleClientDetailChange('address', e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-500" disabled={isReadOnly}/>
                     </div>
                      <div>
                       <label className="block text-sm font-medium text-gray-600 mb-1">Client Email</label>
-                      <input type="email" value={clientDetails.email} onChange={e => handleClientDetailChange('email', e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                      <input type="email" value={clientDetails.email} onChange={e => handleClientDetailChange('email', e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-500" disabled={isReadOnly}/>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-600 mb-1">Client Phone</label>
-                      <input type="tel" value={clientDetails.phone} onChange={e => handleClientDetailChange('phone', e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                      <input type="tel" value={clientDetails.phone} onChange={e => handleClientDetailChange('phone', e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-500" disabled={isReadOnly}/>
                     </div>
                   </div>
                 </div>
@@ -1379,16 +1392,16 @@ const App: React.FC = () => {
                             onChange={e => setDocumentNumber(e.target.value)} 
                             placeholder={isCreatingNew ? "Auto-generated from client" : ""}
                             className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed"
-                            disabled={!isCreatingNew}
+                            disabled={!isCreatingNew || isReadOnly}
                           />
                       </div>
                        <div>
                           <label className="block text-sm font-medium text-gray-600 mb-1">Issue Date</label>
-                          <input type="date" value={issueDate} onChange={handleIssueDateChange} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                          <input type="date" value={issueDate} onChange={handleIssueDateChange} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-500" disabled={isReadOnly}/>
                       </div>
                        <div>
                           <label className="block text-sm font-medium text-gray-600 mb-1">{documentType === DocumentType.Invoice ? 'Payment Terms' : 'Validity'}</label>
-                          <select value={dueDateOption} onChange={handleDueDateChange} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500">
+                          <select value={dueDateOption} onChange={handleDueDateChange} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-500" disabled={isReadOnly}>
                               <option value="15days">15 Days</option>
                               <option value="30days">30 Days</option>
                               <option value="45days">45 Days</option>
@@ -1398,7 +1411,7 @@ const App: React.FC = () => {
                       </div>
                       <div>
                           <label className="block text-sm font-medium text-gray-600 mb-1">{documentType === DocumentType.Invoice ? 'Due Date' : 'Valid Until'}</label>
-                          <input type="date" value={dueDate} onChange={e => { setDueDate(e.target.value); setDueDateOption('custom'); }} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                          <input type="date" value={dueDate} onChange={e => { setDueDate(e.target.value); setDueDateOption('custom'); }} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-500" disabled={isReadOnly}/>
                       </div>
                   </div>
                   {documentType === DocumentType.Invoice && (
@@ -1414,7 +1427,8 @@ const App: React.FC = () => {
                                         setRecurrence(null);
                                     }
                                 }}
-                                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                disabled={isReadOnly}
                             />
                             <span className="font-medium text-gray-700">Make this a recurring invoice</span>
                         </label>
@@ -1429,7 +1443,8 @@ const App: React.FC = () => {
                                                 min="1"
                                                 value={recurrence.interval}
                                                 onChange={e => setRecurrence(r => r ? {...r, interval: parseInt(e.target.value, 10) || 1} : null)}
-                                                className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                                                className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-500"
+                                                disabled={isReadOnly}
                                             />
                                         </div>
                                         <div>
@@ -1437,7 +1452,8 @@ const App: React.FC = () => {
                                             <select 
                                                 value={recurrence.frequency}
                                                 onChange={e => setRecurrence(r => r ? {...r, frequency: e.target.value as Recurrence['frequency']} : null)}
-                                                className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                                                className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-500"
+                                                disabled={isReadOnly}
                                             >
                                                 <option value="daily">Day(s)</option>
                                                 <option value="weekly">Week(s)</option>
@@ -1452,7 +1468,8 @@ const App: React.FC = () => {
                                             type="date" 
                                             value={recurrence.endDate || ''}
                                             onChange={e => setRecurrence(r => r ? {...r, endDate: e.target.value || null} : null)}
-                                            className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                                            className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-500"
+                                            disabled={isReadOnly}
                                         />
                                     </div>
                                 </div>
@@ -1465,13 +1482,14 @@ const App: React.FC = () => {
                 <div className="bg-white p-6 rounded-lg shadow-md">
                   <h2 className="text-xl font-bold text-gray-800 mb-4">Items</h2>
                   
-                  <div className="bg-slate-50 p-4 rounded-lg border space-y-4 mb-6">
+                  <div className={`bg-slate-50 p-4 rounded-lg border space-y-4 mb-6 ${isReadOnly ? 'opacity-50 pointer-events-none' : ''}`}>
                     <div className="flex justify-between items-center">
                         <h3 className="text-lg font-semibold text-gray-700">Add an Item</h3>
                         <button 
                             onClick={handleClearNewLineItem} 
                             type="button"
-                            className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
+                            className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 transition-colors disabled:opacity-50"
+                            disabled={isReadOnly}
                         >
                             Clear Fields
                         </button>
@@ -1486,10 +1504,11 @@ const App: React.FC = () => {
                         onChange={e => handleNewLineItemChange('name', e.target.value)}
                         onFocus={() => setIsItemDropdownOpen(true)}
                         onBlur={() => setTimeout(() => setIsItemDropdownOpen(false), 200)}
-                        className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                        className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100"
                         autoComplete="off"
+                        disabled={isReadOnly}
                       />
-                      {isItemDropdownOpen && (
+                      {isItemDropdownOpen && !isReadOnly && (
                         <div className="absolute z-20 w-full bg-white border border-slate-300 rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto">
                           {filteredSavedItems.length > 0 ? (
                             filteredSavedItems.map(item => (
@@ -1519,7 +1538,8 @@ const App: React.FC = () => {
                             placeholder="Additional details for this item..."
                             value={newLineItem.description}
                             onChange={e => handleNewLineItemChange('description', e.target.value)}
-                            className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 resize-none"
+                            className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 resize-none disabled:bg-slate-100"
+                            disabled={isReadOnly}
                         />
                     </div>
                     <div>
@@ -1529,7 +1549,7 @@ const App: React.FC = () => {
                             inputMode={inputMode}
                             value={newLineItem.quantity} 
                             onChange={e => handleNewLineItemChange('quantity', e.target.value)} 
-                            className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                            className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100" disabled={isReadOnly}/>
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                         <div>
@@ -1540,7 +1560,7 @@ const App: React.FC = () => {
                                 step={inputType === 'number' ? "0.01" : undefined}
                                 value={newLineItem.costPrice} 
                                 onChange={e => handleNewLineItemChange('costPrice', e.target.value)} 
-                                className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                                className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100" disabled={isReadOnly}/>
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-600 mb-1">Markup (%)</label>
@@ -1550,7 +1570,7 @@ const App: React.FC = () => {
                                 step={inputType === 'number' ? "0.01" : undefined}
                                 value={newLineItem.markup} 
                                 onChange={e => handleNewLineItemChange('markup', e.target.value)} 
-                                className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                                className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100" disabled={isReadOnly}/>
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-600 mb-1">Sell</label>
@@ -1560,11 +1580,11 @@ const App: React.FC = () => {
                                 step={inputType === 'number' ? "0.01" : undefined}
                                 value={newLineItem.price} 
                                 onChange={e => handleNewLineItemChange('price', e.target.value)} 
-                                className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                                className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100" disabled={isReadOnly}/>
                         </div>
                     </div>
                     
-                    <button onClick={handleAddLineItem} className="w-full flex items-center justify-center gap-2 bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700">
+                    <button onClick={handleAddLineItem} disabled={isReadOnly} className="w-full flex items-center justify-center gap-2 bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 disabled:bg-indigo-400">
                         <PlusIcon /> Add Item to Document
                     </button>
                   </div>
@@ -1578,7 +1598,8 @@ const App: React.FC = () => {
                                   type="text"
                                   value={item.name}
                                   onChange={e => handleLineItemChange(item.id, 'name', e.target.value)}
-                                  className="flex-grow w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                                  className="flex-grow w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100"
+                                  disabled={isReadOnly}
                               />
                           </div>
                           <div className="col-span-12">
@@ -1588,13 +1609,14 @@ const App: React.FC = () => {
                                       rows={2}
                                       value={item.description}
                                       onChange={e => handleLineItemChange(item.id, 'description', e.target.value)}
-                                      className="flex-grow w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 resize-none"
+                                      className="flex-grow w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 resize-none disabled:bg-slate-100"
+                                      disabled={isReadOnly}
                                   />
                                   <button
                                       onClick={() => handleGenerateDescription(item.id, item.name, item.description)}
-                                      className="flex-shrink-0 p-2 bg-indigo-100 text-indigo-600 rounded-md hover:bg-indigo-200"
+                                      className="flex-shrink-0 p-2 bg-indigo-100 text-indigo-600 rounded-md hover:bg-indigo-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                                       title="Generate description with AI"
-                                      disabled={generatingStates[item.id]}
+                                      disabled={generatingStates[item.id] || isReadOnly}
                                   >
                                       <SparklesIcon isLoading={generatingStates[item.id]} />
                                   </button>
@@ -1608,7 +1630,7 @@ const App: React.FC = () => {
                                     inputMode={inputMode}
                                     value={item.quantity} 
                                     onChange={e => handleLineItemChange(item.id, 'quantity', e.target.value)} 
-                                    className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                                    className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100" disabled={isReadOnly}/>
                             </div>
                             <div className="col-span-4 sm:col-span-3">
                                 <label className="block text-sm font-medium text-gray-600 mb-1">Cost</label>
@@ -1616,7 +1638,7 @@ const App: React.FC = () => {
                                     type={inputType} inputMode={inputMode} step={inputType === 'number' ? "0.01" : undefined}
                                     value={item.costPrice} 
                                     onChange={e => handleLineItemChange(item.id, 'costPrice', e.target.value)} 
-                                    className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                                    className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100" disabled={isReadOnly}/>
                             </div>
                             <div className="col-span-4 sm:col-span-3">
                                 <label className="block text-sm font-medium text-gray-600 mb-1">Markup%</label>
@@ -1624,7 +1646,7 @@ const App: React.FC = () => {
                                     type={inputType} inputMode={inputMode} step={inputType === 'number' ? "0.01" : undefined}
                                     value={item.markup} 
                                     onChange={e => handleLineItemChange(item.id, 'markup', e.target.value)} 
-                                    className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                                    className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100" disabled={isReadOnly}/>
                             </div>
                             <div className="col-span-4 sm:col-span-3">
                                 <label className="block text-sm font-medium text-gray-600 mb-1">Selling</label>
@@ -1632,10 +1654,10 @@ const App: React.FC = () => {
                                     type={inputType} inputMode={inputMode} step={inputType === 'number' ? "0.01" : undefined}
                                     value={item.price} 
                                     onChange={e => handleLineItemChange(item.id, 'price', e.target.value)} 
-                                    className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                                    className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100" disabled={isReadOnly}/>
                             </div>
                             <div className="col-span-12 sm:col-span-1 flex items-end">
-                                <button onClick={() => handleDeleteLineItem(item.id)} className="w-full h-10 p-2 bg-red-100 text-red-600 rounded-md hover:bg-red-200 flex justify-center items-center">
+                                <button onClick={() => handleDeleteLineItem(item.id)} disabled={isReadOnly} className="w-full h-10 p-2 bg-red-100 text-red-600 rounded-md hover:bg-red-200 flex justify-center items-center disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed">
                                     <TrashIcon />
                                 </button>
                             </div>
@@ -1651,8 +1673,9 @@ const App: React.FC = () => {
                       rows={4} 
                       value={notes} 
                       onChange={e => setNotes(e.target.value)}
-                      className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                      className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100"
                       placeholder="Enter notes, terms and conditions, or payment instructions here..."
+                      disabled={isReadOnly}
                   />
                 </div>
               </div>
