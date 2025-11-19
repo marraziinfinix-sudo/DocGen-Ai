@@ -122,6 +122,7 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
 
   const handleRecordPaymentClick = (doc: SavedDocument) => {
     setSelectedInvoice(doc);
+    // For "Fully Paid" invoices, we still open the PaymentModal, but it will show history/receipt options.
     setPaymentModalOpen(true);
   };
 
@@ -177,10 +178,11 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
     }
   };
 
-  const handleSendPaymentNotification = (channel: 'email' | 'whatsapp') => {
-    if (!lastPaidInvoice) return;
+  const handleSendPaymentNotification = (channel: 'email' | 'whatsapp', invoiceOverride?: SavedDocument) => {
+    // Use override if provided (useful when calling from PaymentModal for an existing invoice), otherwise use lastPaidInvoice
+    const doc = invoiceOverride || lastPaidInvoice;
+    if (!doc) return;
 
-    const doc = lastPaidInvoice;
     const amountPaid = doc.payments?.reduce((sum, p) => sum + p.amount, 0) || 0;
     const balanceDue = Math.max(0, doc.total - amountPaid);
     const statusDisplay = doc.status === InvoiceStatus.Paid ? 'Fully Paid' : doc.status;
@@ -285,7 +287,10 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
   const isIndeterminate = selectedIds.size > 0 && selectedIds.size < filteredDocuments.length;
 
 
-  const renderActionsDropdown = (doc: SavedDocument) => (
+  const renderActionsDropdown = (doc: SavedDocument) => {
+    const isPaid = doc.status === InvoiceStatus.Paid;
+
+    return (
     <div className="relative">
       <button
         onMouseDown={(e) => e.stopPropagation()}
@@ -303,12 +308,12 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
         >
             <div className="py-1" role="menu" aria-orientation="vertical">
                 <button onClick={() => { handleRecordPaymentClick(doc); setOpenDropdownId(null); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">
-                    <CashIcon /> Record Payment
+                    <CashIcon /> {isPaid ? 'Payment & Receipt' : 'Record Payment'}
                 </button>
                 <button onClick={() => { handleLoadDocument(doc); setOpenDropdownId(null); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">
-                    <ViewIcon /> View/Edit Invoice
+                    <ViewIcon /> {isPaid ? 'View Invoice' : 'View/Edit Invoice'}
                 </button>
-                 {doc.status !== InvoiceStatus.Paid && (
+                 {!isPaid && (
                     <>
                         <div className="border-t my-1"></div>
                         <button onClick={() => { handleSendReminder(doc, 'email'); setOpenDropdownId(null); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">
@@ -320,19 +325,22 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
                     </>
                  )}
                 <div className="border-t my-1"></div>
-                {!!doc.recurrence && !doc.recurrenceParentId && (
+                {!!doc.recurrence && !doc.recurrenceParentId && !isPaid && (
                     <button onClick={() => { handleStopRecurrence(doc.id); setOpenDropdownId(null); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-orange-600 hover:bg-orange-50">
                         <RepeatIcon /> Stop Recurrence
                     </button>
                 )}
-                <button onClick={() => { handleDeleteDocument(doc.id); setOpenDropdownId(null); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50">
-                    <TrashIcon /> Delete Invoice
-                </button>
+                {!isPaid && (
+                    <button onClick={() => { handleDeleteDocument(doc.id); setOpenDropdownId(null); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50">
+                        <TrashIcon /> Delete Invoice
+                    </button>
+                )}
             </div>
         </div>
       )}
     </div>
-  );
+    );
+  };
   
   const filterOptions = ['All', 'Fully Paid', 'Partially Paid', 'Pending', 'Overdue', 'Recurring'];
 
@@ -591,6 +599,8 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
           onSave={handleSavePayment}
           onCancel={() => setPaymentModalOpen(false)}
           formatCurrency={formatCurrency}
+          onSendEmail={() => handleSendPaymentNotification('email', selectedInvoice)}
+          onSendWhatsApp={() => handleSendPaymentNotification('whatsapp', selectedInvoice)}
         />
       )}
       {paymentSuccessModalOpen && lastPaidInvoice && (
