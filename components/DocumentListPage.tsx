@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { SavedDocument, InvoiceStatus, Payment } from '../types';
 import { MailIcon, WhatsAppIcon, CashIcon, ViewIcon, TrashIcon, MoreVerticalIcon, RepeatIcon } from './Icons';
 import PaymentModal from './PaymentModal';
+import { saveInvoices } from '../services/firebaseService';
 
 interface DocumentListPageProps {
   documents: SavedDocument[];
@@ -122,8 +123,8 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
   const handleSavePayment = (paymentData: Omit<Payment, 'id'>) => {
     if (!selectedInvoice) return;
 
-    setDocuments(prevDocs =>
-      prevDocs.map(doc => {
+    setDocuments(prevDocs => {
+      const newDocs = prevDocs.map(doc => {
         if (doc.id === selectedInvoice.id) {
           const newPayment: Payment = { ...paymentData, id: Date.now() };
           const updatedPayments = [...(doc.payments || []), newPayment];
@@ -151,21 +152,31 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
           };
         }
         return doc;
-      })
-    );
+      });
+      saveInvoices(newDocs);
+      return newDocs;
+    });
     setPaymentModalOpen(false);
     setSelectedInvoice(null);
   };
 
   const handleDeleteDocument = (id: number) => {
     if (window.confirm('Are you sure you want to delete this document? This action cannot be undone.')) {
-      setDocuments(prev => prev.filter(doc => doc.id !== id));
+      setDocuments(prev => {
+        const newDocs = prev.filter(doc => doc.id !== id);
+        saveInvoices(newDocs);
+        return newDocs;
+      });
     }
   };
 
   const handleStopRecurrence = (id: number) => {
     if (window.confirm('Are you sure you want to stop this invoice from recurring? This will not delete any existing invoices in the series.')) {
-        setDocuments(prev => prev.map(doc => doc.id === id ? { ...doc, recurrence: null } : doc));
+        setDocuments(prev => {
+            const newDocs = prev.map(doc => doc.id === id ? { ...doc, recurrence: null } : doc);
+            saveInvoices(newDocs);
+            return newDocs;
+        });
     }
   };
   
@@ -192,7 +203,11 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
   const handleDeleteSelected = () => {
     if (selectedIds.size === 0) return;
     if (window.confirm(`Are you sure you want to delete ${selectedIds.size} selected invoice(s)? This action cannot be undone.`)) {
-      setDocuments(prev => prev.filter(d => !selectedIds.has(d.id)));
+      setDocuments(prev => {
+        const newDocs = prev.filter(d => !selectedIds.has(d.id));
+        saveInvoices(newDocs);
+        return newDocs;
+      });
       setSelectedIds(new Set());
     }
   };
