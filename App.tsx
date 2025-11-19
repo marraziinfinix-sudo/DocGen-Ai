@@ -1164,7 +1164,8 @@ const App: React.FC = () => {
 
     body += `Thank you for your business.\n\nBest regards,\n${companyDetails.name}`;
     
-    window.location.href = `mailto:${clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    const mailtoLink = `mailto:${clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.open(mailtoLink, '_blank');
   };
   
   const handleSendViaWhatsApp = () => {
@@ -1226,7 +1227,8 @@ const App: React.FC = () => {
     const whatsappMessage = `Hello ${doc.clientDetails.name},\n\nThis is a friendly reminder regarding invoice #${doc.documentNumber}.\nThe outstanding balance is ${formatCurrency(balanceDue)}.\n\nThank you,\n${doc.companyDetails.name}`;
   
     if (channel === 'email') {
-      window.location.href = `mailto:${doc.clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`;
+      const mailtoLink = `mailto:${doc.clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`;
+      window.open(mailtoLink, '_blank');
     } else {
       window.open(`https://wa.me/?text=${encodeURIComponent(whatsappMessage)}`, '_blank');
     }
@@ -1244,7 +1246,8 @@ const App: React.FC = () => {
     const whatsappMessage = `Hello ${doc.clientDetails.name},\n\nThis is a friendly reminder regarding quotation #${doc.documentNumber}, valid until ${new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}.\nThe total amount is ${formatCurrency(doc.total)}.\n\nPlease let us know if you have any questions.\n\nThank you,\n${doc.companyDetails.name}`;
   
     if (channel === 'email') {
-      window.location.href = `mailto:${doc.clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`;
+      const mailtoLink = `mailto:${doc.clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`;
+      window.open(mailtoLink, '_blank');
     } else {
       window.open(`https://wa.me/?text=${encodeURIComponent(whatsappMessage)}`, '_blank');
     }
