@@ -119,7 +119,6 @@ const App: React.FC = () => {
   // --- Refs for PDF/Print ---
   const previewContainerRef = React.useRef<HTMLDivElement>(null);
   const previewScrollerRef = React.useRef<HTMLDivElement>(null);
-  const [isSendDropdownOpen, setIsSendDropdownOpen] = useState(false);
 
 
   // --- Data States (from Firestore) ---
@@ -1638,37 +1637,6 @@ const App: React.FC = () => {
                           <button onClick={handleDownloadPdf} className="flex items-center gap-2 bg-white text-slate-700 font-semibold py-2 px-3 rounded-lg shadow-sm border hover:bg-slate-100 text-sm">
                               <DownloadIcon /> <span className="hidden sm:inline">PDF</span>
                           </button>
-                          <div className="relative">
-                            <button 
-                                onClick={() => setIsSendDropdownOpen(prev => !prev)}
-                                disabled={!clientDetails.name}
-                                className="flex items-center gap-2 bg-indigo-600 text-white font-semibold py-2 px-3 rounded-lg shadow-sm border border-indigo-600 hover:bg-indigo-700 text-sm disabled:bg-indigo-400 disabled:cursor-not-allowed"
-                            >
-                                <SendIcon /> <span className="hidden sm:inline">Send</span>
-                            </button>
-                             {isSendDropdownOpen && (
-                                <div 
-                                    className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-20 ring-1 ring-black ring-opacity-5"
-                                    onMouseLeave={() => setIsSendDropdownOpen(false)}
-                                >
-                                    <div className="py-1">
-                                        <button 
-                                            onClick={() => { handleSendViaEmail(); setIsSendDropdownOpen(false); }}
-                                            disabled={!clientDetails.email}
-                                            className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
-                                        >
-                                            <MailIcon /> Email
-                                        </button>
-                                        <button 
-                                            onClick={() => { handleSendViaWhatsApp(); setIsSendDropdownOpen(false); }}
-                                            className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
-                                        >
-                                            <WhatsAppIcon /> WhatsApp
-                                        </button>
-                                    </div>
-                                </div>
-                             )}
-                          </div>
                       </div>
                     </div>
                     <div 
