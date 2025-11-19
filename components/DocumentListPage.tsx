@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { SavedDocument, InvoiceStatus, Payment } from '../types';
 import { MailIcon, WhatsAppIcon, CashIcon, ViewIcon, TrashIcon, MoreVerticalIcon, RepeatIcon } from './Icons';
 import PaymentModal from './PaymentModal';
+import PaymentSuccessModal from './PaymentSuccessModal';
 import { saveInvoices } from '../services/firebaseService';
 
 interface DocumentListPageProps {
@@ -22,6 +23,10 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
   const [clientFilter, setClientFilter] = useState('All');
   const [clientSearchInput, setClientSearchInput] = useState('');
   const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
+  
+  // New state for Payment Success Modal
+  const [paymentSuccessModalOpen, setPaymentSuccessModalOpen] = useState(false);
+  const [lastPaidInvoice, setLastPaidInvoice] = useState<SavedDocument | null>(null);
 
   const getDisplayStatusText = (doc: SavedDocument): string => {
     if (!!doc.recurrence && !doc.recurrenceParentId) return 'Recurring';
@@ -123,6 +128,8 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
   const handleSavePayment = (paymentData: Omit<Payment, 'id'>) => {
     if (!selectedInvoice) return;
 
+    let updatedInvoiceForModal: SavedDocument | null = null;
+
     setDocuments(prevDocs => {
       const newDocs = prevDocs.map(doc => {
         if (doc.id === selectedInvoice.id) {
@@ -144,20 +151,69 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
             newPaidDate = null;
           }
 
-          return {
+          const updatedDoc = {
             ...doc,
             payments: updatedPayments,
             status: newStatus,
             paidDate: newPaidDate,
           };
+          updatedInvoiceForModal = updatedDoc;
+          return updatedDoc;
         }
         return doc;
       });
       saveInvoices(newDocs);
       return newDocs;
     });
+
+    // Close Payment Modal
     setPaymentModalOpen(false);
     setSelectedInvoice(null);
+
+    // Open Success Modal with updated document data
+    if (updatedInvoiceForModal) {
+        setLastPaidInvoice(updatedInvoiceForModal);
+        setPaymentSuccessModalOpen(true);
+    }
+  };
+
+  const handleSendPaymentNotification = (channel: 'email' | 'whatsapp') => {
+    if (!lastPaidInvoice) return;
+
+    const doc = lastPaidInvoice;
+    const amountPaid = doc.payments?.reduce((sum, p) => sum + p.amount, 0) || 0;
+    const balanceDue = Math.max(0, doc.total - amountPaid);
+
+    const subject = `Payment Receipt - Invoice #${doc.documentNumber}`;
+    
+    const emailBody = `Dear ${doc.clientDetails.name},\n\n` +
+        `Thank you for your payment regarding Invoice #${doc.documentNumber}.\n\n` +
+        `Here is the updated status:\n` +
+        `Status: ${doc.status}\n` +
+        `Invoice Total: ${formatCurrency(doc.total)}\n` +
+        `Total Paid: ${formatCurrency(amountPaid)}\n` +
+        `Balance Due: ${formatCurrency(balanceDue)}\n\n` +
+        `Thank you for your business.\n\n` +
+        `Best regards,\n${doc.companyDetails.name}`;
+
+    const whatsappMessage = `*Payment Receipt*\n` +
+        `Invoice: #${doc.documentNumber}\n` +
+        `Status: *${doc.status}*\n\n` +
+        `Total Amount: ${formatCurrency(doc.total)}\n` +
+        `Total Paid: ${formatCurrency(amountPaid)}\n` +
+        `*Balance Due: ${formatCurrency(balanceDue)}*\n\n` +
+        `Thank you!\n${doc.companyDetails.name}`;
+
+    if (channel === 'email') {
+        if (!doc.clientDetails.email) {
+            alert("Client email is missing.");
+            return;
+        }
+        const mailtoLink = `mailto:${doc.clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`;
+        window.open(mailtoLink, '_blank');
+    } else {
+        window.open(`https://wa.me/?text=${encodeURIComponent(whatsappMessage)}`, '_blank');
+    }
   };
 
   const handleDeleteDocument = (id: number) => {
@@ -533,6 +589,16 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
           invoice={selectedInvoice}
           onSave={handleSavePayment}
           onCancel={() => setPaymentModalOpen(false)}
+          formatCurrency={formatCurrency}
+        />
+      )}
+      {paymentSuccessModalOpen && lastPaidInvoice && (
+        <PaymentSuccessModal
+          isOpen={paymentSuccessModalOpen}
+          invoice={lastPaidInvoice}
+          onClose={() => setPaymentSuccessModalOpen(false)}
+          onSendEmail={() => handleSendPaymentNotification('email')}
+          onSendWhatsApp={() => handleSendPaymentNotification('whatsapp')}
           formatCurrency={formatCurrency}
         />
       )}
