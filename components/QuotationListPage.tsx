@@ -1,19 +1,20 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { SavedDocument, QuotationStatus } from '../types';
+import { SavedDocument, QuotationStatus, InvoiceStatus } from '../types';
 import { DocumentIcon, ViewIcon, TrashIcon, MoreVerticalIcon, MailIcon, WhatsAppIcon, RepeatIcon } from './Icons';
 import { saveQuotations } from '../services/firebaseService';
 
 interface QuotationListPageProps {
   documents: SavedDocument[];
   setDocuments: React.Dispatch<React.SetStateAction<SavedDocument[]>>;
+  invoices: SavedDocument[];
   formatCurrency: (amount: number) => string;
   handleCreateInvoiceFromQuote: (quotation: SavedDocument) => void;
   handleLoadDocument: (doc: SavedDocument) => void;
   handleSendQuotationReminder: (doc: SavedDocument, channel: 'email' | 'whatsapp') => void;
 }
 
-const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDocuments, formatCurrency, handleCreateInvoiceFromQuote, handleLoadDocument, handleSendQuotationReminder }) => {
+const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDocuments, invoices, formatCurrency, handleCreateInvoiceFromQuote, handleLoadDocument, handleSendQuotationReminder }) => {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [openDropdownId, setOpenDropdownId] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('All');
@@ -141,8 +142,11 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
       const isAgreed = statusInfo.text === 'Agreed';
       const isRejected = statusInfo.text === 'Rejected';
 
-      // Allow conversion if the quote is Active OR Agreed
-      const canConvert = isActive || isAgreed;
+      const linkedInvoice = doc.relatedDocumentId ? invoices.find(inv => inv.id === doc.relatedDocumentId) : null;
+      const isLinkedInvoicePaid = linkedInvoice?.status === InvoiceStatus.Paid;
+
+      // Allow conversion if the quote is Active OR Agreed AND not linked to a paid invoice
+      const canConvert = (isActive || isAgreed) && !isLinkedInvoicePaid;
 
       return (
         <div className="relative">
@@ -175,7 +179,7 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
                             <DocumentIcon /> Convert to Invoice
                         </button>
                         <button onClick={() => { handleLoadDocument(doc); setOpenDropdownId(null); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">
-                            <ViewIcon /> View Quotation
+                            <ViewIcon /> {isLinkedInvoicePaid ? 'View Quotation (ReadOnly)' : 'View Quotation'}
                         </button>
                          {isActive && (
                             <>

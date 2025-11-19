@@ -100,4 +100,5 @@ export interface SavedDocument {
   accentColor: string;
   recurrence?: Recurrence | null;
   recurrenceParentId?: number | null;
+  relatedDocumentId?: number | null; // Link between Quote and Invoice
 }

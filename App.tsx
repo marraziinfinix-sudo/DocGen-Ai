@@ -279,10 +279,24 @@ const App: React.FC = () => {
   const [recurrence, setRecurrence] = useState<Recurrence | null>(null);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
-  // Derived state for Read Only (Fully Paid Invoice)
+  // Derived state for Read Only (Fully Paid Invoice or Linked Quote)
   const isReadOnly = useMemo(() => {
-      return loadedDocumentInfo?.docType === DocumentType.Invoice && loadedDocumentInfo?.status === InvoiceStatus.Paid;
-  }, [loadedDocumentInfo]);
+      if (loadedDocumentInfo?.docType === DocumentType.Invoice) {
+          return loadedDocumentInfo?.status === InvoiceStatus.Paid;
+      }
+      if (loadedDocumentInfo?.docType === DocumentType.Quotation) {
+          // Find the actual quotation object to get the relatedDocumentId
+          const quote = savedQuotations.find(q => q.id === loadedDocumentInfo.id);
+          if (quote && quote.relatedDocumentId) {
+              const linkedInvoice = savedInvoices.find(inv => inv.id === quote.relatedDocumentId);
+              // If the linked invoice is fully paid, the quote is read-only
+              if (linkedInvoice && linkedInvoice.status === InvoiceStatus.Paid) {
+                  return true;
+              }
+          }
+      }
+      return false;
+  }, [loadedDocumentInfo, savedQuotations, savedInvoices]);
 
   // --- Sync active company changes to form ---
   useEffect(() => {
@@ -649,6 +663,11 @@ const App: React.FC = () => {
             quotationStatus = current;
         }
     }
+    
+    // If editing a quotation, keep the relatedDocumentId
+    let relatedDocId = loadedDocumentInfo?.docType === DocumentType.Quotation 
+        ? savedQuotations.find(q => q.id === loadedDocumentInfo.id)?.relatedDocumentId 
+        : null;
 
     const docToSave: SavedDocument = {
       id: loadedDocumentInfo?.id || Date.now(),
@@ -660,6 +679,7 @@ const App: React.FC = () => {
       payments: documentType === DocumentType.Invoice ? payments : [],
       recurrence: documentType === DocumentType.Invoice ? recurrence : null,
       recurrenceParentId: loadedDocumentInfo?.docType === DocumentType.Invoice ? loadedDocumentInfo.recurrenceParentId : null,
+      relatedDocumentId: relatedDocId
     };
     
     if (!isCreatingNew) { // If editing, check if client details were modified
@@ -847,14 +867,19 @@ const App: React.FC = () => {
       payments: [],
       issueDate: today,
       dueDate: newDueDate.toISOString().split('T')[0],
+      relatedDocumentId: quotation.id // Link back to the quotation
     };
 
     // Save the new invoice
     saveDocument('savedInvoices', newInvoice);
     setSavedInvoices(prev => [newInvoice, ...prev]);
 
-    // Update the original quotation's status to 'Agreed'
-    const updatedQuotation = { ...quotation, quotationStatus: QuotationStatus.Agreed };
+    // Update the original quotation's status to 'Agreed' and link to the invoice
+    const updatedQuotation = { 
+        ...quotation, 
+        quotationStatus: QuotationStatus.Agreed,
+        relatedDocumentId: newInvoice.id // Link forward to the invoice
+    };
     saveDocument('savedQuotations', updatedQuotation);
     setSavedQuotations(prev => prev.map(q => q.id === quotation.id ? updatedQuotation : q));
     
@@ -1255,6 +1280,7 @@ const App: React.FC = () => {
         return <QuotationListPage
             documents={savedQuotations}
             setDocuments={setSavedQuotations}
+            invoices={savedInvoices} // Passed savedInvoices here
             formatCurrency={formatCurrency}
             handleCreateInvoiceFromQuote={handleCreateInvoiceFromQuote}
             handleLoadDocument={handleLoadDocument}
@@ -1284,7 +1310,7 @@ const App: React.FC = () => {
                             </button>
                             <button onClick={() => handleSaveDocument()} disabled={isSaving || isReadOnly} className={`${isReadOnly ? 'bg-slate-400' : 'bg-indigo-600 hover:bg-indigo-700'} text-white font-semibold py-2 px-4 rounded-lg shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2`}>
                                 {isSaving && <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>}
-                                {isSaving ? 'Saving...' : (isReadOnly ? 'Read Only (Paid)' : 'Save')}
+                                {isSaving ? 'Saving...' : (isReadOnly ? 'Read Only' : 'Save')}
                             </button>
                         </div>
                     </div>
@@ -1298,7 +1324,9 @@ const App: React.FC = () => {
                     )}
                     {isReadOnly && (
                       <div className="w-full bg-green-50 border-l-4 border-green-500 p-2 mb-2 text-xs sm:text-sm text-green-700">
-                        This invoice is fully paid and cannot be edited.
+                        {loadedDocumentInfo?.docType === DocumentType.Invoice
+                          ? "This invoice is fully paid and cannot be edited."
+                          : "This quotation is linked to a fully paid invoice and cannot be edited."}
                       </div>
                     )}
                 </div>
