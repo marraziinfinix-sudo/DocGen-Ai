@@ -664,10 +664,14 @@ const App: React.FC = () => {
         }
     }
     
-    // If editing a quotation, keep the relatedDocumentId
-    let relatedDocId = loadedDocumentInfo?.docType === DocumentType.Quotation 
-        ? savedQuotations.find(q => q.id === loadedDocumentInfo.id)?.relatedDocumentId 
-        : null;
+    // Preserve relatedDocumentId if editing an existing document
+    let relatedDocId = null;
+    if (!isCreatingNew && loadedDocumentInfo && loadedDocumentInfo.docType === documentType) {
+         const originalDoc = documentType === DocumentType.Invoice 
+            ? savedInvoices.find(d => d.id === loadedDocumentInfo.id) 
+            : savedQuotations.find(d => d.id === loadedDocumentInfo.id);
+        relatedDocId = originalDoc?.relatedDocumentId || null;
+    }
 
     const docToSave: SavedDocument = {
       id: loadedDocumentInfo?.id || Date.now(),

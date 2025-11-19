@@ -173,6 +173,7 @@ const sanitizeDocument = (docData: any): SavedDocument | null => {
         accentColor: typeof docData.accentColor === 'string' ? docData.accentColor : '#4f46e5',
         recurrence: docData.recurrence ? sanitizeRecurrence(docData.recurrence) : null,
         recurrenceParentId: typeof docData.recurrenceParentId === 'number' ? docData.recurrenceParentId : null,
+        relatedDocumentId: typeof docData.relatedDocumentId === 'number' ? docData.relatedDocumentId : null,
     };
 };
 
