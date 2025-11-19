@@ -1,742 +1,1900 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
-import { auth } from './services/firebaseConfig';
-import { 
-  fetchUserData, saveDocument, saveActiveCompanyId, saveCompanies, 
-  saveClients, saveItems, saveItemCategories, saveInvoices, saveQuotations 
-} from './services/firebaseService';
-import { 
-  Company, Client, Item, SavedDocument, DocumentType, 
-  InvoiceStatus, QuotationStatus, LineItem, Details 
-} from './types';
-import { generateDescription } from './services/geminiService';
 
-// Components
-import LoginPage from './components/LoginPage';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { DocumentType, LineItem, Details, Client, Item, SavedDocument, InvoiceStatus, Company, Payment, QuotationStatus, Recurrence } from './types';
+import { generateDescription } from './services/geminiService';
+import { fetchUserData, saveCompanies, saveClients, saveItems, saveInvoices, saveQuotations, saveDocument, saveActiveCompanyId, saveItemCategories, defaultUserData, fetchPublicQuotation, updatePublicQuotationStatus } from './services/firebaseService';
+import { SparklesIcon, PlusIcon, TrashIcon, CogIcon, UsersIcon, ListIcon, DocumentIcon, MailIcon, WhatsAppIcon, FileTextIcon, DownloadIcon, MoreVerticalIcon, PrinterIcon, ChevronDownIcon, CashIcon, SendIcon, RefreshIcon } from './components/Icons';
+import DocumentPreview from './components/DocumentPreview';
 import SetupPage from './components/SetupPage';
 import ClientListPage from './components/ClientListPage';
 import ItemListPage from './components/ItemListPage';
 import DocumentListPage from './components/DocumentListPage';
 import QuotationListPage from './components/QuotationListPage';
-import DocumentPreview from './components/DocumentPreview';
 import SaveItemsModal from './components/SaveItemsModal';
 import SaveClientModal from './components/SaveClientModal';
+import LoginPage from './components/LoginPage';
+import { auth } from './services/firebaseConfig';
+import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
 
-// Icons
-import { 
-  PlusIcon, SparklesIcon, ListIcon, UsersIcon, 
-  DocumentIcon, FileTextIcon, PrinterIcon, CogIcon, 
-  DownloadIcon, SendIcon, TrashIcon, RefreshIcon,
-  ChevronDownIcon
-} from './components/Icons';
 
-type Page = 'dashboard' | 'create' | 'invoices' | 'quotations' | 'clients' | 'items' | 'settings';
+declare const jspdf: any;
+declare const html2canvas: any;
 
-const defaultCompanyDetails: Details = { name: '', address: '', email: '', phone: '', bankName: '', accountNumber: '', website: '', taxId: '' };
-const emptyClient: Details = { name: '', address: '', email: '', phone: '' };
+// --- Customer Response Component ---
+const CustomerResponsePage: React.FC<{ uid: string; docId: number; formatCurrency: (amount: number) => string }> = ({ uid, docId, formatCurrency }) => {
+    const [loading, setLoading] = useState(true);
+    const [doc, setDoc] = useState<SavedDocument | null>(null);
+    const [responseStatus, setResponseStatus] = useState<'pending' | 'agreed' | 'rejected' | 'error'>('pending');
+    const [errorMsg, setErrorMsg] = useState('');
 
-function App() {
-  const [user, setUser] = useState<FirebaseUser | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [currentPage, setCurrentPage] = useState<Page>('dashboard');
-  const [navOpen, setNavOpen] = useState(false);
+    useEffect(() => {
+        const loadDoc = async () => {
+            const document = await fetchPublicQuotation(uid, docId);
+            if (document) {
+                setDoc(document);
+                if (document.quotationStatus === QuotationStatus.Agreed) setResponseStatus('agreed');
+                if (document.quotationStatus === QuotationStatus.Rejected) setResponseStatus('rejected');
+            } else {
+                setResponseStatus('error');
+                setErrorMsg('Quotation not found or invalid link.');
+            }
+            setLoading(false);
+        };
+        loadDoc();
+    }, [uid, docId]);
 
-  // App Data State
-  const [companies, setCompanies] = useState<Company[]>([]);
-  const [activeCompanyId, setActiveCompanyId] = useState<number>(0);
-  const [clients, setClients] = useState<Client[]>([]);
-  const [items, setItems] = useState<Item[]>([]);
-  const [savedInvoices, setSavedInvoices] = useState<SavedDocument[]>([]);
-  const [savedQuotations, setSavedQuotations] = useState<SavedDocument[]>([]);
-  const [itemCategories, setItemCategories] = useState<string[]>([]);
-
-  // Editor State
-  const [editorDocType, setEditorDocType] = useState<DocumentType>(DocumentType.Invoice);
-  const [editorClient, setEditorClient] = useState<Details>(emptyClient);
-  const [editorIssueDate, setEditorIssueDate] = useState(new Date().toISOString().split('T')[0]);
-  const [editorDueDate, setEditorDueDate] = useState(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]); // +7 days
-  const [editorLineItems, setEditorLineItems] = useState<LineItem[]>([{ id: Date.now(), name: '', description: '', quantity: 1, costPrice: 0, markup: 0, price: 0 }]);
-  const [editorNotes, setEditorNotes] = useState('');
-  const [editorDocNumber, setEditorDocNumber] = useState('');
-  const [editingDocId, setEditingDocId] = useState<number | null>(null);
-  
-  const [generatingDescIndex, setGeneratingDescIndex] = useState<number | null>(null);
-  
-  // Modals
-  const [saveItemsModalOpen, setSaveItemsModalOpen] = useState(false);
-  const [saveClientModalOpen, setSaveClientModalOpen] = useState(false);
-  const [pendingSaveDoc, setPendingSaveDoc] = useState<SavedDocument | null>(null);
-
-  const activeCompany = companies.find(c => c.id === activeCompanyId) || companies[0] || { 
-      id: 0, details: defaultCompanyDetails, logo: null, bankQRCode: null, 
-      defaultNotes: '', taxRate: 0, currency: '$', template: 'modern', accentColor: '#4f46e5' 
-  };
-
-  // Auth Listener
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
-      if (currentUser) {
+    const handleResponse = async (agree: boolean) => {
         setLoading(true);
-        const userData = await fetchUserData(currentUser.uid);
-        setCompanies(userData.companies);
-        setClients(userData.clients);
-        setItems(userData.items);
-        setSavedInvoices(userData.savedInvoices);
-        setSavedQuotations(userData.savedQuotations);
-        setActiveCompanyId(userData.activeCompanyId);
-        setItemCategories(userData.itemCategories);
-        setLoading(false);
-      } else {
-        setLoading(false);
-      }
-    });
-    return () => unsubscribe();
+        try {
+            const status = agree ? QuotationStatus.Agreed : QuotationStatus.Rejected;
+            await updatePublicQuotationStatus(uid, docId, status);
+            setResponseStatus(agree ? 'agreed' : 'rejected');
+            if (doc) setDoc({ ...doc, quotationStatus: status });
+        } catch (e) {
+            console.error(e);
+            alert("Failed to update status. Please try again.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    if (loading) return <div className="flex justify-center items-center h-screen"><div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-indigo-500"></div></div>;
+
+    if (responseStatus === 'error' || !doc) {
+        return (
+            <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+                <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full text-center">
+                    <h1 className="text-2xl font-bold text-red-600 mb-4">Error</h1>
+                    <p className="text-slate-600">{errorMsg}</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (responseStatus === 'agreed') {
+        return (
+            <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+                 <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full text-center">
+                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                    </div>
+                    <h1 className="text-2xl font-bold text-green-700 mb-2">Thank You!</h1>
+                    <p className="text-slate-600">You have agreed to the quotation <strong>#{doc.documentNumber}</strong>.</p>
+                    <p className="text-slate-500 text-sm mt-4">We have notified {doc.companyDetails.name}.</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (responseStatus === 'rejected') {
+        return (
+            <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+                 <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full text-center">
+                    <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </div>
+                    <h1 className="text-2xl font-bold text-red-700 mb-2">Response Recorded</h1>
+                    <p className="text-slate-600">You have declined quotation <strong>#{doc.documentNumber}</strong>.</p>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+            <div className="bg-white p-6 sm:p-8 rounded-lg shadow-xl max-w-lg w-full">
+                <div className="border-b pb-4 mb-6">
+                    <h1 className="text-xl font-bold text-gray-800">Quotation Response</h1>
+                    <p className="text-sm text-slate-500">From: {doc.companyDetails.name}</p>
+                </div>
+                
+                <div className="mb-8">
+                    <p className="text-lg text-slate-700 mb-2">
+                        Do you agree with quotation <span className="font-bold text-indigo-600">#{doc.documentNumber}</span> and the total price <span className="font-bold text-indigo-600">{formatCurrency(doc.total)}</span> provided?
+                    </p>
+                    <div className="bg-slate-50 p-4 rounded-md mt-4 text-sm text-slate-600">
+                        <p><strong>Date:</strong> {new Date(doc.issueDate).toLocaleDateString()}</p>
+                        <p><strong>Valid Until:</strong> {new Date(doc.dueDate).toLocaleDateString()}</p>
+                    </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-4">
+                    <button 
+                        onClick={() => handleResponse(true)} 
+                        className="flex-1 bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition-colors shadow-sm flex justify-center items-center gap-2"
+                    >
+                        Yes, I Agree
+                    </button>
+                    <button 
+                        onClick={() => handleResponse(false)} 
+                        className="flex-1 bg-white text-red-600 border-2 border-red-100 font-bold py-3 px-4 rounded-lg hover:bg-red-50 transition-colors shadow-sm"
+                    >
+                        No, I Disagree
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// --- Update Client Modal Component ---
+interface UpdateClientModalProps {
+  isOpen: boolean;
+  clientInfo: { original: Client; updated: Details };
+  onConfirm: () => void;
+  onDecline: () => void;
+  onCancel: () => void;
+}
+
+const DetailChange: React.FC<{ label: string; original: string; updated: string }> = ({ label, original, updated }) => {
+    if (original === updated) return null;
+    return (
+        <div>
+            <p className="font-semibold text-slate-700">{label}</p>
+            <p className="text-sm text-slate-500">From: <span className="line-through">{original || 'N/A'}</span></p>
+            <p className="text-sm text-green-700">To: <span className="font-medium">{updated || 'N/A'}</span></p>
+        </div>
+    );
+};
+
+const UpdateClientModal: React.FC<UpdateClientModalProps> = ({ isOpen, clientInfo, onConfirm, onDecline, onCancel }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4" onClick={onCancel}>
+      <div className="bg-white rounded-lg shadow-2xl max-w-lg w-full" onClick={e => e.stopPropagation()}>
+        <div className="p-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-4">Update Client Details?</h2>
+          <p className="text-gray-600 mb-4">
+            You've changed some details for <span className="font-bold">{clientInfo.original.name}</span>. Do you want to update this client's record in your saved client list?
+          </p>
+          <div className="bg-slate-50 border rounded-md p-4 space-y-3 max-h-48 overflow-y-auto">
+            <DetailChange label="Address" original={clientInfo.original.address} updated={clientInfo.updated.address} />
+            <DetailChange label="Email" original={clientInfo.original.email} updated={clientInfo.updated.email} />
+            <DetailChange label="Phone" original={clientInfo.original.phone} updated={clientInfo.updated.phone} />
+          </div>
+        </div>
+        <div className="bg-slate-50 p-4 flex flex-col sm:flex-row justify-end gap-3 border-t">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="w-full sm:w-auto bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onDecline}
+            className="w-full sm:w-auto bg-white text-slate-700 font-semibold py-2 px-4 rounded-lg shadow-sm border hover:bg-slate-100"
+          >
+            No, Just Update Document
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="w-full sm:w-auto bg-indigo-600 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-indigo-700"
+          >
+            Yes, Update Client List
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const useWindowWidth = () => {
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowWidth(window.innerWidth);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Auto-set notes and currency when company changes
+  return windowWidth;
+};
+
+const App: React.FC = () => {
+  const windowWidth = useWindowWidth();
+  const isMobile = windowWidth < 640;
+  
+  // --- States ---
+  const [isSaving, setIsSaving] = useState(false);
+  const [currentView, setCurrentView] = useState<'editor' | 'setup' | 'clients' | 'items' | 'invoices' | 'quotations'>('editor');
+  
+  // --- Public Response State ---
+  const [publicResponseData, setPublicResponseData] = useState<{ uid: string, docId: number } | null>(null);
+
+  // --- Auth States ---
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // --- Refs for PDF/Print ---
+  const previewContainerRef = React.useRef<HTMLDivElement>(null);
+  const previewScrollerRef = React.useRef<HTMLDivElement>(null);
+  const [isSendDropdownOpen, setIsSendDropdownOpen] = useState(false);
+
+
+  // --- Data States (from Firestore) ---
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [activeCompanyId, setActiveCompanyId] = useState<number>(1);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [items, setItems] = useState<Item[]>([]);
+  const [itemCategories, setItemCategories] = useState<string[]>([]);
+  const [savedInvoices, setSavedInvoices] = useState<SavedDocument[]>([]);
+  const [savedQuotations, setSavedQuotations] = useState<SavedDocument[]>([]);
+  
+  // --- Check for URL Parameters for Public Response ---
   useEffect(() => {
-    if (activeCompany && !editingDocId) {
-        setEditorNotes(activeCompany.defaultNotes);
+    const params = new URLSearchParams(window.location.search);
+    const action = params.get('action');
+    const uid = params.get('uid');
+    const id = params.get('id');
+
+    if (action === 'respond' && uid && id) {
+        setPublicResponseData({ uid, docId: parseInt(id, 10) });
+        setIsAuthLoading(false); // Stop loading auth if we are in public mode
     }
-  }, [activeCompanyId, editingDocId]);
+  }, []);
 
-  const handleLogout = async () => {
-    await signOut(auth);
-    setCurrentPage('dashboard');
+
+  // --- Authentication and Data loading ---
+  const loadUserData = useCallback(async (uid: string) => {
+    const userData = await fetchUserData(uid);
+    setCompanies(userData.companies);
+    setClients(userData.clients);
+    setItems(userData.items);
+    setItemCategories(userData.itemCategories || []);
+    setSavedInvoices(userData.savedInvoices);
+    setSavedQuotations(userData.savedQuotations);
+    setActiveCompanyId(userData.activeCompanyId);
+  }, []);
+
+  const handleRefresh = async () => {
+      if (!firebaseUser) return;
+      setIsRefreshing(true);
+      await loadUserData(firebaseUser.uid);
+      setIsRefreshing(false);
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', { 
-      style: 'currency', 
-      currency: 'USD' // Simplified for this example, usually derived from activeCompany.currency
-    }).format(amount).replace('$', activeCompany.currency || '$');
-  };
+  useEffect(() => {
+    if (publicResponseData) return; // Skip auth check if in public mode
 
-  const calculateTotals = () => {
-    const subtotal = editorLineItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
-    const taxAmount = subtotal * (activeCompany.taxRate / 100);
-    const total = subtotal + taxAmount;
-    return { subtotal, taxAmount, total };
-  };
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setFirebaseUser(user);
+      setIsAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, [publicResponseData]);
 
-  const { subtotal, taxAmount, total } = calculateTotals();
-
-  // --- Editor Actions ---
-
-  const handleAddItem = () => {
-    setEditorLineItems([...editorLineItems, { id: Date.now(), name: '', description: '', quantity: 1, costPrice: 0, markup: 0, price: 0 }]);
-  };
-
-  const handleRemoveItem = (index: number) => {
-    const newItems = [...editorLineItems];
-    newItems.splice(index, 1);
-    setEditorLineItems(newItems);
-  };
-
-  const handleUpdateItem = (index: number, field: keyof LineItem, value: string | number) => {
-    const newItems = [...editorLineItems];
-    const item = { ...newItems[index], [field]: value };
-    
-    if (field === 'costPrice' || field === 'markup') {
-        const cost = Number(item.costPrice);
-        const markup = Number(item.markup);
-        item.price = cost * (1 + markup / 100);
-    } else if (field === 'price') {
-        const cost = Number(item.costPrice);
-        const price = Number(item.price);
-        if (cost > 0) {
-            item.markup = ((price / cost) - 1) * 100;
-        }
+  useEffect(() => {
+    if (firebaseUser && !publicResponseData) {
+      loadUserData(firebaseUser.uid);
+    } else if (!publicResponseData) {
+      // Clear data on logout
+      setCompanies([]);
+      setClients([]);
+      setItems([]);
+      setItemCategories([]);
+      setSavedInvoices([]);
+      setSavedQuotations([]);
+      setActiveCompanyId(1);
     }
+  }, [firebaseUser, loadUserData, publicResponseData]);
+  
+  useEffect(() => {
+      if (firebaseUser && !publicResponseData) {
+        saveItemCategories(itemCategories);
+      }
+  }, [itemCategories, firebaseUser, publicResponseData]);
 
-    newItems[index] = item;
-    setEditorLineItems(newItems);
+  const handleLogout = () => {
+    signOut(auth);
   };
 
-  const handleSelectItem = (index: number, savedItem: Item) => {
-    const newItems = [...editorLineItems];
-    const cost = savedItem.costPrice || 0;
-    const sell = savedItem.price || 0;
-    const markup = cost > 0 ? ((sell - cost) / cost) * 100 : 0;
-    
-    newItems[index] = {
-      ...newItems[index],
-      name: savedItem.name,
-      description: savedItem.description,
-      costPrice: cost,
-      price: sell,
-      markup: markup,
+  const generateDocumentNumber = useCallback((
+    client: Details, 
+    docType: DocumentType, 
+    invoices: SavedDocument[], 
+    quotations: SavedDocument[]
+  ): string => {
+      const clientNameTrimmed = client.name.trim();
+
+      if (!clientNameTrimmed) {
+          return '';
+      }
+
+      // Shorten the client name part to the first 6 alphanumeric characters, uppercase
+      const clientNamePart = clientNameTrimmed.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().substring(0, 6);
+      
+      // Ensure phone part is digits only, fallback to '0000'
+      const phoneDigits = client.phone ? client.phone.replace(/\D/g, '') : '';
+      const phonePart = phoneDigits.length >= 4 ? phoneDigits.slice(-4) : phoneDigits.padEnd(4, '0');
+      
+      const docTypePart = docType === DocumentType.Quotation ? 'QUO' : 'INV';
+      
+      // Use 'CLI' as fallback if name has no alphanumeric characters
+      const prefix = `${clientNamePart || 'CLI'}_${phonePart}_${docTypePart}_`;
+
+      const relevantDocs = docType === DocumentType.Quotation ? quotations : invoices;
+      
+      const clientDocs = relevantDocs.filter(
+          doc => doc.clientDetails.name.trim().toLowerCase() === clientNameTrimmed.toLowerCase()
+      );
+      
+      const numbers = clientDocs
+          .map(doc => {
+              const parts = doc.documentNumber.split('_');
+              const numStr = parts[parts.length - 1];
+              const typeInNum = parts[parts.length - 2];
+              if (typeInNum === docTypePart) {
+                  const num = parseInt(numStr, 10);
+                  return isNaN(num) ? 0 : num;
+              }
+              return 0;
+          })
+          .filter(n => n > 0);
+
+      const lastNum = numbers.length > 0 ? Math.max(...numbers) : 0;
+      const newNum = String(lastNum + 1).padStart(3, '0');
+
+      return `${prefix}${newNum}`;
+  }, []);
+
+  // --- Document Form States ---
+  const [documentType, setDocumentType] = useState<DocumentType>(DocumentType.Quotation);
+  const activeCompany = useMemo(() => companies.find(c => c.id === activeCompanyId) || companies[0], [companies, activeCompanyId]);
+  
+  const [companyDetails, setCompanyDetails] = useState<Details>({ name: '', address: '', email: '', phone: '' });
+  const [companyLogo, setCompanyLogo] = useState<string | null>(null);
+  const [bankQRCode, setBankQRCode] = useState<string | null>(null);
+  const [notes, setNotes] = useState('');
+  const [taxRate, setTaxRate] = useState(0);
+  const [currency, setCurrency] = useState('');
+  const [template, setTemplate] = useState('classic');
+  const [accentColor, setAccentColor] = useState('#4f46e5');
+  const [clientDetails, setClientDetails] = useState<Details>({ name: '', address: '', email: '', phone: '' });
+  const [documentNumber, setDocumentNumber] = useState('');
+  const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0]);
+  const [dueDate, setDueDate] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() + 15);
+    return date.toISOString().split('T')[0];
+  });
+  const [dueDateOption, setDueDateOption] = useState<string>('15days');
+  const [lineItems, setLineItems] = useState<LineItem[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [status, setStatus] = useState<InvoiceStatus | null>(null);
+  const [generatingStates, setGeneratingStates] = useState<Record<number, boolean>>({});
+  const [loadedDocumentInfo, setLoadedDocumentInfo] = useState<{ id: number; status: InvoiceStatus | QuotationStatus | null; docType: DocumentType, recurrenceParentId?: number | null } | null>(null);
+  const [isCreatingNew, setIsCreatingNew] = useState(true);
+  const [isSaveItemsModalOpen, setIsSaveItemsModalOpen] = useState(false);
+  const [potentialNewItems, setPotentialNewItems] = useState<LineItem[]>([]);
+  const [pendingDoc, setPendingDoc] = useState<SavedDocument | null>(null);
+  const [isSaveClientModalOpen, setIsSaveClientModalOpen] = useState(false);
+  const [potentialNewClient, setPotentialNewClient] = useState<Details | null>(null);
+  const [newLineItem, setNewLineItem] = useState<Omit<LineItem, 'id'>>({ name: '', description: '', quantity: isMobile ? 0 : 1, costPrice: 0, markup: 0, price: 0 });
+  const [isItemDropdownOpen, setIsItemDropdownOpen] = useState(false);
+  const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
+  const [isUpdateClientModalOpen, setIsUpdateClientModalOpen] = useState(false);
+  const [clientUpdateInfo, setClientUpdateInfo] = useState<{ original: Client; updated: Details } | null>(null);
+  const [recurrence, setRecurrence] = useState<Recurrence | null>(null);
+
+  // --- Sync active company changes to form ---
+  useEffect(() => {
+    if (activeCompany) {
+      setCompanyDetails(activeCompany.details);
+      setCompanyLogo(activeCompany.logo);
+      setBankQRCode(activeCompany.bankQRCode);
+      setNotes(activeCompany.defaultNotes);
+      setTaxRate(activeCompany.taxRate);
+      setCurrency(activeCompany.currency);
+      setTemplate(activeCompany.template);
+      setAccentColor(activeCompany.accentColor);
+    }
+  }, [activeCompany]);
+  
+  useEffect(() => {
+    if (activeCompanyId && firebaseUser) {
+        saveActiveCompanyId(activeCompanyId);
+    }
+  }, [activeCompanyId, firebaseUser]);
+
+  useEffect(() => {
+    if (isCreatingNew) {
+      setDocumentNumber(generateDocumentNumber(clientDetails, documentType, savedInvoices, savedQuotations));
+    }
+  }, [isCreatingNew, clientDetails, documentType, savedInvoices, savedQuotations, generateDocumentNumber]);
+
+  // --- Recurring Invoice Generation ---
+  const recurringChecked = React.useRef(false);
+  useEffect(() => {
+    if (!firebaseUser || recurringChecked.current || savedInvoices.length === 0) return;
+    recurringChecked.current = true;
+
+    const calculateNextIssueDate = (lastDateStr: string, rec: Recurrence): Date => {
+      const lastDate = new Date(lastDateStr + 'T00:00:00');
+      const { frequency, interval } = rec;
+      switch (frequency) {
+        case 'daily': lastDate.setDate(lastDate.getDate() + interval); break;
+        case 'weekly': lastDate.setDate(lastDate.getDate() + interval * 7); break;
+        case 'monthly': lastDate.setMonth(lastDate.getMonth() + interval); break;
+        case 'yearly': lastDate.setFullYear(lastDate.getFullYear() + interval); break;
+      }
+      return lastDate;
     };
-    setEditorLineItems(newItems);
-  };
 
-  const handleGenerateDescription = async (index: number) => {
-    const item = editorLineItems[index];
-    if (!item.name) return;
-    setGeneratingDescIndex(index);
-    const desc = await generateDescription(item.name);
-    if (desc) {
-      handleUpdateItem(index, 'description', desc);
+    const parentInvoices = savedInvoices.filter(inv => inv.recurrence && !inv.recurrenceParentId);
+    let newInvoicesToGenerate: SavedDocument[] = [];
+    let allInvoices = [...savedInvoices]; // Use a temporary list for number generation
+
+    parentInvoices.forEach(parent => {
+      const seriesInvoices = allInvoices.filter(inv => inv.recurrenceParentId === parent.id);
+      const allSeries = [parent, ...seriesInvoices];
+      const latestInvoice = allSeries.sort((a, b) => new Date(b.issueDate).getTime() - new Date(a.issueDate).getTime())[0];
+      
+      let nextIssueDate = calculateNextIssueDate(latestInvoice.issueDate, parent.recurrence!);
+      
+      while (nextIssueDate <= new Date() && (!parent.recurrence!.endDate || nextIssueDate <= new Date(parent.recurrence!.endDate))) {
+        const issueDateObj = new Date(parent.issueDate + 'T00:00:00');
+        const dueDateObj = new Date(parent.dueDate + 'T00:00:00');
+        const duration = dueDateObj.getTime() - issueDateObj.getTime();
+        const newDueDate = new Date(nextIssueDate.getTime() + duration);
+
+        const newInvoice: SavedDocument = {
+          ...parent,
+          id: Date.now() + Math.random(),
+          issueDate: nextIssueDate.toISOString().split('T')[0],
+          dueDate: newDueDate.toISOString().split('T')[0],
+          documentNumber: generateDocumentNumber(parent.clientDetails, DocumentType.Invoice, allInvoices, savedQuotations),
+          status: InvoiceStatus.Pending,
+          payments: [],
+          paidDate: null,
+          recurrence: null,
+          recurrenceParentId: parent.id,
+        };
+        
+        newInvoicesToGenerate.push(newInvoice);
+        allInvoices.push(newInvoice); // Add to temp list for next number generation
+        
+        nextIssueDate = calculateNextIssueDate(newInvoice.issueDate, parent.recurrence!);
+      }
+    });
+
+    if (newInvoicesToGenerate.length > 0) {
+      setSavedInvoices(allInvoices);
+      saveInvoices(allInvoices);
+      alert(`Generated ${newInvoicesToGenerate.length} new recurring invoice(s).`);
     }
-    setGeneratingDescIndex(null);
+  }, [savedInvoices, savedQuotations, generateDocumentNumber, firebaseUser]);
+
+  // --- Calculations ---
+  const subtotal = useMemo(() => lineItems.reduce((acc, item) => acc + item.quantity * item.price, 0), [lineItems]);
+  const taxAmount = useMemo(() => subtotal * (taxRate / 100), [subtotal, taxRate]);
+  const total = useMemo(() => subtotal + taxAmount, [subtotal, taxAmount]);
+  const formatCurrency = useCallback((amount: number) => `${activeCompany?.currency || '$'} ${amount.toFixed(2)}`, [activeCompany]);
+
+  // --- Handlers ---
+  const handleLineItemChange = (id: number, field: keyof LineItem, value: string | number) => {
+    setLineItems(prev =>
+        prev.map(item => {
+            if (item.id === id) {
+                const updatedItem = { ...item };
+                const numericValue = typeof value === 'string' ? parseFloat(value) || 0 : value;
+
+                if (['costPrice', 'markup', 'price', 'quantity'].includes(field)) {
+                    (updatedItem as any)[field] = numericValue;
+                } else {
+                    (updatedItem as any)[field] = value;
+                }
+
+                if (field === 'costPrice') {
+                    const price = numericValue * (1 + updatedItem.markup / 100);
+                    updatedItem.price = parseFloat(price.toFixed(2));
+                } else if (field === 'markup') {
+                    const price = updatedItem.costPrice * (1 + numericValue / 100);
+                    updatedItem.price = parseFloat(price.toFixed(2));
+                } else if (field === 'price') {
+                    const markup = updatedItem.costPrice > 0 ? ((numericValue / updatedItem.costPrice) - 1) * 100 : 0;
+                    updatedItem.markup = parseFloat(markup.toFixed(2));
+                }
+                
+                return updatedItem;
+            }
+            return item;
+        })
+    );
   };
 
-  const handleSelectClient = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const clientId = Number(e.target.value);
-    const client = clients.find(c => c.id === clientId);
-    if (client) {
-      setEditorClient(client);
-    } else {
-      setEditorClient(emptyClient);
+  const handleAddLineItem = () => {
+    if (!newLineItem.name.trim() || newLineItem.price < 0 || newLineItem.quantity <= 0) {
+        alert('Please provide a valid item name, quantity, and price for the item.');
+        return;
+    }
+    setLineItems(prev => [...prev, { id: Date.now(), ...newLineItem }]);
+    setNewLineItem({ name: '', description: '', quantity: isMobile ? 0 : 1, costPrice: 0, markup: 0, price: 0 });
+  };
+
+  const handleDeleteLineItem = (id: number) => {
+    setLineItems(prev => prev.filter(item => item.id !== id));
+  };
+  
+  const handleGenerateDescription = async (id: number, itemName: string, currentDescription: string) => {
+    setGeneratingStates(prev => ({ ...prev, [id]: true }));
+    try {
+      const newDescription = await generateDescription(itemName); // Pass item name to AI
+      handleLineItemChange(id, 'description', newDescription);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setGeneratingStates(prev => ({ ...prev, [id]: false }));
+    }
+  };
+
+  const handleClearClientDetails = () => {
+    setClientDetails({ name: '', address: '', email: '', phone: '' });
+  };
+
+  const handleClearNewLineItem = () => {
+    setNewLineItem({ name: '', description: '', quantity: isMobile ? 0 : 1, costPrice: 0, markup: 0, price: 0 });
+  };
+
+  const handleClientDetailChange = (field: keyof Details, value: string) => {
+    setClientDetails(prev => ({ ...prev, [field]: value }));
+    if (field === 'name') {
+        setIsClientDropdownOpen(true);
+    }
+  };
+
+  const handleSavedClientSelected = (client: Client) => {
+    setClientDetails({ name: client.name, address: client.address, email: client.email, phone: client.phone });
+    setIsClientDropdownOpen(false);
+  };
+
+  const handleDueDateChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value;
+    setDueDateOption(value);
+    const newDueDate = new Date(issueDate);
+    if (value.endsWith('days')) {
+      newDueDate.setDate(newDueDate.getDate() + parseInt(value, 10));
+    } else if (value.endsWith('months')) {
+      newDueDate.setMonth(newDueDate.getMonth() + parseInt(value, 10));
+    } else if (value === 'custom') { return; }
+    setDueDate(newDueDate.toISOString().split('T')[0]);
+  };
+
+  const handleIssueDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newIssueDate = e.target.value;
+    setIssueDate(newIssueDate);
+    const newDueDate = new Date(newIssueDate);
+    if (dueDateOption.endsWith('days')) {
+      newDueDate.setDate(newDueDate.getDate() + parseInt(dueDateOption, 10));
+    } else if (dueDateOption.endsWith('months')) {
+      newDueDate.setMonth(newDueDate.getMonth() + parseInt(dueDateOption, 10));
+    }
+    setDueDate(newDueDate.toISOString().split('T')[0]);
+  };
+  
+  const handleNewLineItemChange = (field: keyof Omit<LineItem, 'id'>, value: string | number) => {
+    const numericValue = typeof value === 'string' ? parseFloat(value) || 0 : value;
+    
+    setNewLineItem(prev => {
+        const updatedItem = { ...prev };
+
+        if (['costPrice', 'markup', 'price', 'quantity'].includes(field)) {
+            (updatedItem as any)[field] = numericValue;
+        } else {
+            (updatedItem as any)[field] = value;
+        }
+
+        if (field === 'costPrice') {
+            const price = numericValue * (1 + updatedItem.markup / 100);
+            updatedItem.price = parseFloat(price.toFixed(2));
+        } else if (field === 'markup') {
+            const price = updatedItem.costPrice * (1 + numericValue / 100);
+            updatedItem.price = parseFloat(price.toFixed(2));
+        } else if (field === 'price') {
+            const markup = updatedItem.costPrice > 0 ? ((numericValue / updatedItem.costPrice) - 1) * 100 : 0;
+            updatedItem.markup = parseFloat(markup.toFixed(2));
+        }
+        
+        return updatedItem;
+    });
+
+    if (field === 'name') {
+        setIsItemDropdownOpen(true);
     }
   };
   
-  const handleClientDetailChange = (field: keyof Details, value: string) => {
-      setEditorClient(prev => ({ ...prev, [field]: value }));
-  }
+  const handleSavedItemSelected = (item: Item) => {
+    const costPrice = item.costPrice || 0;
+    const price = item.price || 0;
+    const markup = costPrice > 0 ? ((price / costPrice) - 1) * 100 : 0;
+    
+    setNewLineItem({
+      name: item.name,
+      description: item.description,
+      quantity: isMobile ? 0 : 1,
+      costPrice: costPrice,
+      markup: parseFloat(markup.toFixed(2)),
+      price: price
+    });
+    setIsItemDropdownOpen(false);
+  };
 
-  // --- Saving Logic ---
+  const handleDocumentTypeChange = (newType: DocumentType) => {
+    if (newType === documentType) return;
+    setDocumentType(newType);
+    if (newType === DocumentType.Quotation) {
+      setRecurrence(null); // Clear recurrence when switching to quotation
+    }
+  };
+  
+  const filteredSavedItems = useMemo(() => {
+    if (!isItemDropdownOpen || !Array.isArray(items)) return [];
+    const searchTerm = newLineItem.name.trim().toLowerCase(); // Filter by item name
+    if (!searchTerm) return items;
+    return items.filter(item => item.name.toLowerCase().includes(searchTerm));
+  }, [items, newLineItem.name, isItemDropdownOpen]);
 
-  const handleSaveDocumentInit = () => {
-    if (!editorClient.name) {
-      alert('Please enter a client name.');
+  const filteredSavedClients = useMemo(() => {
+    if (!isClientDropdownOpen || !Array.isArray(clients)) return [];
+    const searchTerm = clientDetails.name.trim().toLowerCase();
+    if (!searchTerm) return clients;
+    return clients.filter(client => 
+        client.name.toLowerCase().includes(searchTerm) ||
+        (client.email && client.email.toLowerCase().includes(searchTerm)) ||
+        (client.phone && client.phone.includes(searchTerm))
+    );
+  }, [clients, clientDetails.name, isClientDropdownOpen]);
+
+  const saveDocumentAndState = (docToSave: SavedDocument) => {
+      setIsSaving(true);
+      if (docToSave.documentType === DocumentType.Invoice) {
+          saveDocument('savedInvoices', docToSave);
+          const existing = savedInvoices.find(inv => inv.id === docToSave.id);
+          if (existing) {
+              setSavedInvoices(prev => prev.map(inv => inv.id === docToSave.id ? docToSave : inv));
+          } else {
+              setSavedInvoices(prev => [docToSave, ...prev]);
+          }
+          alert('Invoice saved successfully!');
+      } else {
+          saveDocument('savedQuotations', docToSave);
+          const existing = savedQuotations.find(q => q.id === docToSave.id);
+          if (existing) {
+              setSavedQuotations(prev => prev.map(q => q.id === docToSave.id ? docToSave : q));
+          } else {
+              setSavedQuotations(prev => [docToSave, ...prev]);
+          }
+          alert('Quotation saved successfully!');
+      }
+      setIsSaving(false);
+      handleCreateNew();
+  };
+
+  const checkNewItemsAndSave = (docToSave: SavedDocument) => {
+    const savedItemNames = new Set(items.map(i => i.name.trim().toLowerCase())); // Check by item name
+    const newItemsInDoc = docToSave.lineItems.filter(li => li.name.trim() && !savedItemNames.has(li.name.trim().toLowerCase())); // Filter by item name
+    if (newItemsInDoc.length > 0) {
+        setPotentialNewItems(newItemsInDoc);
+        setPendingDoc(docToSave);
+        setIsSaveItemsModalOpen(true);
+    } else {
+        saveDocumentAndState(docToSave);
+        setPendingDoc(null);
+    }
+  };
+
+  const handleSaveDocument = () => {
+    if (!clientDetails.name || lineItems.length === 0) {
+      alert('Please fill in client details and add at least one item.');
       return;
     }
     
-    const docToSave: SavedDocument = {
-      id: editingDocId || Date.now(),
-      documentNumber: editorDocNumber || `${Date.now()}`,
-      documentType: editorDocType,
-      clientDetails: editorClient,
-      companyDetails: activeCompany.details,
-      companyLogo: activeCompany.logo,
-      bankQRCode: activeCompany.bankQRCode,
-      issueDate: editorIssueDate,
-      dueDate: editorDueDate,
-      lineItems: editorLineItems,
-      notes: editorNotes,
-      taxRate: activeCompany.taxRate,
-      currency: activeCompany.currency,
-      total: total,
-      status: editorDocType === DocumentType.Invoice ? (editingDocId ? undefined : InvoiceStatus.Pending) : null,
-      quotationStatus: editorDocType === DocumentType.Quotation ? (editingDocId ? undefined : QuotationStatus.Active) : null,
-      template: activeCompany.template,
-      accentColor: activeCompany.accentColor,
-    };
-    
-    // Restore existing status/payments if editing
-    if (editingDocId) {
-        const existingDocs = editorDocType === DocumentType.Invoice ? savedInvoices : savedQuotations;
-        const original = existingDocs.find(d => d.id === editingDocId);
-        if (original) {
-            docToSave.status = original.status;
-            docToSave.quotationStatus = original.quotationStatus;
-            docToSave.payments = original.payments;
-            docToSave.paidDate = original.paidDate;
-        }
+    const trimmedDocNum = documentNumber.trim();
+    if (!trimmedDocNum) {
+        alert('Document number cannot be empty. Please ensure client details are filled to generate a number.');
+        return;
     }
 
-    setPendingSaveDoc(docToSave);
-
-    // Check for new items/client to save
-    const newItems = editorLineItems.filter(li => 
-      li.name && !items.some(i => i.name.toLowerCase() === li.name.toLowerCase())
+    const allDocs = [...savedInvoices, ...savedQuotations];
+    const potentialDuplicate = allDocs.find(
+        doc => doc.documentNumber.trim().toLowerCase() === trimmedDocNum.toLowerCase()
     );
 
-    const isNewClient = editorClient.name && !clients.some(c => c.name.toLowerCase() === editorClient.name.toLowerCase());
+    if (potentialDuplicate && potentialDuplicate.id !== loadedDocumentInfo?.id) {
+        alert(`A document (invoice or quotation) with number "${trimmedDocNum}" already exists. Please use a unique number.`);
+        return;
+    }
 
-    if (newItems.length > 0) {
-      setSaveItemsModalOpen(true);
-    } else if (isNewClient) {
-      setSaveClientModalOpen(true);
+    const docToSave: SavedDocument = {
+      id: loadedDocumentInfo?.id || Date.now(),
+      documentNumber: trimmedDocNum,
+      documentType, clientDetails, companyDetails, companyLogo, bankQRCode, issueDate, dueDate,
+      lineItems, notes, taxRate, currency, total, template, accentColor,
+      status: loadedDocumentInfo?.docType === DocumentType.Invoice ? (loadedDocumentInfo.status as InvoiceStatus) || InvoiceStatus.Pending : null,
+      quotationStatus: loadedDocumentInfo?.docType === DocumentType.Quotation ? (loadedDocumentInfo.status as QuotationStatus) || QuotationStatus.Active : null,
+      payments: documentType === DocumentType.Invoice ? payments : [],
+      recurrence: documentType === DocumentType.Invoice ? recurrence : null,
+      recurrenceParentId: loadedDocumentInfo?.docType === DocumentType.Invoice ? loadedDocumentInfo.recurrenceParentId : null,
+    };
+    
+    if (!isCreatingNew) { // If editing, check if client details were modified
+        const originalClient = clients.find(c => c.name.trim().toLowerCase() === clientDetails.name.trim().toLowerCase());
+        if (originalClient) {
+            const detailsHaveChanged = originalClient.address !== clientDetails.address ||
+                                     originalClient.email !== clientDetails.email ||
+                                     originalClient.phone !== clientDetails.phone;
+            if (detailsHaveChanged) {
+                setClientUpdateInfo({ original: originalClient, updated: clientDetails });
+                setPendingDoc(docToSave);
+                setIsUpdateClientModalOpen(true);
+                return; // Stop and wait for user confirmation
+            }
+        }
+    }
+
+    const isExistingClient = clients.some(c => c.name.trim().toLowerCase() === clientDetails.name.trim().toLowerCase());
+    if (isCreatingNew && clientDetails.name.trim() && !isExistingClient) { // Only prompt for new client when creating new doc
+        setPotentialNewClient(clientDetails);
+        setPendingDoc(docToSave);
+        setIsSaveClientModalOpen(true);
     } else {
-      finalizeSave(docToSave);
+        checkNewItemsAndSave(docToSave);
     }
   };
 
-  const finalizeSave = async (doc: SavedDocument, saveExtra?: { newItems?: boolean, newClient?: boolean }) => {
-    if (saveExtra?.newItems) {
-      const itemsToSave = editorLineItems.filter(li => li.name && !items.some(i => i.name === li.name)).map(li => ({
-        id: Date.now() + Math.random(),
-        name: li.name,
-        description: li.description,
-        costPrice: li.costPrice,
-        price: li.price,
-        category: ''
-      }));
-      const updatedItems = [...items, ...itemsToSave];
-      setItems(updatedItems);
-      saveItems(updatedItems);
+  const handleConfirmUpdateClient = () => {
+    if (clientUpdateInfo) {
+      const newClients = clients.map(c => 
+        c.id === clientUpdateInfo.original.id 
+          ? { ...c, name: clientUpdateInfo.updated.name, address: clientUpdateInfo.updated.address, email: clientUpdateInfo.updated.email, phone: clientUpdateInfo.updated.phone } 
+          : c
+      );
+      saveClients(newClients);
+      setClients(newClients);
+    }
+    setIsUpdateClientModalOpen(false);
+    setClientUpdateInfo(null);
+    if (pendingDoc) checkNewItemsAndSave(pendingDoc);
+  };
+
+  const handleDeclineUpdateClient = () => {
+    setIsUpdateClientModalOpen(false);
+    setClientUpdateInfo(null);
+    if (pendingDoc) checkNewItemsAndSave(pendingDoc);
+  };
+
+  const handleCancelUpdateClient = () => {
+    setIsUpdateClientModalOpen(false);
+    setClientUpdateInfo(null);
+    setPendingDoc(null);
+  };
+
+  const handleConfirmSaveNewClient = () => {
+    if (potentialNewClient) {
+        const newClients = [{ id: Date.now(), ...potentialNewClient }, ...clients];
+        saveClients(newClients);
+        setClients(newClients);
+    }
+    setIsSaveClientModalOpen(false);
+    setPotentialNewClient(null);
+    if (pendingDoc) checkNewItemsAndSave(pendingDoc);
+  };
+
+  const handleDeclineSaveNewClient = () => {
+    setIsSaveClientModalOpen(false);
+    setPotentialNewClient(null);
+    if (pendingDoc) checkNewItemsAndSave(pendingDoc);
+  };
+  
+  const handleCancelSaveNewClient = () => {
+    setIsSaveClientModalOpen(false);
+    setPotentialNewClient(null);
+    setPendingDoc(null);
+  };
+
+  const handleConfirmSaveNewItems = () => {
+    if (potentialNewItems.length > 0) {
+        const itemsToAdd: Item[] = potentialNewItems.map((li, index) => ({
+            id: Date.now() + index,
+            name: li.name, // Save item name
+            description: li.description, // Save item description
+            costPrice: li.costPrice,
+            price: li.price,
+            category: ''
+        }));
+        const newItems = [...items, ...itemsToAdd];
+        saveItems(newItems);
+        setItems(newItems);
+    }
+    if (pendingDoc) saveDocumentAndState(pendingDoc);
+    setIsSaveItemsModalOpen(false);
+    setPotentialNewItems([]);
+    setPendingDoc(null);
+  };
+
+  const handleDeclineSaveNewItems = () => {
+    if (pendingDoc) saveDocumentAndState(pendingDoc);
+    setIsSaveItemsModalOpen(false);
+    setPotentialNewItems([]);
+    setPendingDoc(null);
+  };
+
+  const handleCancelSaveNewItems = () => {
+    setIsSaveItemsModalOpen(false);
+    setPotentialNewItems([]);
+    setPendingDoc(null);
+  };
+
+  const handleCreateNew = () => {
+    setLoadedDocumentInfo(null);
+    setIsCreatingNew(true);
+    setDocumentType(DocumentType.Quotation);
+    setClientDetails({ name: '', address: '', email: '', phone: '' });
+    setLineItems([]);
+    setPayments([]);
+    setStatus(null);
+    setRecurrence(null);
+    const today = new Date().toISOString().split('T')[0];
+    setIssueDate(today);
+    const newDueDate = new Date();
+    newDueDate.setDate(newDueDate.getDate() + 15);
+    setDueDate(newDueDate.toISOString().split('T')[0]);
+    setDueDateOption('15days');
+    if (activeCompany) {
+      setCompanyDetails(activeCompany.details);
+      setCompanyLogo(activeCompany.logo);
+      setBankQRCode(activeCompany.bankQRCode);
+      setNotes(activeCompany.defaultNotes);
+      setTaxRate(activeCompany.taxRate);
+      setCurrency(activeCompany.currency);
+      setTemplate(activeCompany.template);
+      setAccentColor(activeCompany.accentColor);
+    }
+  };
+
+  const handleLoadDocument = (doc: SavedDocument) => {
+      setDocumentType(doc.documentType);
+      setClientDetails(doc.clientDetails);
+      setDocumentNumber(doc.documentNumber);
+      setIssueDate(doc.issueDate);
+      setDueDate(doc.dueDate);
+      setLineItems(doc.lineItems);
+      setNotes(doc.notes);
+      setTaxRate(doc.taxRate);
+      setCurrency(doc.currency);
+      setStatus(doc.status);
+      setPayments(doc.payments || []);
+      setCompanyDetails(doc.companyDetails);
+      setCompanyLogo(doc.companyLogo);
+      setBankQRCode(doc.bankQRCode);
+      setTemplate(doc.template);
+      setAccentColor(doc.accentColor);
+      setRecurrence(doc.recurrence || null);
+      setLoadedDocumentInfo({id: doc.id, status: doc.status || doc.quotationStatus || null, docType: doc.documentType, recurrenceParentId: doc.recurrenceParentId});
+      setIsCreatingNew(false);
+      setCurrentView('editor');
+  };
+
+  const handleCreateInvoiceFromQuote = (quotation: SavedDocument) => {
+    setIsSaving(true);
+    // Generate new invoice number
+    const newInvoiceNumber = generateDocumentNumber(quotation.clientDetails, DocumentType.Invoice, savedInvoices, savedQuotations);
+
+    // Set new issue and due dates for the invoice
+    const today = new Date().toISOString().split('T')[0];
+    const newDueDate = new Date();
+    // Assuming a default of 15 days for new invoices
+    newDueDate.setDate(newDueDate.getDate() + 15);
+
+    // Create the new invoice object from the quotation
+    const newInvoice: SavedDocument = {
+      ...quotation,
+      id: Date.now(),
+      documentType: DocumentType.Invoice,
+      documentNumber: newInvoiceNumber,
+      status: InvoiceStatus.Pending,
+      quotationStatus: null, // Invoices don't have quotation status
+      payments: [],
+      issueDate: today,
+      dueDate: newDueDate.toISOString().split('T')[0],
+    };
+
+    // Save the new invoice
+    saveDocument('savedInvoices', newInvoice);
+    setSavedInvoices(prev => [newInvoice, ...prev]);
+
+    // Update the original quotation's status to 'Agreed'
+    const updatedQuotation = { ...quotation, quotationStatus: QuotationStatus.Agreed };
+    saveDocument('savedQuotations', updatedQuotation);
+    setSavedQuotations(prev => prev.map(q => q.id === quotation.id ? updatedQuotation : q));
+    
+    setIsSaving(false);
+    alert(`Invoice #${newInvoiceNumber} has been created successfully.`);
+  };
+  
+  const handlePrint = () => window.print();
+
+  const handleDownloadPdf = async () => {
+    const printArea = document.getElementById('print-area');
+    const container = previewContainerRef.current;
+    const scroller = previewScrollerRef.current;
+    
+    if (!printArea || !container || !scroller) {
+        alert("Preview element not found. Cannot generate PDF.");
+        return;
     }
 
-    if (saveExtra?.newClient) {
-      const clientToSave: Client = { id: Date.now(), ...editorClient };
-      const updatedClients = [...clients, clientToSave];
-      setClients(updatedClients);
-      saveClients(updatedClients);
-    }
+    // Store original styles
+    const originalContainerStyle = container.style.cssText;
+    const originalScrollerStyle = scroller.style.cssText;
+    const originalPrintAreaStyle = printArea.style.cssText;
 
-    if (doc.documentType === DocumentType.Invoice) {
-      saveDocument('savedInvoices', doc);
-      setSavedInvoices(prev => {
-        const idx = prev.findIndex(d => d.id === doc.id);
-        if (idx > -1) {
-            const newArr = [...prev];
-            newArr[idx] = doc;
-            return newArr;
+    try {
+        // --- HIGH-FIDELITY PDF GENERATION ---
+
+        // Prepare for capture: force A4-like width to ensure consistent layout/text wrapping
+        const a4WidthPx = 794; // approx 210mm at 96dpi
+        container.style.position = 'static'; // Remove sticky positioning
+        container.style.width = `${a4WidthPx}px`; // Force a consistent width
+        container.style.margin = '0 auto'; 
+        
+        scroller.style.maxHeight = 'none'; // Remove scrollbar
+        scroller.style.overflow = 'visible'; // Show all content
+        
+        printArea.style.width = '100%'; // Ensure print area uses the container's width
+        
+        // Wait for the DOM to update with the new styles
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        window.scrollTo(0, 0); // Scroll to top to ensure full capture
+
+        const canvas = await html2canvas(printArea, { 
+            scale: 2, // Higher scale for better resolution
+            useCORS: true,
+            logging: false, // Suppress console logs from html2canvas
+            windowWidth: a4WidthPx, // Tell html2canvas the simulated window width
+        });
+        
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jspdf.jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        
+        const canvasWidth = canvas.width;
+        const canvasHeight = canvas.height;
+        const ratio = canvasHeight / canvasWidth;
+        
+        const imgHeight = pdfWidth * ratio;
+        let heightLeft = imgHeight;
+        let position = 0;
+
+        // Add the first page
+        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+        heightLeft -= pdfHeight;
+
+        // Add more pages if the content is longer than one page
+        while (heightLeft > 0) {
+            position = position - pdfHeight;
+            pdf.addPage();
+            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+            heightLeft -= pdfHeight;
         }
-        return [doc, ...prev];
-      });
-      setCurrentPage('invoices');
-    } else {
-      saveDocument('savedQuotations', doc);
-      setSavedQuotations(prev => {
-        const idx = prev.findIndex(d => d.id === doc.id);
-        if (idx > -1) {
-            const newArr = [...prev];
-            newArr[idx] = doc;
-            return newArr;
+        
+        pdf.save(`${documentType}_${documentNumber}.pdf`);
+
+    } catch (error) {
+        console.error("Error generating rich PDF, falling back to simple text PDF:", error);
+        
+        try {
+            // --- FALLBACK: SIMPLE TEXT-BASED PDF ---
+            const doc = new jspdf.jsPDF();
+            
+            doc.setFontSize(20);
+            doc.text(documentType.toUpperCase(), 20, 20);
+            
+            doc.setFontSize(12);
+            doc.text(`Number: ${documentNumber}`, 20, 30);
+            doc.text(`Date: ${new Date(issueDate + 'T00:00:00').toLocaleDateString()}`, 20, 40);
+            doc.text(`Due: ${new Date(dueDate + 'T00:00:00').toLocaleDateString()}`, 20, 50);
+            
+            doc.text(`From:`, 20, 70);
+            doc.setFontSize(10);
+            doc.text(companyDetails.name, 20, 76);
+            
+            doc.setFontSize(12);
+            doc.text(`To:`, 120, 70);
+            doc.setFontSize(10);
+            doc.text(clientDetails.name, 120, 76);
+            
+            let y = 100;
+            doc.setFontSize(12);
+            doc.text("Items:", 20, y);
+            y += 10;
+            
+            lineItems.forEach((item: LineItem) => {
+                doc.setFontSize(10);
+                const itemText = `${item.name} (x${item.quantity})`;
+                const priceText = formatCurrency(item.price * item.quantity);
+                doc.text(itemText, 20, y);
+                doc.text(priceText, 150, y);
+                y += 7;
+                if (item.description) {
+                     doc.setFontSize(8);
+                     doc.setTextColor(100); // Gray color for description
+                     doc.text(item.description.substring(0, 80) + (item.description.length > 80 ? '...' : ''), 20, y);
+                     doc.setTextColor(0); // Reset color
+                     y += 10; // More space for description
+                } else {
+                    y += 3; // Less space if no description
+                }
+                
+                // Page break logic
+                if (y > 270) {
+                    doc.addPage();
+                    y = 20;
+                }
+            });
+            
+            y += 10;
+            doc.setFontSize(14);
+            doc.text(`Total: ${formatCurrency(total)}`, 120, y);
+            
+            doc.save(`${documentType}_${documentNumber}_simple.pdf`);
+            alert("A standard PDF could not be generated due to a browser limitation. A simplified version has been downloaded instead.");
+            
+        } catch (fallbackError) {
+            console.error("Fallback PDF generation failed:", fallbackError);
+            alert("Could not generate PDF. Please try the 'Print' option and save as PDF.");
         }
-        return [doc, ...prev];
-      });
-      setCurrentPage('quotations');
+    } finally {
+        // Restore original styles regardless of success or failure
+        container.style.cssText = originalContainerStyle;
+        scroller.style.cssText = originalScrollerStyle;
+        printArea.style.cssText = originalPrintAreaStyle;
+    }
+  };
+  
+  const handleSendViaEmail = () => {
+    if (!clientDetails.email) {
+      alert("Client email is missing.");
+      return;
     }
     
-    setPendingSaveDoc(null);
-    setSaveItemsModalOpen(false);
-    setSaveClientModalOpen(false);
-    clearEditor();
-  };
+    const dateIssued = new Date(issueDate + 'T00:00:00').toLocaleDateString();
+    const dateDue = new Date(dueDate + 'T00:00:00').toLocaleDateString();
+    
+    let docText = `${documentType.toUpperCase()} #${documentNumber}\n`;
+    docText += `From: ${companyDetails.name}\n`;
+    docText += `To: ${clientDetails.name}\n\n`;
+    docText += `Date: ${dateIssued}\n`;
+    docText += `${documentType === DocumentType.Invoice ? 'Due Date' : 'Valid Until'}: ${dateDue}\n\n`;
+    
+    docText += `ITEMS:\n`;
+    lineItems.forEach((item, index) => {
+        docText += `${index + 1}. ${item.name} (x${item.quantity}) - ${formatCurrency(item.price * item.quantity)}\n`;
+    });
+    docText += `\n`;
+    
+    docText += `Subtotal: ${formatCurrency(subtotal)}\n`;
+    if (taxRate > 0) {
+        docText += `Tax (${taxRate}%): ${formatCurrency(taxAmount)}\n`;
+    }
+    docText += `TOTAL: ${formatCurrency(total)}\n\n`;
+    
+    if (companyDetails.bankName || companyDetails.accountNumber) {
+        docText += `PAYMENT DETAILS:\n`;
+        if (companyDetails.bankName) docText += `Bank: ${companyDetails.bankName}\n`;
+        if (companyDetails.accountNumber) docText += `Account: ${companyDetails.accountNumber}\n`;
+        docText += `\n`;
+    }
 
-  const clearEditor = () => {
-    setEditorClient(emptyClient);
-    setEditorLineItems([{ id: Date.now(), name: '', description: '', quantity: 1, costPrice: 0, markup: 0, price: 0 }]);
-    setEditorDocNumber('');
-    setEditorNotes(activeCompany.defaultNotes);
-    setEditingDocId(null);
-  };
+    const subject = `${documentType} #${documentNumber} from ${companyDetails.name}`;
+    let body = `Dear ${clientDetails.name},\n\nHere are the details for your ${documentType.toLowerCase()}:\n\n${docText}`;
+    
+    // Add response link for quotation
+    if (documentType === DocumentType.Quotation && firebaseUser && loadedDocumentInfo?.id) {
+         const responseLink = `${window.location.origin}?action=respond&uid=${firebaseUser.uid}&id=${loadedDocumentInfo.id}`;
+         body += `Please click the link below to respond to this quotation:\n${responseLink}\n\n`;
+    } else if (documentType === DocumentType.Quotation) {
+        body += `If you agree with this quotation, please reply to this email stating: "Yes, I agree to the quotation offer provided."\n\n`;
+    }
 
-  const loadDocumentIntoEditor = (doc: SavedDocument) => {
-    setEditorDocType(doc.documentType);
-    setEditorClient(doc.clientDetails);
-    setEditorIssueDate(doc.issueDate);
-    setEditorDueDate(doc.dueDate);
-    setEditorLineItems(doc.lineItems.length ? doc.lineItems : [{ id: Date.now(), name: '', description: '', quantity: 1, costPrice: 0, markup: 0, price: 0 }]);
-    setEditorNotes(doc.notes);
-    setEditorDocNumber(doc.documentNumber);
-    setEditingDocId(doc.id);
-    setCurrentPage('create');
+    body += `Thank you for your business.\n\nBest regards,\n${companyDetails.name}`;
+    
+    window.location.href = `mailto:${clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   };
   
-  const createInvoiceFromQuote = (quote: SavedDocument) => {
-      loadDocumentIntoEditor(quote);
-      setEditorDocType(DocumentType.Invoice);
-      setEditingDocId(null); // New ID for the invoice
-      setEditorDocNumber(`INV-${Date.now().toString().slice(-6)}`);
-      setEditorIssueDate(new Date().toISOString().split('T')[0]);
+  const handleSendViaWhatsApp = () => {
+    const dateIssued = new Date(issueDate + 'T00:00:00').toLocaleDateString();
+    const dateDue = new Date(dueDate + 'T00:00:00').toLocaleDateString();
+
+    let text = `*${documentType.toUpperCase()} #${documentNumber}*\n`;
+    text += `From: *${companyDetails.name}*\n`;
+    text += `To: ${clientDetails.name}\n\n`;
+    
+    text += `Date: ${dateIssued}\n`;
+    text += `${documentType === DocumentType.Invoice ? 'Due Date' : 'Valid Until'}: ${dateDue}\n\n`;
+    
+    text += `*ITEMS:*\n`;
+    lineItems.forEach((item, index) => {
+        text += `${index + 1}. ${item.name} (x${item.quantity}) - ${formatCurrency(item.price * item.quantity)}\n`;
+    });
+    text += `\n`;
+    
+    text += `Subtotal: ${formatCurrency(subtotal)}\n`;
+    if (taxRate > 0) {
+        text += `Tax (${taxRate}%): ${formatCurrency(taxAmount)}\n`;
+    }
+    text += `*TOTAL: ${formatCurrency(total)}*\n\n`;
+    
+    if (companyDetails.bankName || companyDetails.accountNumber) {
+        text += `*Payment Details:*\n`;
+        if (companyDetails.bankName) text += `Bank: ${companyDetails.bankName}\n`;
+        if (companyDetails.accountNumber) text += `Account: ${companyDetails.accountNumber}\n`;
+        text += `\n`;
+    }
+
+    if (documentType === DocumentType.Quotation && firebaseUser && loadedDocumentInfo?.id) {
+         const responseLink = `${window.location.origin}?action=respond&uid=${firebaseUser.uid}&id=${loadedDocumentInfo.id}`;
+         text += `Please click the link below to respond to this quotation:\n${responseLink}\n\n`;
+    } else if (documentType === DocumentType.Quotation) {
+        text += `If you agree with this quotation, please reply to this message stating: "Yes, I agree to the quotation offer provided."\n\n`;
+    }
+    
+    text += `Thank you!`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
-  
+
+  // FIX: Define handleSendReminder function for invoices
   const handleSendReminder = (doc: SavedDocument, channel: 'email' | 'whatsapp') => {
-    const subject = `Invoice #${doc.documentNumber} from ${doc.companyDetails.name}`;
-    const emailBody = `Dear ${doc.clientDetails.name},\n\nThis is a friendly reminder regarding invoice #${doc.documentNumber}, due on ${new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}.\nThe remaining balance is ${formatCurrency(doc.total - (doc.payments?.reduce((acc, p) => acc + p.amount, 0) || 0))}.\n\nPlease let us know if you have any questions.\n\nThank you,\n${doc.companyDetails.name}`;
-    
-    const whatsappMessage = `Hello ${doc.clientDetails.name},\n\nThis is a friendly reminder regarding invoice #${doc.documentNumber}, due on ${new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}.\nThe remaining balance is ${formatCurrency(doc.total - (doc.payments?.reduce((acc, p) => acc + p.amount, 0) || 0))}.\n\nPlease let us know if you have any questions.\n\nThank you,\n${doc.companyDetails.name}`;
-
+    if (channel === 'email' && !doc.clientDetails.email) {
+      alert("Client email is missing for this document.");
+      return;
+    }
+  
+    const amountPaid = doc.payments?.reduce((sum, p) => sum + p.amount, 0) || 0;
+    let balanceDue = doc.total - amountPaid;
+    if (doc.status === InvoiceStatus.Paid || balanceDue < 0.01) {
+      balanceDue = 0;
+    }
+  
+    const subject = `Reminder: Invoice #${doc.documentNumber} from ${doc.companyDetails.name}`;
+    const emailBody = `Dear ${doc.clientDetails.name},\n\nThis is a friendly reminder regarding invoice #${doc.documentNumber}, which was due on ${new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}.\n\nThe outstanding balance is ${formatCurrency(balanceDue)}.\n\nPlease let us know if you have any questions.\n\nBest regards,\n${doc.companyDetails.name}`;
+    const whatsappMessage = `Hello ${doc.clientDetails.name},\n\nThis is a friendly reminder regarding invoice #${doc.documentNumber}.\nThe outstanding balance is ${formatCurrency(balanceDue)}.\n\nThank you,\n${doc.companyDetails.name}`;
+  
     if (channel === 'email') {
-      window.open(`mailto:${doc.clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`, '_blank');
+      window.location.href = `mailto:${doc.clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`;
     } else {
       window.open(`https://wa.me/?text=${encodeURIComponent(whatsappMessage)}`, '_blank');
     }
   };
-  
-  const handleSendQuotationReminder = (doc: SavedDocument, channel: 'email' | 'whatsapp') => {
-    const subject = `Quotation #${doc.documentNumber} from ${doc.companyDetails.name}`;
-    const emailBody = `Dear ${doc.clientDetails.name},\n\nThis is a friendly reminder regarding quotation #${doc.documentNumber}, valid until ${new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}.\nThe total amount is ${formatCurrency(doc.total)}.\n\nPlease let us know if you have any questions.\n\nThank you,\n${doc.companyDetails.name}`;
 
+  // FIX: Define handleSendQuotationReminder function for quotations
+  const handleSendQuotationReminder = (doc: SavedDocument, channel: 'email' | 'whatsapp') => {
+    if (channel === 'email' && !doc.clientDetails.email) {
+      alert("Client email is missing for this document.");
+      return;
+    }
+  
+    const subject = `Reminder: Quotation #${doc.documentNumber} from ${doc.companyDetails.name}`;
+    const emailBody = `Dear ${doc.clientDetails.name},\n\nThis is a friendly reminder regarding quotation #${doc.documentNumber}, which is valid until ${new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}.\n\nThe total amount is ${formatCurrency(doc.total)}.\n\nPlease let us know if you have any questions or would like to proceed.\n\nBest regards,\n${doc.companyDetails.name}`;
     const whatsappMessage = `Hello ${doc.clientDetails.name},\n\nThis is a friendly reminder regarding quotation #${doc.documentNumber}, valid until ${new Date(doc.dueDate + 'T00:00:00').toLocaleDateString()}.\nThe total amount is ${formatCurrency(doc.total)}.\n\nPlease let us know if you have any questions.\n\nThank you,\n${doc.companyDetails.name}`;
   
     if (channel === 'email') {
-      window.open(`mailto:${doc.clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`, '_blank');
+      window.location.href = `mailto:${doc.clientDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`;
     } else {
       window.open(`https://wa.me/?text=${encodeURIComponent(whatsappMessage)}`, '_blank');
     }
   };
 
-  if (!user) {
+  const navButtonClasses = "flex flex-col sm:flex-row items-center justify-center sm:justify-start gap-2 py-2 px-3 rounded-md transition-colors text-sm font-medium";
+  const activeNavButtonClasses = "bg-indigo-100 text-indigo-700";
+  const inactiveNavButtonClasses = "text-slate-600 hover:bg-slate-200";
+
+  if (isAuthLoading) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-indigo-500"></div>
+      </div>
+    );
+  }
+
+  if (publicResponseData) {
+      return <CustomerResponsePage uid={publicResponseData.uid} docId={publicResponseData.docId} formatCurrency={formatCurrency} />
+  }
+
+  if (!firebaseUser) {
     return <LoginPage />;
   }
+  
+  // Helper to truncate email for mobile display
+  const truncateEmail = (email: string | null | undefined, maxLength: number) => {
+    if (!email) return '';
+    if (email.length <= maxLength) return email;
+    return email.substring(0, maxLength - 3) + '...';
+  };
 
-  if (loading) {
-      return (
-          <div className="min-h-screen flex items-center justify-center bg-gray-100">
-              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-600"></div>
-          </div>
-      );
-  }
 
-  const navButtonClasses = "flex flex-col sm:flex-row items-center justify-center sm:justify-start gap-2 py-2 px-3 rounded-md transition-colors text-sm font-medium";
-
-  return (
-    <div className="min-h-screen bg-gray-100 flex flex-col md:flex-row">
-        {/* Mobile Header */}
-        <div className="md:hidden bg-white p-4 shadow-md flex justify-between items-center sticky top-0 z-20">
-            <h1 className="text-xl font-bold text-indigo-600">InvQuo</h1>
-            <button onClick={() => setNavOpen(!navOpen)} className="text-gray-600">
-                <ListIcon />
-            </button>
-        </div>
-
-      {/* Navigation */}
-      <nav className={`bg-white shadow-lg w-full md:w-64 flex-shrink-0 flex flex-col justify-between fixed md:relative z-10 h-full transition-transform duration-300 ${navOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
-        <div>
-            <div className="p-6 hidden md:block">
-                <h1 className="text-2xl font-bold text-indigo-600">InvQuo</h1>
-            </div>
-            <div className="px-4 py-2 space-y-2">
-                <button onClick={() => { setCurrentPage('dashboard'); setNavOpen(false); }} className={`${navButtonClasses} ${currentPage === 'dashboard' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}>
-                    <ListIcon /> Dashboard
-                </button>
-                <button onClick={() => { clearEditor(); setCurrentPage('create'); setNavOpen(false); }} className={`${navButtonClasses} ${currentPage === 'create' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}>
-                    <PlusIcon /> Create New
-                </button>
-                <button onClick={() => { setCurrentPage('invoices'); setNavOpen(false); }} className={`${navButtonClasses} ${currentPage === 'invoices' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}>
-                    <FileTextIcon /> Invoices
-                </button>
-                <button onClick={() => { setCurrentPage('quotations'); setNavOpen(false); }} className={`${navButtonClasses} ${currentPage === 'quotations' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}>
-                    <DocumentIcon /> Quotations
-                </button>
-                <button onClick={() => { setCurrentPage('clients'); setNavOpen(false); }} className={`${navButtonClasses} ${currentPage === 'clients' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}>
-                    <UsersIcon /> Clients
-                </button>
-                <button onClick={() => { setCurrentPage('items'); setNavOpen(false); }} className={`${navButtonClasses} ${currentPage === 'items' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}>
-                    <CogIcon /> Items
-                </button>
-            </div>
-        </div>
-        <div className="p-4 border-t bg-gray-50">
-            <div className="flex items-center gap-2 mb-4 px-2">
-                <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold">
-                    {user.email?.[0].toUpperCase()}
-                </div>
-                <div className="overflow-hidden">
-                    <p className="text-sm font-medium text-gray-900 truncate">{user.email}</p>
-                    <p className="text-xs text-gray-500 truncate">{activeCompany.details.name}</p>
-                </div>
-            </div>
-            <button onClick={() => { setCurrentPage('settings'); setNavOpen(false); }} className="w-full text-left px-3 py-2 text-sm text-gray-600 hover:text-indigo-600 font-medium">
-                Settings
-            </button>
-            <button onClick={handleLogout} className="w-full text-left px-3 py-2 text-sm text-red-600 hover:text-red-800 font-medium">
-                Sign Out
-            </button>
-        </div>
-      </nav>
-
-      {/* Main Content */}
-      <div className="flex-grow overflow-y-auto h-screen">
-        {currentPage === 'dashboard' && (
-            <main className="p-4 sm:p-8">
-                <h2 className="text-2xl font-bold text-gray-800 mb-6">Dashboard</h2>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
-                    <div className="bg-white p-6 rounded-lg shadow-sm border border-indigo-100">
-                        <p className="text-sm text-gray-500 font-medium uppercase">Total Revenue</p>
-                        <p className="text-3xl font-bold text-indigo-600 mt-2">
-                            {formatCurrency(savedInvoices.reduce((sum, doc) => sum + (doc.payments?.reduce((pSum, p) => pSum + p.amount, 0) || 0), 0))}
-                        </p>
-                    </div>
-                     <div className="bg-white p-6 rounded-lg shadow-sm border border-orange-100">
-                        <p className="text-sm text-gray-500 font-medium uppercase">Pending Invoices</p>
-                        <p className="text-3xl font-bold text-orange-600 mt-2">
-                            {savedInvoices.filter(i => i.status !== InvoiceStatus.Paid).length}
-                        </p>
-                    </div>
-                     <div className="bg-white p-6 rounded-lg shadow-sm border border-blue-100">
-                        <p className="text-sm text-gray-500 font-medium uppercase">Active Quotes</p>
-                        <p className="text-3xl font-bold text-blue-600 mt-2">
-                            {savedQuotations.filter(q => q.quotationStatus === QuotationStatus.Active).length}
-                        </p>
-                    </div>
-                </div>
-                
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    <div className="bg-white p-6 rounded-lg shadow-sm">
-                        <h3 className="text-lg font-bold text-gray-800 mb-4">Recent Invoices</h3>
-                        {savedInvoices.length > 0 ? (
-                            <div className="space-y-3">
-                                {savedInvoices.slice(0, 5).map(inv => (
-                                    <div key={inv.id} className="flex justify-between items-center p-3 hover:bg-gray-50 rounded-lg border border-transparent hover:border-gray-100 cursor-pointer" onClick={() => loadDocumentIntoEditor(inv)}>
-                                        <div>
-                                            <p className="font-semibold text-gray-800">#{inv.documentNumber}</p>
-                                            <p className="text-sm text-gray-500">{inv.clientDetails.name}</p>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className="font-bold text-gray-700">{formatCurrency(inv.total)}</p>
-                                            <span className={`text-xs px-2 py-0.5 rounded-full ${inv.status === InvoiceStatus.Paid ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{inv.status}</span>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : <p className="text-gray-400 text-sm">No invoices yet.</p>}
-                        <button onClick={() => setCurrentPage('invoices')} className="mt-4 text-indigo-600 text-sm font-medium hover:underline">View All Invoices &rarr;</button>
-                    </div>
-                    
-                     <div className="bg-white p-6 rounded-lg shadow-sm">
-                        <h3 className="text-lg font-bold text-gray-800 mb-4">Quick Actions</h3>
-                        <div className="space-y-2">
-                            <button onClick={() => { clearEditor(); setEditorDocType(DocumentType.Invoice); setCurrentPage('create'); }} className="w-full p-3 text-left bg-indigo-50 hover:bg-indigo-100 rounded-lg text-indigo-700 font-medium flex items-center gap-3">
-                                <PlusIcon /> Create New Invoice
+  const renderCurrentView = () => {
+    switch(currentView) {
+      case 'setup':
+        return <SetupPage
+            user={firebaseUser}
+            companies={companies}
+            setCompanies={setCompanies}
+            onDone={() => setCurrentView('editor')}
+            activeCompanyId={activeCompanyId}
+            setActiveCompanyId={setActiveCompanyId}
+            setClients={setClients} // Passed for reset app
+            setItems={setItems} // Passed for reset app
+            setItemCategories={setItemCategories} // Passed for reset app
+            setSavedInvoices={setSavedInvoices} // Passed for reset app
+            setSavedQuotations={setSavedQuotations} // Passed for reset app
+            defaultUserData={defaultUserData} // Passed for reset app
+            />;
+      case 'clients':
+        return <ClientListPage
+            clients={clients}
+            setClients={setClients}
+            onDone={() => setCurrentView('editor')} />;
+      case 'items':
+        return <ItemListPage
+            items={items}
+            setItems={setItems}
+            categories={itemCategories}
+            setCategories={setItemCategories}
+            formatCurrency={formatCurrency}
+            onDone={() => setCurrentView('editor')} />;
+      case 'invoices':
+        return <DocumentListPage
+            documents={savedInvoices}
+            setDocuments={setSavedInvoices}
+            formatCurrency={formatCurrency}
+            handleSendReminder={handleSendReminder}
+            handleLoadDocument={handleLoadDocument} />;
+      case 'quotations':
+        return <QuotationListPage
+            documents={savedQuotations}
+            setDocuments={setSavedQuotations}
+            formatCurrency={formatCurrency}
+            handleCreateInvoiceFromQuote={handleCreateInvoiceFromQuote}
+            handleLoadDocument={handleLoadDocument}
+            handleSendQuotationReminder={handleSendQuotationReminder} />;
+      case 'editor':
+      default:
+        const inputType = isMobile ? 'text' : 'number';
+        const inputMode = isMobile ? 'decimal' : undefined;
+        return (
+          <>
+            <div className="sticky top-[68px] bg-gray-100/80 backdrop-blur-sm z-10 border-b no-print">
+                <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="flex justify-between items-center py-2">
+                        {/* Status text */}
+                        <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-sm font-medium text-slate-600 truncate">
+                              {isCreatingNew ? 'Creating New Document' : `Editing ${loadedDocumentInfo?.docType}`}
+                              <span className="hidden sm:inline">
+                                {!isCreatingNew && ` #${documentNumber}`}
+                              </span>
+                            </span>
+                        </div>
+                        {/* Action buttons */}
+                        <div className="flex items-center gap-2">
+                            <button onClick={handleCreateNew} className="flex items-center gap-1.5 bg-white text-slate-700 font-semibold py-2 px-3 rounded-lg shadow-sm border hover:bg-slate-100 text-sm">
+                                <PlusIcon /> New
                             </button>
-                             <button onClick={() => { clearEditor(); setEditorDocType(DocumentType.Quotation); setCurrentPage('create'); }} className="w-full p-3 text-left bg-blue-50 hover:bg-blue-100 rounded-lg text-blue-700 font-medium flex items-center gap-3">
-                                <DocumentIcon /> Create New Quotation
-                            </button>
-                            <button onClick={() => setCurrentPage('clients')} className="w-full p-3 text-left bg-gray-50 hover:bg-gray-100 rounded-lg text-gray-700 font-medium flex items-center gap-3">
-                                <UsersIcon /> Manage Clients
+                            <button onClick={handleSaveDocument} disabled={isSaving} className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-wait flex items-center gap-2">
+                                {isSaving && <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>}
+                                {isSaving ? 'Saving...' : (isCreatingNew ? 'Save' : 'Update')}
                             </button>
                         </div>
                     </div>
+                     {/* Document Number on Mobile */}
+                    {!isCreatingNew && (
+                      <div className="sm:hidden pb-2">
+                        <span className="text-xs text-slate-500 truncate">
+                          #{documentNumber}
+                        </span>
+                      </div>
+                    )}
                 </div>
-            </main>
-        )}
+            </div>
+            <main className="container mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8 p-4 sm:p-6 lg:p-8">
+              {/* Form Section */}
+              <div className="lg:col-span-1 space-y-6 no-print">
+                <div className="bg-white p-6 rounded-lg shadow-md">
+                  <h2 className="text-xl font-bold text-gray-800 mb-4">Document Type</h2>
+                  <div className="flex gap-2 bg-slate-100 p-1 rounded-lg">
+                      <button onClick={() => handleDocumentTypeChange(DocumentType.Quotation)} className={`flex-1 text-center font-semibold py-2 px-3 rounded-md transition-all duration-200 ${documentType === DocumentType.Quotation ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>
+                          Quotation
+                      </button>
+                      <button onClick={() => handleDocumentTypeChange(DocumentType.Invoice)} className={`flex-1 text-center font-semibold py-2 px-3 rounded-md transition-all duration-200 ${documentType === DocumentType.Invoice ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>
+                          Invoice
+                      </button>
+                  </div>
+                </div>
 
-        {currentPage === 'create' && (
-            <div className="p-4 sm:p-6 lg:p-8 flex flex-col lg:flex-row gap-6">
-                {/* Editor Form */}
-                <div className="w-full lg:w-1/2 space-y-6">
-                    <div className="bg-white p-6 rounded-lg shadow-sm border">
-                        <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-xl font-bold text-gray-800">
-                                {editingDocId ? `Edit ${editorDocType}` : `New ${editorDocType}`}
-                            </h2>
-                            <div className="flex bg-gray-100 p-1 rounded-lg">
-                                <button 
-                                    onClick={() => setEditorDocType(DocumentType.Invoice)}
-                                    className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${editorDocType === DocumentType.Invoice ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
+                <div className="bg-white p-6 rounded-lg shadow-md">
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-xl font-bold text-gray-800">Client Information</h2>
+                    <button 
+                        onClick={handleClearClientDetails} 
+                        type="button"
+                        className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
+                    >
+                        Clear Fields
+                    </button>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="relative">
+                        <label className="block text-sm font-medium text-gray-600 mb-1">Client Name</label>
+                        <input 
+                            type="text" 
+                            value={clientDetails.name} 
+                            onChange={e => handleClientDetailChange('name', e.target.value)} 
+                            onFocus={() => setIsClientDropdownOpen(true)}
+                            onBlur={() => setTimeout(() => setIsClientDropdownOpen(false), 200)}
+                            placeholder="Search name, email, or phone..."
+                            className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed"
+                            autoComplete="off"
+                            disabled={!isCreatingNew}
+                        />
+                        {isClientDropdownOpen && isCreatingNew && (
+                            <div className="absolute z-20 w-full bg-white border border-slate-300 rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto">
+                            {filteredSavedClients.length > 0 ? (
+                                filteredSavedClients.map(client => (
+                                <button
+                                    key={client.id}
+                                    type="button"
+                                    onClick={() => handleSavedClientSelected(client)}
+                                    className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
                                 >
-                                    Invoice
+                                    <p className="font-semibold">{client.name}</p>
+                                    <p className="text-xs text-slate-500">{client.email} {client.email && client.phone && '•'} {client.phone}</p>
                                 </button>
-                                <button 
-                                    onClick={() => setEditorDocType(DocumentType.Quotation)}
-                                    className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${editorDocType === DocumentType.Quotation ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
-                                >
-                                    Quote
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4 mb-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-600 mb-1">Document No.</label>
-                                <input type="text" value={editorDocNumber} onChange={e => setEditorDocNumber(e.target.value)} placeholder="Auto-generated" className="w-full p-2 border rounded-md" />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-600 mb-1">Client</label>
-                                <select onChange={handleSelectClient} className="w-full p-2 border rounded-md mb-2">
-                                    <option value="">Select Client...</option>
-                                    {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                                </select>
-                                <input 
-                                    type="text" 
-                                    placeholder="Or type Client Name" 
-                                    value={editorClient.name} 
-                                    onChange={e => handleClientDetailChange('name', e.target.value)}
-                                    className="w-full p-2 border rounded-md"
-                                />
-                            </div>
-                             {editorClient.name && (
-                                <div className="col-span-2 grid grid-cols-2 gap-4 bg-gray-50 p-3 rounded-md">
-                                    <input type="text" placeholder="Address" value={editorClient.address} onChange={e => handleClientDetailChange('address', e.target.value)} className="p-2 border rounded-md text-sm" />
-                                    <input type="email" placeholder="Email" value={editorClient.email} onChange={e => handleClientDetailChange('email', e.target.value)} className="p-2 border rounded-md text-sm" />
+                                ))
+                            ) : (
+                                <div className="px-4 py-2 text-sm text-slate-500">
+                                    {Array.isArray(clients) && clients.length > 0 ? "No clients match your search." : "No saved clients. Add some on the 'Clients' page!"}
                                 </div>
                             )}
-                        </div>
-
-                         <div className="grid grid-cols-2 gap-4 mb-6">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-600 mb-1">Issue Date</label>
-                                <input type="date" value={editorIssueDate} onChange={e => setEditorIssueDate(e.target.value)} className="w-full p-2 border rounded-md" />
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-600 mb-1">{editorDocType === DocumentType.Invoice ? 'Due Date' : 'Valid Until'}</label>
-                                <input type="date" value={editorDueDate} onChange={e => setEditorDueDate(e.target.value)} className="w-full p-2 border rounded-md" />
-                            </div>
-                        </div>
-
-                        <div className="mb-6">
-                             <label className="block text-sm font-medium text-gray-600 mb-2">Line Items</label>
-                             <div className="space-y-4">
-                                {editorLineItems.map((item, index) => (
-                                    <div key={item.id} className="bg-gray-50 p-3 rounded-md border relative group">
-                                        <button onClick={() => handleRemoveItem(index)} className="absolute top-2 right-2 text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"><TrashIcon /></button>
-                                        <div className="grid grid-cols-12 gap-2 mb-2">
-                                            <div className="col-span-12 sm:col-span-6">
-                                                <input 
-                                                    type="text" 
-                                                    placeholder="Item Name" 
-                                                    value={item.name} 
-                                                    onChange={e => handleUpdateItem(index, 'name', e.target.value)} 
-                                                    className="w-full p-1.5 border rounded-md font-medium text-sm"
-                                                    list={`items-list-${index}`}
-                                                />
-                                                <datalist id={`items-list-${index}`}>
-                                                    {items.map(i => <option key={i.id} value={i.name} />)}
-                                                </datalist>
-                                            </div>
-                                            <div className="col-span-4 sm:col-span-2">
-                                                <input type="number" placeholder="Qty" value={item.quantity} onChange={e => handleUpdateItem(index, 'quantity', Number(e.target.value))} className="w-full p-1.5 border rounded-md text-sm text-center" />
-                                            </div>
-                                            <div className="col-span-4 sm:col-span-2">
-                                                <input type="number" placeholder="Price" value={item.price} onChange={e => handleUpdateItem(index, 'price', Number(e.target.value))} className="w-full p-1.5 border rounded-md text-sm text-right" />
-                                            </div>
-                                             <div className="col-span-4 sm:col-span-2 flex items-center justify-end text-sm font-bold text-gray-700">
-                                                {formatCurrency(item.price * item.quantity)}
-                                            </div>
+                        )}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600 mb-1">Client Address</label>
+                      <input type="text" value={clientDetails.address} onChange={e => handleClientDetailChange('address', e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                    </div>
+                     <div>
+                      <label className="block text-sm font-medium text-gray-600 mb-1">Client Email</label>
+                      <input type="email" value={clientDetails.email} onChange={e => handleClientDetailChange('email', e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600 mb-1">Client Phone</label>
+                      <input type="tel" value={clientDetails.phone} onChange={e => handleClientDetailChange('phone', e.target.value)} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-white p-6 rounded-lg shadow-md">
+                  <h2 className="text-xl font-bold text-gray-800 mb-4">Document Details</h2>
+                  <div className="grid grid-cols-2 gap-4">
+                      <div>
+                          <label className="block text-sm font-medium text-gray-600 mb-1">{documentType} Number</label>
+                          <input 
+                            type="text" 
+                            value={documentNumber} 
+                            onChange={e => setDocumentNumber(e.target.value)} 
+                            placeholder={isCreatingNew ? "Auto-generated from client" : ""}
+                            className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed"
+                            disabled={!isCreatingNew}
+                          />
+                      </div>
+                       <div>
+                          <label className="block text-sm font-medium text-gray-600 mb-1">Issue Date</label>
+                          <input type="date" value={issueDate} onChange={handleIssueDateChange} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                      </div>
+                       <div>
+                          <label className="block text-sm font-medium text-gray-600 mb-1">{documentType === DocumentType.Invoice ? 'Payment Terms' : 'Validity'}</label>
+                          <select value={dueDateOption} onChange={handleDueDateChange} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500">
+                              <option value="15days">15 Days</option>
+                              <option value="30days">30 Days</option>
+                              <option value="45days">45 Days</option>
+                              <option value="60days">60 Days</option>
+                              <option value="custom">Custom</option>
+                          </select>
+                      </div>
+                      <div>
+                          <label className="block text-sm font-medium text-gray-600 mb-1">{documentType === DocumentType.Invoice ? 'Due Date' : 'Valid Until'}</label>
+                          <input type="date" value={dueDate} onChange={e => { setDueDate(e.target.value); setDueDateOption('custom'); }} className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                      </div>
+                  </div>
+                  {documentType === DocumentType.Invoice && (
+                    <div className="space-y-2 mt-4 pt-4 border-t">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                            <input 
+                                type="checkbox"
+                                checked={!!recurrence}
+                                onChange={e => {
+                                    if (e.target.checked) {
+                                        setRecurrence({ frequency: 'monthly', interval: 1 });
+                                    } else {
+                                        setRecurrence(null);
+                                    }
+                                }}
+                                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                            />
+                            <span className="font-medium text-gray-700">Make this a recurring invoice</span>
+                        </label>
+                        {recurrence && (
+                            <div className="pl-6 pt-4">
+                                <div className="bg-slate-50 p-4 rounded-lg border space-y-4">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-600 mb-1">Repeat Every</label>
+                                            <input 
+                                                type="number" 
+                                                min="1"
+                                                value={recurrence.interval}
+                                                onChange={e => setRecurrence(r => r ? {...r, interval: parseInt(e.target.value, 10) || 1} : null)}
+                                                className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                                            />
                                         </div>
-                                        <div className="relative">
-                                             <textarea 
-                                                placeholder="Description" 
-                                                value={item.description} 
-                                                onChange={e => handleUpdateItem(index, 'description', e.target.value)} 
-                                                className="w-full p-1.5 border rounded-md text-sm pr-8"
-                                                rows={1}
-                                             />
-                                             <button 
-                                                onClick={() => handleGenerateDescription(index)}
-                                                disabled={generatingDescIndex === index}
-                                                className="absolute right-2 top-1.5 text-indigo-400 hover:text-indigo-600 disabled:text-gray-300"
-                                                title="Generate description with AI"
-                                             >
-                                                <SparklesIcon isLoading={generatingDescIndex === index} />
-                                             </button>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-600 mb-1">Frequency</label>
+                                            <select 
+                                                value={recurrence.frequency}
+                                                onChange={e => setRecurrence(r => r ? {...r, frequency: e.target.value as Recurrence['frequency']} : null)}
+                                                className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                                            >
+                                                <option value="daily">Day(s)</option>
+                                                <option value="weekly">Week(s)</option>
+                                                <option value="monthly">Month(s)</option>
+                                                <option value="yearly">Year(s)</option>
+                                            </select>
                                         </div>
                                     </div>
-                                ))}
-                             </div>
-                             <button onClick={handleAddItem} className="mt-2 text-sm text-indigo-600 font-medium flex items-center gap-1 hover:underline">
-                                <PlusIcon /> Add Item
-                             </button>
-                        </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-600 mb-1">End Date (Optional)</label>
+                                        <input 
+                                            type="date" 
+                                            value={recurrence.endDate || ''}
+                                            onChange={e => setRecurrence(r => r ? {...r, endDate: e.target.value || null} : null)}
+                                            className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                  )}
+                </div>
 
+                <div className="bg-white p-6 rounded-lg shadow-md">
+                  <h2 className="text-xl font-bold text-gray-800 mb-4">Items</h2>
+                  
+                  <div className="bg-slate-50 p-4 rounded-lg border space-y-4 mb-6">
+                    <div className="flex justify-between items-center">
+                        <h3 className="text-lg font-semibold text-gray-700">Add an Item</h3>
+                        <button 
+                            onClick={handleClearNewLineItem} 
+                            type="button"
+                            className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
+                        >
+                            Clear Fields
+                        </button>
+                    </div>
+                    
+                    <div className="relative">
+                      <label className="block text-sm font-medium text-gray-600 mb-1">Item Name</label>
+                      <input
+                        type="text"
+                        placeholder="Start typing to search or add a new item..."
+                        value={newLineItem.name}
+                        onChange={e => handleNewLineItemChange('name', e.target.value)}
+                        onFocus={() => setIsItemDropdownOpen(true)}
+                        onBlur={() => setTimeout(() => setIsItemDropdownOpen(false), 200)}
+                        className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                        autoComplete="off"
+                      />
+                      {isItemDropdownOpen && (
+                        <div className="absolute z-20 w-full bg-white border border-slate-300 rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto">
+                          {filteredSavedItems.length > 0 ? (
+                            filteredSavedItems.map(item => (
+                              <button
+                                key={item.id}
+                                type="button"
+                                onClick={() => handleSavedItemSelected(item)}
+                                className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                              >
+                                <p className="font-semibold">{item.name}</p>
+                                {item.description && <p className="text-xs text-slate-500">{item.description} &bull; </p>} 
+                                <p className="text-xs text-slate-500">Cost: {formatCurrency(item.costPrice)} &bull; Sell: {formatCurrency(item.price)}</p>
+                              </button>
+                            ))
+                          ) : (
+                            <div className="px-4 py-2 text-sm text-slate-500">
+                                {Array.isArray(items) && items.length > 0 ? "No items match your search." : "No saved items. Add some on the 'Items' page!"}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-600 mb-1">Description (Optional)</label>
+                        <textarea
+                            rows={2}
+                            placeholder="Additional details for this item..."
+                            value={newLineItem.description}
+                            onChange={e => handleNewLineItemChange('description', e.target.value)}
+                            className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 resize-none"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-600 mb-1">Quantity</label>
+                        <input 
+                            type={inputType}
+                            inputMode={inputMode}
+                            value={newLineItem.quantity} 
+                            onChange={e => handleNewLineItemChange('quantity', e.target.value)} 
+                            className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
                         <div>
-                            <label className="block text-sm font-medium text-gray-600 mb-1">Notes / Terms</label>
-                            <textarea value={editorNotes} onChange={e => setEditorNotes(e.target.value)} rows={3} className="w-full p-2 border rounded-md text-sm" />
+                            <label className="block text-sm font-medium text-gray-600 mb-1">Cost</label>
+                            <input 
+                                type={inputType}
+                                inputMode={inputMode}
+                                step={inputType === 'number' ? "0.01" : undefined}
+                                value={newLineItem.costPrice} 
+                                onChange={e => handleNewLineItemChange('costPrice', e.target.value)} 
+                                className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-600 mb-1">Markup (%)</label>
+                            <input 
+                                type={inputType}
+                                inputMode={inputMode}
+                                step={inputType === 'number' ? "0.01" : undefined}
+                                value={newLineItem.markup} 
+                                onChange={e => handleNewLineItemChange('markup', e.target.value)} 
+                                className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-600 mb-1">Sell</label>
+                            <input 
+                                type={inputType}
+                                inputMode={inputMode}
+                                step={inputType === 'number' ? "0.01" : undefined}
+                                value={newLineItem.price} 
+                                onChange={e => handleNewLineItemChange('price', e.target.value)} 
+                                className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
                         </div>
                     </div>
+                    
+                    <button onClick={handleAddLineItem} className="w-full flex items-center justify-center gap-2 bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700">
+                        <PlusIcon /> Add Item to Document
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    {lineItems.map((item) => (
+                      <div key={item.id} className="p-3 bg-slate-50 rounded-lg border space-y-2">
+                          <div className="col-span-12">
+                              <label className="block text-sm font-medium text-gray-600 mb-1">Item Name</label>
+                              <input
+                                  type="text"
+                                  value={item.name}
+                                  onChange={e => handleLineItemChange(item.id, 'name', e.target.value)}
+                                  className="flex-grow w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                              />
+                          </div>
+                          <div className="col-span-12">
+                              <label className="block text-sm font-medium text-gray-600 mb-1">Description (Optional)</label>
+                              <div className="flex gap-1">
+                                  <textarea
+                                      rows={2}
+                                      value={item.description}
+                                      onChange={e => handleLineItemChange(item.id, 'description', e.target.value)}
+                                      className="flex-grow w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 resize-none"
+                                  />
+                                  <button
+                                      onClick={() => handleGenerateDescription(item.id, item.name, item.description)}
+                                      className="flex-shrink-0 p-2 bg-indigo-100 text-indigo-600 rounded-md hover:bg-indigo-200"
+                                      title="Generate description with AI"
+                                      disabled={generatingStates[item.id]}
+                                  >
+                                      <SparklesIcon isLoading={generatingStates[item.id]} />
+                                  </button>
+                              </div>
+                          </div>
+                          <div className="grid grid-cols-12 gap-2">
+                            <div className="col-span-12 sm:col-span-2">
+                                <label className="block text-sm font-medium text-gray-600 mb-1">Qty</label>
+                                <input 
+                                    type={inputType}
+                                    inputMode={inputMode}
+                                    value={item.quantity} 
+                                    onChange={e => handleLineItemChange(item.id, 'quantity', e.target.value)} 
+                                    className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                            </div>
+                            <div className="col-span-4 sm:col-span-3">
+                                <label className="block text-sm font-medium text-gray-600 mb-1">Cost</label>
+                                <input 
+                                    type={inputType} inputMode={inputMode} step={inputType === 'number' ? "0.01" : undefined}
+                                    value={item.costPrice} 
+                                    onChange={e => handleLineItemChange(item.id, 'costPrice', e.target.value)} 
+                                    className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                            </div>
+                            <div className="col-span-4 sm:col-span-3">
+                                <label className="block text-sm font-medium text-gray-600 mb-1">Markup%</label>
+                                <input 
+                                    type={inputType} inputMode={inputMode} step={inputType === 'number' ? "0.01" : undefined}
+                                    value={item.markup} 
+                                    onChange={e => handleLineItemChange(item.id, 'markup', e.target.value)} 
+                                    className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                            </div>
+                            <div className="col-span-4 sm:col-span-3">
+                                <label className="block text-sm font-medium text-gray-600 mb-1">Selling</label>
+                                <input 
+                                    type={inputType} inputMode={inputMode} step={inputType === 'number' ? "0.01" : undefined}
+                                    value={item.price} 
+                                    onChange={e => handleLineItemChange(item.id, 'price', e.target.value)} 
+                                    className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"/>
+                            </div>
+                            <div className="col-span-12 sm:col-span-1 flex items-end">
+                                <button onClick={() => handleDeleteLineItem(item.id)} className="w-full h-10 p-2 bg-red-100 text-red-600 rounded-md hover:bg-red-200 flex justify-center items-center">
+                                    <TrashIcon />
+                                </button>
+                            </div>
+                          </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
-                {/* Preview & Actions */}
-                <div className="w-full lg:w-1/2 flex flex-col gap-6">
-                     <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
-                        <DocumentPreview 
-                            documentType={editorDocType}
-                            companyDetails={activeCompany.details}
-                            clientDetails={editorClient}
-                            documentNumber={editorDocNumber || 'DRAFT'}
-                            issueDate={editorIssueDate}
-                            dueDate={editorDueDate}
-                            lineItems={editorLineItems}
-                            notes={editorNotes}
-                            subtotal={subtotal}
-                            taxAmount={taxAmount}
-                            taxRate={activeCompany.taxRate}
-                            total={total}
-                            companyLogo={activeCompany.logo}
-                            bankQRCode={activeCompany.bankQRCode}
-                            formatCurrency={formatCurrency}
-                            status={null}
-                            template={activeCompany.template}
-                            accentColor={activeCompany.accentColor}
-                        />
-                     </div>
-                     <div className="flex gap-4 justify-end">
-                         <button onClick={() => setCurrentPage('dashboard')} className="px-4 py-2 bg-white border border-gray-300 text-gray-700 font-medium rounded-lg shadow-sm hover:bg-gray-50">
-                             Cancel
-                         </button>
-                         <button onClick={() => window.print()} className="px-4 py-2 bg-white border border-gray-300 text-gray-700 font-medium rounded-lg shadow-sm hover:bg-gray-50 flex items-center gap-2">
-                             <PrinterIcon /> Print
-                         </button>
-                         <button onClick={handleSaveDocumentInit} className="px-6 py-2 bg-indigo-600 text-white font-medium rounded-lg shadow-md hover:bg-indigo-700 flex items-center gap-2">
-                             <DownloadIcon /> Save Document
-                         </button>
-                     </div>
+                <div className="bg-white p-6 rounded-lg shadow-md">
+                  <h2 className="text-xl font-bold text-gray-800 mb-4">Notes / Terms</h2>
+                  <textarea 
+                      rows={4} 
+                      value={notes} 
+                      onChange={e => setNotes(e.target.value)}
+                      className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500"
+                      placeholder="Enter notes, terms and conditions, or payment instructions here..."
+                  />
                 </div>
+              </div>
+
+              {/* Preview and Actions Section */}
+              <div className="lg:col-span-2">
+                <div 
+                  ref={previewContainerRef} 
+                  data-print-container="true"
+                  className="bg-white p-6 rounded-lg shadow-md sticky top-[132px]"
+                >
+                    <div className="flex flex-wrap justify-between items-center gap-4 mb-6 border-b pb-4 no-print">
+                      <h2 className="text-xl font-bold text-gray-800">Preview</h2>
+                      <div className="flex items-center gap-2">
+                          <button onClick={handlePrint} className="flex items-center gap-2 bg-white text-slate-700 font-semibold py-2 px-3 rounded-lg shadow-sm border hover:bg-slate-100 text-sm">
+                              <PrinterIcon /> <span className="hidden sm:inline">Print</span>
+                          </button>
+                          <button onClick={handleDownloadPdf} className="flex items-center gap-2 bg-white text-slate-700 font-semibold py-2 px-3 rounded-lg shadow-sm border hover:bg-slate-100 text-sm">
+                              <DownloadIcon /> <span className="hidden sm:inline">PDF</span>
+                          </button>
+                          <div className="relative">
+                            <button 
+                                onClick={() => setIsSendDropdownOpen(prev => !prev)}
+                                disabled={!clientDetails.name}
+                                className="flex items-center gap-2 bg-indigo-600 text-white font-semibold py-2 px-3 rounded-lg shadow-sm border border-indigo-600 hover:bg-indigo-700 text-sm disabled:bg-indigo-400 disabled:cursor-not-allowed"
+                            >
+                                <SendIcon /> <span className="hidden sm:inline">Send</span>
+                            </button>
+                             {isSendDropdownOpen && (
+                                <div 
+                                    className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-20 ring-1 ring-black ring-opacity-5"
+                                    onMouseLeave={() => setIsSendDropdownOpen(false)}
+                                >
+                                    <div className="py-1">
+                                        <button 
+                                            onClick={() => { handleSendViaEmail(); setIsSendDropdownOpen(false); }}
+                                            disabled={!clientDetails.email}
+                                            className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
+                                        >
+                                            <MailIcon /> Email
+                                        </button>
+                                        <button 
+                                            onClick={() => { handleSendViaWhatsApp(); setIsSendDropdownOpen(false); }}
+                                            className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                                        >
+                                            <WhatsAppIcon /> WhatsApp
+                                        </button>
+                                    </div>
+                                </div>
+                             )}
+                          </div>
+                      </div>
+                    </div>
+                    <div 
+                      ref={previewScrollerRef}
+                      data-print-scroller="true"
+                      className="max-h-[70vh] overflow-y-auto pr-2"
+                    >
+                      <DocumentPreview
+                        documentType={documentType}
+                        companyDetails={companyDetails}
+                        clientDetails={clientDetails}
+                        documentNumber={documentNumber}
+                        issueDate={issueDate}
+                        dueDate={dueDate}
+                        lineItems={lineItems}
+                        notes={notes}
+                        subtotal={subtotal}
+                        taxAmount={taxAmount}
+                        taxRate={taxRate}
+                        total={total}
+                        companyLogo={companyLogo}
+                        bankQRCode={bankQRCode}
+                        formatCurrency={formatCurrency}
+                        payments={payments}
+                        status={status}
+                        template={template}
+                        accentColor={accentColor}
+                      />
+                    </div>
+                </div>
+              </div>
+            </main>
+          </>
+        );
+    }
+  };
+  
+  const DesktopSidebarButton: React.FC<{
+    onClick: () => void;
+    isActive: boolean;
+    title: string;
+    children: React.ReactNode;
+  }> = ({ onClick, isActive, title, children }) => (
+    <button 
+      onClick={onClick}
+      className={`relative group flex items-center justify-center gap-2 p-3 rounded-md transition-colors text-sm font-medium w-12 h-12 ${isActive ? activeNavButtonClasses : inactiveNavButtonClasses}`}
+      title={title}
+    >
+      {children}
+      <span className="absolute left-full ml-3 px-2 py-1 bg-slate-700 text-white text-xs rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+          {title}
+      </span>
+    </button>
+  );
+
+  return (
+    <div className="min-h-screen bg-gray-100">
+      <header className="bg-white shadow-md sticky top-0 z-20 h-[68px] flex items-center no-print">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center">
+             <div className="flex items-center gap-2 sm:gap-4">
+                <h1 className="text-xl sm:text-2xl font-bold text-indigo-600">InvQuo</h1>
+                <nav className="hidden sm:flex items-center gap-2 bg-slate-100 p-1 rounded-lg">
+                    <button onClick={() => setCurrentView('editor')} className={`py-1 px-3 rounded-md transition-colors text-sm font-medium ${currentView === 'editor' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Editor</button>
+                    <button onClick={() => setCurrentView('quotations')} className={`py-1 px-3 rounded-md transition-colors text-sm font-medium ${currentView === 'quotations' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Quotations</button>
+                    <button onClick={() => setCurrentView('invoices')} className={`py-1 px-3 rounded-md transition-colors text-sm font-medium ${currentView === 'invoices' ? 'bg-white shadow text-indigo-700' : 'text-slate-600 hover:bg-slate-200'}`}>Invoices</button>
+                </nav>
             </div>
-        )}
+            <div className="flex items-center gap-4">
+              <button
+                  onClick={handleRefresh}
+                  className="p-2 text-indigo-600 bg-indigo-50 rounded-full hover:bg-indigo-100 transition-colors"
+                  title="Refresh Data"
+                  disabled={isRefreshing}
+              >
+                  <RefreshIcon className={isRefreshing ? 'animate-spin' : ''} />
+              </button>
+              {isMobile ? (
+                  <span className="text-slate-600 text-sm font-medium truncate max-w-[120px]">
+                      {truncateEmail(firebaseUser.email, 15)}
+                  </span>
+              ) : (
+                  <span className="text-slate-600 text-sm">Welcome, <span className="font-bold">{firebaseUser.email}</span></span>
+              )}
+              <button onClick={handleLogout} className="font-semibold text-indigo-600 py-1 px-3 rounded-lg hover:bg-indigo-50 text-sm">
+                  Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
 
-        {currentPage === 'invoices' && (
-            <DocumentListPage 
-                documents={savedInvoices}
-                setDocuments={setSavedInvoices}
-                formatCurrency={formatCurrency}
-                handleSendReminder={handleSendReminder}
-                handleLoadDocument={loadDocumentIntoEditor}
-            />
-        )}
-        
-        {currentPage === 'quotations' && (
-            <QuotationListPage 
-                documents={savedQuotations}
-                setDocuments={setSavedQuotations}
-                formatCurrency={formatCurrency}
-                handleCreateInvoiceFromQuote={createInvoiceFromQuote}
-                handleLoadDocument={loadDocumentIntoEditor}
-                handleSendQuotationReminder={handleSendQuotationReminder}
-            />
-        )}
+       <nav className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t z-30 grid grid-cols-6 no-print">
+           <button onClick={() => setCurrentView('editor')} className={`${navButtonClasses} ${currentView === 'editor' ? activeNavButtonClasses : inactiveNavButtonClasses}`}>
+               <FileTextIcon /><span className="text-xs">Editor</span>
+           </button>
+            <button onClick={() => setCurrentView('quotations')} className={`${navButtonClasses} ${currentView === 'quotations' ? activeNavButtonClasses : inactiveNavButtonClasses}`}>
+               <DocumentIcon /><span className="text-xs">Quotes</span>
+           </button>
+           <button onClick={() => setCurrentView('invoices')} className={`${navButtonClasses} ${currentView === 'invoices' ? activeNavButtonClasses : inactiveNavButtonClasses}`}>
+               <CashIcon /><span className="text-xs">Invoices</span>
+           </button>
+            <button onClick={() => setCurrentView('clients')} className={`${navButtonClasses} ${currentView === 'clients' ? activeNavButtonClasses : inactiveNavButtonClasses}`}>
+               <UsersIcon /><span className="text-xs">Clients</span>
+           </button>
+           <button onClick={() => setCurrentView('items')} className={`${navButtonClasses} ${currentView === 'items' ? activeNavButtonClasses : inactiveNavButtonClasses}`}>
+               <ListIcon /><span className="text-xs">Items</span>
+           </button>
+           <button onClick={() => setCurrentView('setup')} className={`${navButtonClasses} ${currentView === 'setup' ? activeNavButtonClasses : inactiveNavButtonClasses}`}>
+               <CogIcon /><span className="text-xs">Setup</span>
+           </button>
+       </nav>
 
-        {currentPage === 'clients' && (
-            <ClientListPage clients={clients} setClients={(newClients) => { setClients(newClients as Client[]); saveClients(newClients as Client[]); }} onDone={() => setCurrentPage('dashboard')} />
-        )}
+        <div className="hidden sm:block fixed top-0 left-0 h-full bg-white pt-[68px] z-10 shadow-lg no-print">
+             <nav className="flex flex-col p-2 space-y-1">
+                 <DesktopSidebarButton onClick={() => setCurrentView('clients')} isActive={currentView === 'clients'} title="Clients"><UsersIcon /></DesktopSidebarButton>
+                 <DesktopSidebarButton onClick={() => setCurrentView('items')} isActive={currentView === 'items'} title="Items"><ListIcon /></DesktopSidebarButton>
+                 <DesktopSidebarButton onClick={() => setCurrentView('setup')} isActive={currentView === 'setup'} title="Setup"><CogIcon /></DesktopSidebarButton>
+             </nav>
+        </div>
         
-        {currentPage === 'items' && (
-            <ItemListPage 
-                items={items} 
-                setItems={(newItems) => { setItems(newItems as Item[]); saveItems(newItems as Item[]); }} 
-                categories={itemCategories}
-                setCategories={(newCats) => { setItemCategories(newCats as string[]); saveItemCategories(newCats as string[]); }}
-                formatCurrency={formatCurrency}
-                onDone={() => setCurrentPage('dashboard')} 
-            />
-        )}
-        
-        {currentPage === 'settings' && user && (
-            <SetupPage 
-                user={user}
-                companies={companies} 
-                setCompanies={(newComps) => { setCompanies(newComps as Company[]); saveCompanies(newComps as Company[]); }} 
-                onDone={() => setCurrentPage('dashboard')}
-                activeCompanyId={activeCompanyId}
-                setActiveCompanyId={(id) => { setActiveCompanyId(id as number); saveActiveCompanyId(id as number); }}
-                setClients={(c) => { setClients(c as Client[]); saveClients(c as Client[]); }}
-                setItems={(i) => { setItems(i as Item[]); saveItems(i as Item[]); }}
-                setItemCategories={(ic) => { setItemCategories(ic as string[]); saveItemCategories(ic as string[]); }}
-                setSavedInvoices={(si) => { setSavedInvoices(si as SavedDocument[]); saveInvoices(si as SavedDocument[]); }}
-                setSavedQuotations={(sq) => { setSavedQuotations(sq as SavedDocument[]); saveQuotations(sq as SavedDocument[]); }}
-                defaultUserData={{
-                    companies: [], clients: [], items: [], savedInvoices: [], savedQuotations: [], activeCompanyId: 0, itemCategories: []
-                }}
-            />
-        )}
-      </div>
+        <div className="sm:pl-16 pb-16 sm:pb-0">
+          {renderCurrentView()}
+        </div>
 
-      <SaveItemsModal
-        isOpen={saveItemsModalOpen}
-        newItems={editorLineItems.filter(li => li.name && !items.some(i => i.name === li.name))}
-        onConfirm={() => { if(pendingSaveDoc) finalizeSave(pendingSaveDoc, { newItems: true, newClient: !clients.some(c => c.name === editorClient.name) }); }}
-        onDecline={() => { if(pendingSaveDoc) finalizeSave(pendingSaveDoc, { newItems: false, newClient: !clients.some(c => c.name === editorClient.name) }); }}
-        onCancel={() => { setSaveItemsModalOpen(false); setPendingSaveDoc(null); }}
-        formatCurrency={formatCurrency}
-      />
-      
-      <SaveClientModal
-        isOpen={saveClientModalOpen}
-        newClient={editorClient}
-        onConfirm={() => { if(pendingSaveDoc) finalizeSave(pendingSaveDoc, { newClient: true }); }}
-        onDecline={() => { if(pendingSaveDoc) finalizeSave(pendingSaveDoc, { newClient: false }); }}
-        onCancel={() => { setSaveClientModalOpen(false); setPendingSaveDoc(null); }}
-      />
+        {isSaveItemsModalOpen && (
+            <SaveItemsModal
+                isOpen={isSaveItemsModalOpen}
+                newItems={potentialNewItems}
+                onConfirm={handleConfirmSaveNewItems}
+                onDecline={handleDeclineSaveNewItems}
+                onCancel={handleCancelSaveNewItems}
+                formatCurrency={formatCurrency}
+            />
+        )}
+        {isSaveClientModalOpen && potentialNewClient && (
+            <SaveClientModal
+                isOpen={isSaveClientModalOpen}
+                newClient={potentialNewClient}
+                onConfirm={handleConfirmSaveNewClient}
+                onDecline={handleDeclineSaveNewClient}
+                onCancel={handleCancelSaveNewClient}
+            />
+        )}
+        {isUpdateClientModalOpen && clientUpdateInfo && (
+            <UpdateClientModal
+                isOpen={isUpdateClientModalOpen}
+                clientInfo={clientUpdateInfo}
+                onConfirm={handleConfirmUpdateClient}
+                onDecline={handleDeclineUpdateClient}
+                onCancel={handleCancelUpdateClient}
+            />
+        )}
     </div>
   );
-}
+};
 
 export default App;
