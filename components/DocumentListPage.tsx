@@ -25,7 +25,6 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
 
   const getDisplayStatusText = (doc: SavedDocument): string => {
     if (!!doc.recurrence && !doc.recurrenceParentId) return 'Recurring';
-    if (doc.status === InvoiceStatus.Draft) return 'Draft';
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -67,7 +66,6 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
         PartiallyPaid: { total: 0, balanceDue: 0, count: 0 },
         Pending: { total: 0, count: 0 },
         Overdue: { total: 0, count: 0 },
-        Draft: { count: 0 }
     };
 
     if (!Array.isArray(documents)) return initialSummary;
@@ -97,9 +95,6 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
             case 'Overdue':
                 acc.Overdue.total += balanceDue;
                 acc.Overdue.count++;
-                break;
-            case 'Draft':
-                acc.Draft.count++;
                 break;
         }
         return acc;
@@ -225,7 +220,6 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
         case 'Pending': return { text: 'Pending', color: 'bg-yellow-100 text-yellow-700' };
         case 'Overdue': return { text: 'Overdue', color: 'bg-red-100 text-red-700' };
         case 'Recurring': return { text: 'Recurring', color: 'bg-purple-100 text-purple-700' };
-        case 'Draft': return { text: 'Draft', color: 'bg-gray-200 text-gray-700 border border-gray-300' };
         default: return { text: 'Pending', color: 'bg-yellow-100 text-yellow-700' };
     }
   };
@@ -251,13 +245,13 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
             onMouseDown={(e) => e.stopPropagation()}
         >
             <div className="py-1" role="menu" aria-orientation="vertical">
-                <button onClick={() => { handleRecordPaymentClick(doc); setOpenDropdownId(null); }} disabled={doc.status === InvoiceStatus.Draft} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed">
+                <button onClick={() => { handleRecordPaymentClick(doc); setOpenDropdownId(null); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">
                     <CashIcon /> Record Payment
                 </button>
                 <button onClick={() => { handleLoadDocument(doc); setOpenDropdownId(null); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">
                     <ViewIcon /> View/Edit Invoice
                 </button>
-                 {doc.status !== InvoiceStatus.Paid && doc.status !== InvoiceStatus.Draft && (
+                 {doc.status !== InvoiceStatus.Paid && (
                     <>
                         <div className="border-t my-1"></div>
                         <button onClick={() => { handleSendReminder(doc, 'email'); setOpenDropdownId(null); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">
@@ -283,7 +277,7 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
     </div>
   );
   
-  const filterOptions = ['All', 'Paid', 'Partially Paid', 'Pending', 'Overdue', 'Recurring', 'Draft'];
+  const filterOptions = ['All', 'Paid', 'Partially Paid', 'Pending', 'Overdue', 'Recurring'];
 
   return (
     <>
@@ -299,7 +293,7 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
             )}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <div className="bg-green-50 border border-green-200 p-4 rounded-lg">
                 <h3 className="text-sm font-semibold text-green-800">Total Paid</h3>
                 <p className="text-2xl font-bold text-green-700">{formatCurrency(summary.Paid.total)}</p>
@@ -319,11 +313,6 @@ const DocumentListPage: React.FC<DocumentListPageProps> = ({ documents, setDocum
                 <h3 className="text-sm font-semibold text-red-800">Overdue</h3>
                 <p className="text-2xl font-bold text-red-700">{formatCurrency(summary.Overdue.total)}</p>
                 <p className="text-xs text-red-600">{summary.Overdue.count} invoice(s)</p>
-            </div>
-            <div className="bg-gray-50 border border-gray-200 p-4 rounded-lg">
-                <h3 className="text-sm font-semibold text-gray-800">Drafts</h3>
-                <p className="text-2xl font-bold text-gray-700">{summary.Draft.count}</p>
-                <p className="text-xs text-gray-600">Not finalized</p>
             </div>
           </div>
           

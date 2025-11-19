@@ -710,33 +710,24 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSaveDocument = (asDraft: boolean = false) => {
-    if (!asDraft) {
-        if (!clientDetails.name || lineItems.length === 0) {
-            alert('Please fill in client details and add at least one item to finalize.');
-            return;
-        }
+  const handleSaveDocument = () => {
+    if (!clientDetails.name || lineItems.length === 0) {
+        alert('Please fill in client details and add at least one item to save.');
+        return;
     }
     
     let finalDocNum = documentNumber.trim();
     
-    // If finalizing a draft (or empty number), check if we need to regenerate the number
-    if (!asDraft && (finalDocNum.startsWith('DRAFT-') || !finalDocNum)) {
+    // If number is empty, try to regenerate
+    if (!finalDocNum) {
          const newNum = generateDocumentNumber(clientDetails, documentType, savedInvoices, savedQuotations);
          if (newNum) {
              finalDocNum = newNum;
              setDocumentNumber(newNum);
-         }
-    }
-
-    if (!finalDocNum) {
-        if (asDraft) {
-            finalDocNum = `DRAFT-${Date.now().toString().slice(-6)}`;
-            setDocumentNumber(finalDocNum);
-        } else {
+         } else {
             alert('Document number cannot be empty. Please ensure client details are filled to generate a number.');
             return;
-        }
+         }
     }
 
     const allDocs = [...savedInvoices, ...savedQuotations];
@@ -754,26 +745,18 @@ const App: React.FC = () => {
     let quotationStatus: QuotationStatus | null = null;
 
     if (documentType === DocumentType.Invoice) {
-        if (asDraft) {
-            invoiceStatus = InvoiceStatus.Draft;
+        const current = loadedDocumentInfo?.status as InvoiceStatus;
+        if (!current) {
+            invoiceStatus = InvoiceStatus.Pending;
         } else {
-            const current = loadedDocumentInfo?.status as InvoiceStatus;
-            if (!current || current === InvoiceStatus.Draft) {
-                invoiceStatus = InvoiceStatus.Pending;
-            } else {
-                invoiceStatus = current;
-            }
+            invoiceStatus = current;
         }
     } else {
-        if (asDraft) {
-            quotationStatus = QuotationStatus.Draft;
+        const current = loadedDocumentInfo?.status as QuotationStatus;
+        if (!current) {
+            quotationStatus = QuotationStatus.Active;
         } else {
-            const current = loadedDocumentInfo?.status as QuotationStatus;
-            if (!current || current === QuotationStatus.Draft) {
-                quotationStatus = QuotationStatus.Active;
-            } else {
-                quotationStatus = current;
-            }
+            quotationStatus = current;
         }
     }
 
@@ -805,7 +788,7 @@ const App: React.FC = () => {
     }
 
     const isExistingClient = clients.some(c => c.name.trim().toLowerCase() === clientDetails.name.trim().toLowerCase());
-    if (isCreatingNew && clientDetails.name.trim() && !isExistingClient && !asDraft) { // Only prompt for new client when creating new doc (not draft)
+    if (isCreatingNew && clientDetails.name.trim() && !isExistingClient) { // Only prompt for new client when creating new doc
         setPotentialNewClient(clientDetails);
         setPendingDoc(docToSave);
         setIsSaveClientModalOpen(true);
@@ -1364,10 +1347,7 @@ const App: React.FC = () => {
                             <button onClick={handleCreateNew} className="flex items-center gap-1.5 bg-white text-slate-700 font-semibold py-2 px-3 rounded-lg shadow-sm border hover:bg-slate-100 text-sm">
                                 <PlusIcon /> New
                             </button>
-                            <button onClick={() => handleSaveDocument(true)} disabled={isSaving} className="bg-white text-slate-700 font-semibold py-2 px-3 rounded-lg shadow-sm border hover:bg-slate-100 disabled:opacity-50 disabled:cursor-wait flex items-center gap-2 text-sm">
-                                <span>Draft</span>
-                            </button>
-                            <button onClick={() => handleSaveDocument(false)} disabled={isSaving} className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-wait flex items-center gap-2">
+                            <button onClick={() => handleSaveDocument()} disabled={isSaving} className="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-wait flex items-center gap-2">
                                 {isSaving && <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>}
                                 {isSaving ? 'Saving...' : (isCreatingNew ? 'Save' : 'Update')}
                             </button>
@@ -1471,7 +1451,7 @@ const App: React.FC = () => {
                             onChange={e => setDocumentNumber(e.target.value)} 
                             placeholder={isCreatingNew ? "Auto-generated from client" : ""}
                             className="w-full p-2 bg-white text-slate-900 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed"
-                            disabled={!isCreatingNew && loadedDocumentInfo?.status !== InvoiceStatus.Draft && loadedDocumentInfo?.status !== QuotationStatus.Draft}
+                            disabled={!isCreatingNew}
                           />
                       </div>
                        <div>

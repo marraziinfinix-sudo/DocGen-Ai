@@ -23,7 +23,6 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
 
 
   const getQuotationDisplayStatusText = (doc: SavedDocument): QuotationStatus => {
-    if (doc.quotationStatus === QuotationStatus.Draft) return QuotationStatus.Draft;
     if (doc.quotationStatus === QuotationStatus.Agreed) {
       return QuotationStatus.Agreed;
     }
@@ -115,7 +114,6 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
     switch (statusText) {
       case QuotationStatus.Agreed: return { text: 'Agreed', color: 'bg-green-100 text-green-700' };
       case QuotationStatus.Expired: return { text: 'Expired', color: 'bg-red-100 text-red-700' };
-      case QuotationStatus.Draft: return { text: 'Draft', color: 'bg-gray-200 text-gray-700 border border-gray-300' };
       default: return { text: 'Active', color: 'bg-blue-100 text-blue-700' };
     }
   };
@@ -176,7 +174,7 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
       );
   }
 
-  const filterOptions = ['All', 'Active', 'Agreed', 'Expired', 'Draft'];
+  const filterOptions = ['All', 'Active', 'Agreed', 'Expired'];
 
   return (
     <main className="container mx-auto p-4 sm:p-6 lg:p-8">

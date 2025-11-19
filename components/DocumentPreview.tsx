@@ -46,12 +46,6 @@ const StatusStamp: React.FC<{ status: InvoiceStatus | QuotationStatus | null, co
       borderColor = '#3b82f6';
       textColor = '#3b82f6';
       break;
-    case InvoiceStatus.Draft:
-    case QuotationStatus.Draft:
-      text = 'DRAFT';
-      borderColor = '#9ca3af'; // Gray-400
-      textColor = '#9ca3af';
-      break;
     case QuotationStatus.Rejected:
       text = 'REJECTED';
       borderColor = '#ef4444'; // Red-500
@@ -188,7 +182,7 @@ const DocumentPreview: React.FC<DocumentPreviewProps> = ({
     <>
       <header className="flex flex-col sm:flex-row justify-between items-start pb-8 mb-8 border-b-4 gap-6 sm:gap-0" style={{borderColor: accentColor}}>
         <div className="flex items-center gap-6">
-          {companyLogo && <img src={companyLogo} alt="Company Logo" className="w-24 h-24 sm:w-28 sm:h-28 object-contain" />}
+          {companyLogo && <img src={companyLogo} alt="Company Logo" className="w-24 h-24 sm:w-24 sm:h-24 object-contain" />}
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">{companyDetails.name}</h1>
             <p className="text-slate-500 mt-2">{companyDetails.address}</p>
