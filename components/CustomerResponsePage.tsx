@@ -2,7 +2,6 @@
 import React, { useEffect, useState } from 'react';
 import { QuotationStatus, SavedDocument } from '../types';
 import { fetchQuotationForResponse, respondToQuotation } from '../services/firebaseService';
-import { SparklesIcon } from './Icons';
 
 const CustomerResponsePage: React.FC = () => {
   const [quotation, setQuotation] = useState<SavedDocument | null>(null);
@@ -112,11 +111,11 @@ const CustomerResponsePage: React.FC = () => {
             <>
               <div className="mb-8 text-center">
                 <p className="text-lg text-gray-700 mb-2">
-                  Do you agree with the quotation <span className="font-bold text-indigo-600">#{quotation.documentNumber}</span> and the total price <span className="font-bold text-indigo-600">{formatCurrency(quotation.total, quotation.currency)}</span> provided?
+                  Do you agree with the quotation provided? Please click the link below to respond:
                 </p>
-                <p className="text-sm text-gray-500">
-                  Issued on: {new Date(quotation.issueDate).toLocaleDateString()}
-                </p>
+                <div className="mt-2 p-3 bg-gray-50 rounded border text-sm text-gray-600 inline-block">
+                  <span className="font-bold text-indigo-600">#{quotation.documentNumber}</span> &bull; Total: <span className="font-bold text-indigo-600">{formatCurrency(quotation.total, quotation.currency)}</span>
+                </div>
               </div>
 
               {/* Preview Mini Table */}

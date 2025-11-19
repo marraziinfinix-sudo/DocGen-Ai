@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { SavedDocument, QuotationStatus } from '../types';
-import { DocumentIcon, ViewIcon, TrashIcon, MoreVerticalIcon, MailIcon, WhatsAppIcon } from './Icons';
+import { DocumentIcon, ViewIcon, TrashIcon, MoreVerticalIcon, MailIcon, WhatsAppIcon, RepeatIcon } from './Icons';
 import { saveQuotations } from '../services/firebaseService';
 
 interface QuotationListPageProps {
@@ -80,6 +80,16 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
     }
   };
 
+  const handleReactivateQuotation = (doc: SavedDocument) => {
+      if (window.confirm('Are you sure you want to reactivate this quotation?')) {
+          setDocuments(prev => {
+              const newDocs = prev.map(d => d.id === doc.id ? { ...d, quotationStatus: QuotationStatus.Active } : d);
+              saveQuotations(newDocs);
+              return newDocs;
+          });
+      }
+  };
+
   const handleSelect = (id: number) => {
     setSelectedIds(prev => {
       const newSet = new Set(prev);
@@ -128,6 +138,8 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
   const renderActionsDropdown = (doc: SavedDocument) => {
       const statusInfo = getQuotationDisplayStatus(doc);
       const isActionable = statusInfo.text === 'Active';
+      const isRejected = statusInfo.text === 'Rejected';
+
       return (
         <div className="relative">
             <button
@@ -145,6 +157,11 @@ const QuotationListPage: React.FC<QuotationListPageProps> = ({ documents, setDoc
                     onMouseDown={(e) => e.stopPropagation()}
                 >
                     <div className="py-1" role="menu" aria-orientation="vertical">
+                        {isRejected && (
+                             <button onClick={() => { handleReactivateQuotation(doc); setOpenDropdownId(null); }} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-blue-600 hover:bg-blue-50">
+                                <RepeatIcon /> Reactivate Quotation
+                            </button>
+                        )}
                         <button
                             onClick={() => { handleCreateInvoiceFromQuote(doc); setOpenDropdownId(null); }}
                             disabled={!isActionable}
